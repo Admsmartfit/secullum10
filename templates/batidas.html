@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+
+{% block title %}Espelho de Ponto - Secullum Hub{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0 font-weight-bold">Espelho de Ponto</h1>
+    <div class="d-flex gap-2">
+        <form method="GET" class="d-flex gap-2">
+            <input type="date" name="data_inicio" class="form-control bg-dark border-secondary text-white"
+                value="{{ data_inicio }}">
+            <input type="date" name="data_fim" class="form-control bg-dark border-secondary text-white"
+                value="{{ data_fim }}">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i></button>
+        </form>
+        <button class="btn btn-outline-success" onclick="exportToExcel()"><i
+                class="fas fa-file-excel me-2"></i>Exportar</button>
+    </div>
+</div>
+
+<div class="card p-4">
+    <div class="table-responsive">
+        <table class="table table-hover" id="batidasTable">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Funcionário</th>
+                    <th>Batidas</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if batidas_agrupadas %}
+                {% for item in batidas_agrupadas %}
+                <tr>
+                    <td>{{ item.data }}</td>
+                    <td class="fw-bold">{{ item.funcionario }}</td>
+                    <td>
+                        <div class="d-flex gap-2 flex-wrap">
+                            {% for hora in item.horas %}
+                            <span class="badge bg-secondary font-monospace">{{ hora }}</span>
+                            {% endfor %}
+                        </div>
+                    </td>
+                    <td>
+                        {% if item.horas|length % 2 != 0 %}
+                        <span class="badge bg-danger">Incompleto</span>
+                        {% else %}
+                        <span class="badge bg-success">OK</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-4">Nenhum registro no período selecionado.</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    function exportToExcel() {
+        // Mock export for now or redirect to export route
+        window.location.href = window.location.pathname + '?' + $('form').serialize() + '&export=true';
+    }
+</script>
+{% endblock %}
+{% endblock %}

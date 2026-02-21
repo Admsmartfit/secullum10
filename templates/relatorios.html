@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+
+{% block title %}Relatórios - Secullum Hub{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0 font-weight-bold">Relatórios de Ponto</h1>
+</div>
+
+<!-- Filtros de Data -->
+<div class="card p-4 mb-4">
+    <form method="GET" action="/relatorios" class="row g-3">
+        <div class="col-md-4">
+            <label for="data_inicio" class="form-label text-muted small fw-bold">Data Início</label>
+            <input type="date" class="form-control bg-dark text-white border-secondary"
+                   id="data_inicio" name="data_inicio" value="{{ data_inicio }}">
+        </div>
+        <div class="col-md-4">
+            <label for="data_fim" class="form-label text-muted small fw-bold">Data Fim</label>
+            <input type="date" class="form-control bg-dark text-white border-secondary"
+                   id="data_fim" name="data_fim" value="{{ data_fim }}">
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">
+                <i class="fas fa-filter me-2"></i> Filtrar
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Estatísticas Gerais -->
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="card h-100 p-3 stats-card">
+            <div class="icon-box bg-blue-soft">
+                <i class="fas fa-fingerprint fa-lg"></i>
+            </div>
+            <div class="text-muted small fw-bold text-uppercase">Total de Batidas</div>
+            <div class="h2 mb-0 font-weight-bold">{{ total_batidas|default(0) }}</div>
+            <div class="small text-muted mt-2">No período selecionado</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 p-3 stats-card">
+            <div class="icon-box bg-green-soft">
+                <i class="fas fa-users fa-lg"></i>
+            </div>
+            <div class="text-muted small fw-bold text-uppercase">Funcionários Ativos</div>
+            <div class="h2 mb-0 font-weight-bold">{{ funcionarios_unicos|default(0) }}</div>
+            <div class="small text-green mt-2"><i class="fas fa-check-circle me-1"></i> Com registros</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 p-3 stats-card">
+            <div class="icon-box bg-purple-soft">
+                <i class="fas fa-exclamation-triangle fa-lg"></i>
+            </div>
+            <div class="text-muted small fw-bold text-uppercase">Inconsistências</div>
+            <div class="h2 mb-0 font-weight-bold">{{ inconsistencias|default(0) }}</div>
+            <div class="small text-danger mt-2"><i class="fas fa-exclamation-triangle me-1"></i> Requer atenção</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Ranking de Funcionários -->
+    <div class="col-lg-6">
+        <div class="card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="mb-0"><i class="fas fa-trophy text-warning me-2"></i> Top 10 Funcionários</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Nome</th>
+                            <th class="text-end">Batidas</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if ranking %}
+                        {% for item in ranking %}
+                        <tr>
+                            <td class="fw-bold">
+                                {% if loop.index == 1 %}<i class="fas fa-medal text-warning"></i>{% endif %}
+                                {% if loop.index == 2 %}<i class="fas fa-medal" style="color: #c0c0c0;"></i>{% endif %}
+                                {% if loop.index == 3 %}<i class="fas fa-medal" style="color: #cd7f32;"></i>{% endif %}
+                                {{ loop.index }}
+                            </td>
+                            <td>{{ item.nome }}</td>
+                            <td class="text-end"><span class="badge bg-primary">{{ item.batidas }}</span></td>
+                        </tr>
+                        {% endfor %}
+                        {% else %}
+                        <tr>
+                            <td colspan="3" class="text-center text-muted py-4">
+                                Nenhum dado disponível para o período selecionado.
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Distribuição por Departamento -->
+    <div class="col-lg-6">
+        <div class="card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="mb-0"><i class="fas fa-building me-2"></i> Batidas por Departamento</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Departamento</th>
+                            <th class="text-end">Registros</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if por_departamento %}
+                        {% for dept, count in por_departamento.items() %}
+                        <tr>
+                            <td>{{ dept }}</td>
+                            <td class="text-end"><span class="badge bg-secondary">{{ count }}</span></td>
+                        </tr>
+                        {% endfor %}
+                        {% else %}
+                        <tr>
+                            <td colspan="2" class="text-center text-muted py-4">
+                                Nenhum dado disponível para o período selecionado.
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Ações de Exportação -->
+<div class="card p-4 mt-4">
+    <h5 class="mb-3"><i class="fas fa-download me-2"></i> Exportar Relatórios</h5>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <a href="/espelho?data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&export=true"
+               class="btn btn-outline-light w-100">
+                <i class="fas fa-file-excel me-2"></i> Exportar Espelho de Ponto (Excel)
+            </a>
+        </div>
+        <div class="col-md-6">
+            <button class="btn btn-outline-light w-100" onclick="window.print()">
+                <i class="fas fa-print me-2"></i> Imprimir Relatório
+            </button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    @media print {
+        .sidebar, .navbar, .btn, form {
+            display: none !important;
+        }
+        .main-content {
+            margin-left: 0 !important;
+        }
+        .card {
+            break-inside: avoid;
+            border: 1px solid #333 !important;
+        }
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,199 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Secullum Hub{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0 font-weight-bold">Dashboard de Monitoramento</h1>
+    <div class="text-muted small">Última sincronização: {{ last_sync|default('Nunca', true) }}</div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card h-100 p-3 stats-card">
+            <div class="icon-box bg-blue-soft">
+                <i class="fas fa-users fa-lg"></i>
+            </div>
+            <div class="text-muted small fw-bold text-uppercase">Funcionários</div>
+            <div class="h2 mb-0 font-weight-bold">{{ total_funcionarios|default(0) }}</div>
+            <div class="small text-green mt-2"><i class="fas fa-check-circle me-1"></i> Sincronizados</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100 p-3 stats-card">
+            <div class="icon-box bg-green-soft">
+                <i class="fas fa-fingerprint fa-lg"></i>
+            </div>
+            <div class="text-muted small fw-bold text-uppercase">Batidas Hoje</div>
+            <div class="h2 mb-0 font-weight-bold">{{ batidas_hoje|default(0) }}</div>
+            <div class="small text-muted mt-2">Atualizado em tempo real</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100 p-3 stats-card">
+            <div class="icon-box bg-purple-soft">
+                <i class="fas fa-clock fa-lg"></i>
+            </div>
+            <div class="text-muted small fw-bold text-uppercase">Atrasos/Inconsist.</div>
+            <div class="h2 mb-0 font-weight-bold">{{ inconsistencias|default(0) }}</div>
+            <div class="small text-danger mt-2"><i class="fas fa-exclamation-triangle me-1"></i> Requer atenção</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100 p-3 stats-card">
+            <div class="icon-box bg-orange-soft">
+                <i class="fas fa-user-clock fa-lg"></i>
+            </div>
+            <div class="text-muted small fw-bold text-uppercase">Em Jornada</div>
+            <div class="h2 mb-0 font-weight-bold">{{ em_jornada|default(0) }}</div>
+            <div class="small text-muted mt-2">Ativos no momento</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="mb-0">Últimas Batidas Registradas</h5>
+                <a href="/espelho" class="btn btn-sm btn-outline-light">Ver todos</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Funcionário</th>
+                            <th>Data</th>
+                            <th>Hora</th>
+                            <th>Tipo</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if batidas %}
+                        {% for batida in batidas %}
+                        <tr>
+                            <td class="fw-bold">{{ batida.NomeFuncionario }}</td>
+                            <td>{{ batida.Data }}</td>
+                            <td>{{ batida.Hora }}</td>
+                            <td><span class="badge bg-secondary">Manual/Relógio</span></td>
+                            <td><span class="badge bg-success">OK</span></td>
+                        </tr>
+                        {% endfor %}
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">Nenhuma batida encontrada para hoje.
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card p-4 mb-4">
+            <h5 class="mb-4">Ações Rápidas</h5>
+            <button class="btn btn-primary w-100 mb-3" data-bs-toggle="modal" data-bs-target="#syncModal">
+                <i class="fas fa-sync me-2"></i> Sincronizar Tudo
+            </button>
+            <button class="btn btn-outline-light w-100" onclick="window.location.href='/relatorios'">
+                <i class="fas fa-file-pdf me-2"></i> Relatório do Dia
+            </button>
+        </div>
+
+        <div class="card p-4">
+            <h5 class="mb-4">Status da Conexão</h5>
+            <div class="d-flex align-items-center mb-3">
+                <div class="flex-shrink-0">
+                    <div class="bg-success rounded-circle" style="width: 10px; height: 10px;"></div>
+                </div>
+                <div class="flex-grow-1 ms-3 small">
+                    API Secullum: <span class="text-green fw-bold">Online</span>
+                </div>
+            </div>
+            <div class="d-flex align-items-center">
+                <div class="flex-shrink-0">
+                    <div class="bg-success rounded-circle" style="width: 10px; height: 10px;"></div>
+                </div>
+                <div class="flex-grow-1 ms-3 small">
+                    Banco de Dados: <span class="text-green fw-bold">Conectado</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sync Modal -->
+<div class="modal fade" id="syncModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-secondary text-white border-0">
+            <div class="modal-header border-0">
+                <h5 class="modal-title" id="syncModalLabel">Sincronização em andamento</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"
+                    id="syncCloseBtn"></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <div id="syncLoading">
+                    <div class="spinner-border text-info mb-3" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mb-0">Buscando dados da API Secullum. Isso pode levar alguns segundos.</p>
+                    <small class="text-muted">Aguardando resposta do servidor...</small>
+                </div>
+                <div id="syncResult" style="display: none;">
+                    <div class="mb-3">
+                        <i id="syncIcon" class="fas fa-check-circle fa-3x text-success"></i>
+                    </div>
+                    <h5 id="syncTitle">Sucesso!</h5>
+                    <p id="syncMessage"></p>
+                    <button class="btn btn-primary mt-3" onclick="window.location.reload()">Atualizar Dashboard</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    document.getElementById('syncModal').addEventListener('shown.bs.modal', function () {
+        const loadingDiv = document.getElementById('syncLoading');
+        const resultDiv = document.getElementById('syncResult');
+        const icon = document.getElementById('syncIcon');
+        const title = document.getElementById('syncTitle');
+        const message = document.getElementById('syncMessage');
+        const modalTitle = document.getElementById('syncModalLabel');
+
+        // Reset status
+        loadingDiv.style.display = 'block';
+        resultDiv.style.display = 'none';
+        modalTitle.innerText = 'Sincronização em andamento';
+
+        fetch('/api/sync')
+            .then(response => response.json())
+            .then(data => {
+                loadingDiv.style.display = 'none';
+                resultDiv.style.display = 'block';
+                modalTitle.innerText = 'Sincronização finalizada';
+
+                if (data.success) {
+                    icon.className = 'fas fa-check-circle fa-3x text-success';
+                    title.innerText = 'Sincronização concluída';
+                } else {
+                    icon.className = 'fas fa-exclamation-circle fa-3x text-danger';
+                    title.innerText = 'Falha na sincronização';
+                }
+                message.innerText = data.message;
+            })
+            .catch(error => {
+                loadingDiv.style.display = 'none';
+                resultDiv.style.display = 'block';
+                modalTitle.innerText = 'Erro crítico';
+                icon.className = 'fas fa-bug fa-3x text-warning';
+                title.innerText = 'Erro na requisição';
+                message.innerText = 'Não foi possível conectar ao servidor: ' + error;
+            });
+    });
+</script>
+{% endblock %}
+{% endblock %}
