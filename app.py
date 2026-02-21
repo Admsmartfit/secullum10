@@ -129,10 +129,10 @@ def api_sync_batidas():
 def perform_batidas_sync(data_inicio, data_fim):
     """Sincroniza batidas do período e armazena no banco local."""
     api = get_api()
-    batidas_api = api.buscar_batidas(data_inicio, data_fim)
+    registros_api = api.buscar_batidas(data_inicio, data_fim)
 
-    if not batidas_api:
-        return False, "Nenhuma batida encontrada ou erro ao buscar dados da API."
+    if not registros_api:
+        return False, "Nenhum registro encontrado ou erro ao buscar dados da API."
 
     try:
         # Buscar funcionários ativos para validação
@@ -142,62 +142,109 @@ def perform_batidas_sync(data_inicio, data_fim):
         updated_count = 0
         skipped_count = 0
 
-        for item in batidas_api:
-            func_id = str(item.get('FuncionarioId'))
+        # Processar cada registro (que contém um dia completo)
+        for registro in registros_api:
+            func_id = str(registro.get('FuncionarioId'))
 
-            # Só sincronizar batidas de funcionários ativos no nosso banco
+            # Só sincronizar batidas de funcionários ativos
             if func_id not in funcionarios_ids:
                 skipped_count += 1
                 continue
 
-            # Parsear data e hora
-            data_batida = parse_date(item.get('Data'))
-            hora_batida = item.get('Hora', '')
-
-            if not data_batida or not hora_batida:
+            # Parsear data
+            data_batida = parse_date(registro.get('Data'))
+            if not data_batida:
                 continue
 
-            # Verificar se batida já existe (mesmo funcionário, data e hora)
-            batida_existente = Batida.query.filter_by(
-                funcionario_id=func_id,
-                data=data_batida,
-                hora=hora_batida
-            ).first()
+            # Processar até 5 pares de entrada/saída
+            batidas_do_dia = []
+            for i in range(1, 6):
+                entrada = registro.get(f'Entrada{i}')
+                saida = registro.get(f'Saida{i}')
 
-            if batida_existente:
-                updated_count += 1
-                batida = batida_existente
-            else:
-                batida = Batida(
+                # Adicionar entrada se não for vazia e não for marcação especial (ATESTAD, FOLGA, etc.)
+                if entrada and entrada not in ['ATESTAD', 'FOLGA', 'FALTA', 'FERIAS', 'NEUTRO']:
+                    # Verificar se é hora válida (formato HH:MM)
+                    if ':' in entrada and len(entrada.split(':')) == 2:
+                        # Extrair origem
+                        fonte_dados = registro.get(f'FonteDadosEntrada{i}')
+                        origem = 'REP'
+                        if isinstance(fonte_dados, dict):
+                            origem_id = fonte_dados.get('Origem', 0)
+                            # Mapear códigos de origem
+                            origem_map = {0: 'REP', 1: 'Manual', 16: 'App', 32: 'Web'}
+                            origem = origem_map.get(origem_id, f'Origem-{origem_id}')
+                        elif fonte_dados:
+                            origem = str(fonte_dados)
+
+                        batidas_do_dia.append({
+                            'hora': entrada,
+                            'tipo': 'Entrada',
+                            'origem': origem
+                        })
+
+                # Adicionar saída se não for vazia e não for marcação especial
+                if saida and saida not in ['ATESTAD', 'FOLGA', 'FALTA', 'FERIAS', 'NEUTRO']:
+                    if ':' in saida and len(saida.split(':')) == 2:
+                        # Extrair origem
+                        fonte_dados = registro.get(f'FonteDadosSaida{i}')
+                        origem = 'REP'
+                        if isinstance(fonte_dados, dict):
+                            origem_id = fonte_dados.get('Origem', 0)
+                            # Mapear códigos de origem
+                            origem_map = {0: 'REP', 1: 'Manual', 16: 'App', 32: 'Web'}
+                            origem = origem_map.get(origem_id, f'Origem-{origem_id}')
+                        elif fonte_dados:
+                            origem = str(fonte_dados)
+
+                        batidas_do_dia.append({
+                            'hora': saida,
+                            'tipo': 'Saída',
+                            'origem': origem
+                        })
+
+            # Salvar cada batida individual
+            for batida_info in batidas_do_dia:
+                hora_batida = batida_info['hora']
+
+                # Verificar se batida já existe
+                batida_existente = Batida.query.filter_by(
                     funcionario_id=func_id,
                     data=data_batida,
                     hora=hora_batida
-                )
-                db.session.add(batida)
-                new_count += 1
+                ).first()
 
-            # Criar datetime combinando data e hora
-            try:
-                hora_parts = hora_batida.split(':')
-                if len(hora_parts) >= 2:
-                    batida.data_hora = datetime.combine(
-                        data_batida,
-                        datetime.strptime(f"{hora_parts[0]}:{hora_parts[1]}", '%H:%M').time()
+                if batida_existente:
+                    updated_count += 1
+                    batida = batida_existente
+                else:
+                    batida = Batida(
+                        funcionario_id=func_id,
+                        data=data_batida,
+                        hora=hora_batida
                     )
-            except:
-                pass
+                    db.session.add(batida)
+                    new_count += 1
 
-            # Dados adicionais
-            batida.tipo = item.get('Tipo')
-            batida.origem = item.get('Origem')
-            batida.inconsistente = item.get('Inconsistente', False)
-            batida.justificativa = item.get('Justificativa')
-            batida.latitude = item.get('Latitude')
-            batida.longitude = item.get('Longitude')
-            batida.data_sincronizacao = datetime.utcnow()
+                # Criar datetime combinando data e hora
+                try:
+                    hora_parts = hora_batida.split(':')
+                    if len(hora_parts) >= 2:
+                        batida.data_hora = datetime.combine(
+                            data_batida,
+                            datetime.strptime(f"{hora_parts[0]}:{hora_parts[1]}", '%H:%M').time()
+                        )
+                except:
+                    pass
+
+                # Dados adicionais
+                batida.tipo = batida_info['tipo']
+                batida.origem = batida_info['origem']
+                batida.inconsistente = False  # Pode ser melhorado com lógica de validação
+                batida.data_sincronizacao = datetime.utcnow()
 
         db.session.commit()
-        return True, f"Batidas sincronizadas! {new_count} novas, {updated_count} atualizadas, {skipped_count} ignoradas (funcionários inativos)."
+        return True, f"Batidas sincronizadas! {new_count} novas, {updated_count} atualizadas, {skipped_count} registros ignorados (funcionários inativos)."
     except Exception as e:
         db.session.rollback()
         return False, f"Erro ao sincronizar batidas: {str(e)}"
@@ -264,7 +311,13 @@ def perform_sync():
             # Endereço
             f.endereco = item.get('Endereco')
             f.bairro = item.get('Bairro')
-            f.cidade = item.get('Cidade')
+
+            # Cidade pode vir como objeto ou string
+            cidade = item.get('Cidade')
+            if isinstance(cidade, dict):
+                cidade = cidade.get('Descricao') or cidade.get('Nome')
+            f.cidade = cidade
+
             f.uf = item.get('Uf')
             f.cep = item.get('Cep')
 

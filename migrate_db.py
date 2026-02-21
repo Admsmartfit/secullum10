@@ -17,7 +17,7 @@ def migrate():
             from datetime import datetime
             backup_name = f'instance/secullum_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.db'
             shutil.copy2(db_path, backup_name)
-            print(f"✓ Backup criado: {backup_name}")
+            print(f"[OK] Backup criado: {backup_name}")
 
         # Remover todas as tabelas
         print("Removendo tabelas antigas...")
@@ -27,7 +27,7 @@ def migrate():
         print("Criando novas tabelas...")
         db.create_all()
 
-        print("✓ Migração concluída com sucesso!")
+        print("[OK] Migracao concluida com sucesso!")
         print("\nPróximos passos:")
         print("1. Execute a sincronização de funcionários: /sync")
         print("2. Execute a sincronização de batidas: /sync-batidas")
