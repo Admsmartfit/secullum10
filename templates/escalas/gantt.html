@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+{% block title %}Gantt – Planejado vs. Realizado{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── Layout ────────────────────────────────────────────────────────────────── */
+.gantt-wrapper { overflow-x: auto; }
+.gantt-table   { min-width: 900px; width: 100%; border-collapse: collapse; }
+.gantt-table th, .gantt-table td { padding: 6px 8px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+.gantt-table thead th { background: var(--card-bg); font-size: .72rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); }
+
+/* ── Linha de funcionário ───────────────────────────────────────────────────── */
+.gantt-row-name  { min-width: 180px; max-width: 200px; font-size: .82rem; font-weight: 600; }
+.gantt-row-dept  { min-width: 130px; font-size: .75rem; color: var(--text-muted); }
+.gantt-row-chart { position: relative; height: 32px; background: #f8fafc; border-radius: 4px; overflow: hidden; }
+
+/* ── Barras ─────────────────────────────────────────────────────────────────── */
+.bar-planned { position: absolute; height: 16px; top: 8px; border-radius: 3px; opacity: .5; }
+.bar-actual  { position: absolute; height: 12px; top: 10px; border-radius: 3px; }
+.bar-punch   { position: absolute; width: 3px; height: 28px; top: 2px; background: #0ea5e9; border-radius: 2px; }
+
+/* ── Ticks de hora ──────────────────────────────────────────────────────────── */
+.gantt-axis { position: relative; height: 20px; background: transparent; }
+.gantt-tick { position: absolute; font-size: .65rem; color: var(--text-muted); transform: translateX(-50%); }
+.gantt-tick::before { content: ''; display: block; height: 6px; width: 1px; background: var(--border-color); margin: 0 auto 1px; }
+
+/* ── Status ─────────────────────────────────────────────────────────────────── */
+.badge-presente { background: #dcfce7; color: #166534; }
+.badge-ausente  { background: #fee2e2; color: #991b1b; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0 fw-bold">
+        <i class="fas fa-chart-gantt me-2 text-primary"></i>Gantt – Planejado vs. Realizado
+    </h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('escalas.scheduler') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-table me-1"></i>Scheduler
+        </a>
+        <a href="{{ url_for('escalas.calendario') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-calendar me-1"></i>Calendário
+        </a>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card p-3 mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label small fw-bold mb-1">DATA</label>
+            <input type="date" id="filtData" class="form-control form-control-sm"
+                   value="{{ data }}">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-bold mb-1">DEPARTAMENTO</label>
+            <select id="filtDept" class="form-select form-select-sm">
+                <option value="">Todos</option>
+                {% for d in departamentos %}
+                <option value="{{ d }}" {{ 'selected' if d == dept_sel }}>{{ d }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label small fw-bold mb-1">FUNCIONÁRIO</label>
+            <select id="filtFunc" class="form-select form-select-sm">
+                <option value="">Todos</option>
+                {% for f in funcionarios %}
+                <option value="{{ f.id }}" {{ 'selected' if f.id|string == func_sel }}>{{ f.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button id="btnRecarregar" class="btn btn-primary btn-sm w-100">
+                <i class="fas fa-search me-1"></i>Visualizar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Gantt -->
+<div class="card p-4">
+    <div id="ganttContainer">
+        <div class="text-center text-muted py-5">Carregando...</div>
+    </div>
+</div>
+
+<!-- Legenda -->
+<div class="d-flex gap-4 mt-3 small text-muted flex-wrap">
+    <div><span style="display:inline-block;width:24px;height:12px;background:#4f46e5;opacity:.5;border-radius:2px;vertical-align:middle;"></span> Turno planejado</div>
+    <div><span style="display:inline-block;width:24px;height:10px;background:#16a34a;border-radius:2px;vertical-align:middle;"></span> Período trabalhado (batidas)</div>
+    <div><span style="display:inline-block;width:4px;height:16px;background:#0ea5e9;border-radius:2px;vertical-align:middle;"></span> Batida (ponto)</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const HORA_INI = 5;   // eixo começa às 05:00
+const HORA_FIM = 24;  // eixo termina às 24:00
+const SPAN = HORA_FIM - HORA_INI;  // 19 horas
+
+function toPct(horaStr) {
+    const [h, m] = horaStr.split(':').map(Number);
+    const mins = h * 60 + m - HORA_INI * 60;
+    return Math.max(0, Math.min(100, (mins / (SPAN * 60)) * 100));
+}
+
+function renderGantt(rows) {
+    if (!rows.length) {
+        document.getElementById('ganttContainer').innerHTML =
+            '<div class="text-muted text-center py-5">Nenhuma alocação encontrada para os filtros selecionados.</div>';
+        return;
+    }
+
+    // Eixo de horas
+    let axisHtml = '<div class="gantt-axis" style="margin-left:340px; margin-right:80px; position:relative; height:24px;">';
+    for (let h = HORA_INI; h <= HORA_FIM; h++) {
+        const pct = ((h - HORA_INI) / SPAN) * 100;
+        axisHtml += `<span class="gantt-tick" style="left:${pct}%">${String(h).padStart(2,'0')}h</span>`;
+    }
+    axisHtml += '</div>';
+
+    // Linhas
+    let rowsHtml = rows.map(r => {
+        const pIni = toPct(r.planejado_inicio);
+        const pFim = toPct(r.planejado_fim);
+        const pW   = Math.max(0, pFim - pIni);
+
+        // Barras de batidas (pares entrada/saída)
+        let batidaHtml = '';
+        // Batidas individuais (pinos)
+        r.batidas.forEach(b => {
+            const pB = toPct(b);
+            batidaHtml += `<div class="bar-punch" style="left:${pB}%" title="${b}"></div>`;
+        });
+        // Período trabalhado (entre 1ª e última batida)
+        if (r.batidas.length >= 2) {
+            const pB1 = toPct(r.batidas[0]);
+            const pBN = toPct(r.batidas[r.batidas.length - 1]);
+            batidaHtml += `<div class="bar-actual" style="left:${pB1}%;width:${pBN - pB1}%;background:#16a34a;"></div>`;
+        }
+
+        const status = r.presente
+            ? `<span class="badge badge-presente">Presente</span>`
+            : `<span class="badge badge-ausente">Ausente</span>`;
+
+        const warn = r.compliance_warning
+            ? `<i class="fas fa-exclamation-triangle text-warning ms-1" title="${r.compliance_warning}"></i>`
+            : '';
+
+        return `<tr>
+            <td class="gantt-row-name">${r.funcionario_nome}${warn}</td>
+            <td class="gantt-row-dept">${r.departamento}</td>
+            <td style="min-width:90px;font-size:.75rem;">${r.turno_nome}<br><small class="text-muted">${r.planejado_inicio}–${r.planejado_fim}</small></td>
+            <td style="width:100%;padding:4px 8px;">
+                <div class="gantt-row-chart">
+                    <div class="bar-planned" style="left:${pIni}%;width:${pW}%;background:${r.turno_color};"></div>
+                    ${batidaHtml}
+                </div>
+            </td>
+            <td style="min-width:80px;">${status}</td>
+        </tr>`;
+    }).join('');
+
+    document.getElementById('ganttContainer').innerHTML = `
+        ${axisHtml}
+        <div class="gantt-wrapper">
+        <table class="gantt-table">
+            <thead>
+                <tr>
+                    <th class="gantt-row-name">Funcionário</th>
+                    <th class="gantt-row-dept">Departamento</th>
+                    <th>Turno</th>
+                    <th>Linha do Tempo</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+        </table>
+        </div>`;
+}
+
+async function carregar() {
+    const data   = document.getElementById('filtData').value;
+    const dept   = document.getElementById('filtDept').value;
+    const funcId = document.getElementById('filtFunc').value;
+    document.getElementById('ganttContainer').innerHTML =
+        '<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>';
+    try {
+        const url = `/escalas/gantt/dados?data=${data}&dept=${encodeURIComponent(dept)}&func_id=${funcId}`;
+        const resp = await fetch(url);
+        renderGantt(await resp.json());
+    } catch(e) {
+        document.getElementById('ganttContainer').innerHTML =
+            '<div class="text-danger text-center py-4">Erro ao carregar dados.</div>';
+    }
+}
+
+document.getElementById('btnRecarregar').addEventListener('click', carregar);
+// Select2 para funcionário
+$(function() {
+    $('#filtFunc').select2({ placeholder: 'Todos', allowClear: true, width: '100%' });
+});
+carregar();  // carrega ao abrir
+</script>
+{% endblock %}

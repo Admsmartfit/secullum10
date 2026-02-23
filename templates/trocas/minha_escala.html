@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+{% block title %}Minha Escala{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">
+        <i class="fas fa-calendar-user me-2 text-primary"></i>Minha Escala
+        {% if func %}<small class="text-muted fs-6 fw-normal">— {{ func.nome }}</small>{% endif %}
+    </h1>
+    <a href="{{ url_for('trocas.index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-exchange-alt me-1"></i>Gerenciar Trocas
+    </a>
+</div>
+
+{% if not func %}
+<div class="alert alert-warning">
+    <i class="fas fa-exclamation-triangle me-2"></i>
+    Nenhum funcionário vinculado ao seu usuário. Contate o RH.
+</div>
+{% else %}
+
+<div class="row g-4">
+    <!-- Meus turnos -->
+    <div class="col-lg-7">
+        <div class="card p-4">
+            <h6 class="fw-bold text-muted mb-3">PRÓXIMOS 30 DIAS</h6>
+            {% if alocacoes %}
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Data</th>
+                            <th>Dia</th>
+                            <th>Turno</th>
+                            <th>Horário</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% set dias_pt = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'] %}
+                    {% for aloc in alocacoes %}
+                    <tr>
+                        <td class="fw-semibold">{{ aloc.data.strftime('%d/%m') }}</td>
+                        <td class="text-muted small">{{ dias_pt[aloc.data.weekday()] }}</td>
+                        <td>
+                            <span class="badge" style="background:{{ aloc.turno.color or '#4f46e5' }};">
+                                {{ aloc.turno.nome }}
+                            </span>
+                        </td>
+                        <td class="small">
+                            {{ aloc.turno.hora_inicio.strftime('%H:%M') }}–{{ aloc.turno.hora_fim.strftime('%H:%M') }}
+                        </td>
+                        <td>
+                            <!-- Verificar se já existe pedido pendente -->
+                            {% set tem_pedido = aloc.id in trocas_abertas|map(attribute='alocacao_origem_id')|list %}
+                            {% if tem_pedido %}
+                            <span class="badge bg-warning text-dark small">Em troca</span>
+                            {% else %}
+                            <button class="btn btn-outline-secondary btn-sm"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#modalSolicitar"
+                                    data-aloc-id="{{ aloc.id }}"
+                                    data-turno="{{ aloc.turno.nome }}"
+                                    data-data="{{ aloc.data.strftime('%d/%m/%Y') }}">
+                                <i class="fas fa-exchange-alt me-1"></i>Trocar
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-muted text-center py-4">Nenhuma alocação nos próximos 30 dias.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Turnos disponíveis para troca -->
+    <div class="col-lg-5">
+        <div class="card p-4">
+            <h6 class="fw-bold text-muted mb-3">TURNOS OFERTADOS PARA TROCA</h6>
+            {% if trocas_abertas %}
+            {% for troca in trocas_abertas %}
+            {% if troca.solicitante_id != func.id %}
+            <div class="border rounded p-3 mb-3">
+                <div class="fw-semibold">{{ troca.solicitante.nome }}</div>
+                <div class="small text-muted mb-1">
+                    {{ troca.alocacao_origem.data.strftime('%d/%m/%Y') }} ·
+                    {{ troca.alocacao_origem.turno.nome }}
+                    ({{ troca.alocacao_origem.turno.hora_inicio.strftime('%H:%M') }}–{{ troca.alocacao_origem.turno.hora_fim.strftime('%H:%M') }})
+                </div>
+                {% if troca.obs_solicitante %}
+                <div class="small text-muted fst-italic mb-2">"{{ troca.obs_solicitante }}"</div>
+                {% endif %}
+                <button class="btn btn-sm btn-primary"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalAceitar"
+                        data-troca-id="{{ troca.id }}"
+                        data-solicitante="{{ troca.solicitante.nome }}"
+                        data-data="{{ troca.alocacao_origem.data.strftime('%d/%m/%Y') }}"
+                        data-turno="{{ troca.alocacao_origem.turno.nome }}">
+                    <i class="fas fa-handshake me-1"></i>Aceitar Troca
+                </button>
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% else %}
+            <div class="text-muted text-center py-4">Nenhum turno disponível para troca no momento.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal solicitar troca -->
+<div class="modal fade" id="modalSolicitar" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h6 class="modal-title fw-bold">Ofertar Turno para Troca</h6>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formSolicitar" method="POST">
+                <div class="modal-body">
+                    <p class="mb-3">
+                        Você vai disponibilizar o turno <strong id="solTurno"></strong>
+                        do dia <strong id="solData"></strong> para troca.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">OBSERVAÇÃO (opcional)</label>
+                        <textarea name="obs" class="form-control" rows="2"
+                                  placeholder="Ex: preciso de folga neste dia..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-paper-plane me-1"></i>Enviar Pedido
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal aceitar troca -->
+<div class="modal fade" id="modalAceitar" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h6 class="modal-title fw-bold">Aceitar Troca</h6>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formAceitar" method="POST">
+                <div class="modal-body">
+                    <p class="mb-3">
+                        <strong id="acSolicitante"></strong> quer trocar o turno <strong id="acTurno"></strong>
+                        do dia <strong id="acData"></strong>.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">QUAL TURNO VOCÊ QUER TROCAR?</label>
+                        <select name="aloc_destino_id" class="form-select" required>
+                            <option value="">Selecione...</option>
+                            {% for aloc in alocacoes %}
+                            <option value="{{ aloc.id }}">
+                                {{ aloc.data.strftime('%d/%m') }} – {{ aloc.turno.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-check me-1"></i>Confirmar Aceite
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Modal solicitar
+document.getElementById('modalSolicitar').addEventListener('show.bs.modal', function(e) {
+    const btn = e.relatedTarget;
+    document.getElementById('solTurno').textContent = btn.dataset.turno;
+    document.getElementById('solData').textContent  = btn.dataset.data;
+    document.getElementById('formSolicitar').action =
+        `/trocas/solicitar/${btn.dataset.alocId}`;
+});
+
+// Modal aceitar
+document.getElementById('modalAceitar').addEventListener('show.bs.modal', function(e) {
+    const btn = e.relatedTarget;
+    document.getElementById('acSolicitante').textContent = btn.dataset.solicitante;
+    document.getElementById('acTurno').textContent       = btn.dataset.turno;
+    document.getElementById('acData').textContent        = btn.dataset.data;
+    document.getElementById('formAceitar').action =
+        `/trocas/${btn.dataset.trocaId}/aceitar`;
+});
+</script>
+{% endblock %}

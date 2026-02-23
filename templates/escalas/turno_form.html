@@ -11,15 +11,21 @@
 <div class="card p-4 mx-auto" style="max-width:860px;">
     <form method="POST">
 
-        <!-- Nome + Departamento -->
+        <!-- Nome + Cor + Departamento -->
         <div class="row g-3 mb-4">
-            <div class="col-md-7">
+            <div class="col-md-6">
                 <label class="form-label text-muted small fw-bold">NOME DO TURNO</label>
                 <input type="text" name="nome" class="form-control"
                     value="{{ turno.nome if turno else '' }}"
                     placeholder="Ex: Manhã 08h-17h" required>
             </div>
-            <div class="col-md-5">
+            <div class="col-md-2">
+                <label class="form-label text-muted small fw-bold">COR</label>
+                <input type="color" name="color" class="form-control form-control-color w-100"
+                    value="{{ turno.color if turno and turno.color else '#4f46e5' }}"
+                    title="Cor no calendário">
+            </div>
+            <div class="col-md-4">
                 <label class="form-label text-muted small fw-bold">UNIDADE / DEPARTAMENTO</label>
                 <input type="text" name="departamento" class="form-control" list="deptList"
                     value="{{ turno.departamento if turno else '' }}"

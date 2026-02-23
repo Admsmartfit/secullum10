@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}Gestão de Trocas de Turno{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">Trocas de Turno</h1>
+    <a href="{{ url_for('trocas.minha_escala') }}" class="btn btn-outline-primary btn-sm">
+        <i class="fas fa-user me-1"></i>Minha Escala
+    </a>
+</div>
+
+{% set status_colors = {'PENDENTE': 'warning', 'AGUARDANDO_APROVACAO': 'info', 'APROVADO': 'success', 'REJEITADO': 'danger'} %}
+
+<div class="card p-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Solicitante</th>
+                    <th>Turno Oferecido</th>
+                    <th>Candidato</th>
+                    <th>Turno Recebido</th>
+                    <th>Status</th>
+                    <th>Solicitado em</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for t in trocas %}
+            <tr>
+                <td class="text-muted small">{{ t.id }}</td>
+                <td class="fw-semibold">{{ t.solicitante.nome }}</td>
+                <td>
+                    <span class="badge bg-secondary">{{ t.alocacao_origem.data.strftime('%d/%m') }}</span>
+                    {{ t.alocacao_origem.turno.nome }}
+                    {% if t.obs_solicitante %}
+                    <br><small class="text-muted">{{ t.obs_solicitante }}</small>
+                    {% endif %}
+                </td>
+                <td>{{ t.candidato.nome if t.candidato else '—' }}</td>
+                <td>
+                    {% if t.alocacao_destino %}
+                    <span class="badge bg-secondary">{{ t.alocacao_destino.data.strftime('%d/%m') }}</span>
+                    {{ t.alocacao_destino.turno.nome }}
+                    {% else %}—{% endif %}
+                </td>
+                <td>
+                    <span class="badge bg-{{ status_colors.get(t.status, 'secondary') }}">
+                        {{ t.status.replace('_', ' ') }}
+                    </span>
+                </td>
+                <td class="text-muted small">{{ t.criado_em.strftime('%d/%m %H:%M') }}</td>
+                <td>
+                    {% if t.status == 'AGUARDANDO_APROVACAO' %}
+                    <form method="POST" action="{{ url_for('trocas.aprovar', troca_id=t.id) }}" class="d-inline">
+                        <button class="btn btn-sm btn-success" onclick="return confirm('Aprovar esta troca?')">
+                            <i class="fas fa-check"></i> Aprovar
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ url_for('trocas.rejeitar', troca_id=t.id) }}" class="d-inline ms-1">
+                        <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Rejeitar?')">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </form>
+                    {% elif t.status == 'PENDENTE' %}
+                    <span class="text-muted small">Aguardando candidato</span>
+                    {% else %}
+                    <span class="text-muted small">—</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8" class="text-center text-muted py-5">Nenhuma solicitação encontrada.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

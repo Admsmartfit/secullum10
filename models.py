@@ -134,6 +134,8 @@ class Turno(db.Model):
     dias_complexos_json = db.Column(db.Text, nullable=True)
     # Escopo: departamento (unidade/CNPJ) ao qual o turno pertence. Null = global.
     departamento = db.Column(db.String(200), nullable=True)
+    # Cor hexadecimal para o calendário
+    color = db.Column(db.String(7), nullable=True, default='#4f46e5')
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     alocacoes = db.relationship('AlocacaoDiaria', backref='turno', lazy='dynamic', cascade="all, delete-orphan")
@@ -202,6 +204,8 @@ class AlocacaoDiaria(db.Model):
     turno_id = db.Column(db.Integer, db.ForeignKey('turnos.id'), nullable=False)
     data = db.Column(db.Date, nullable=False)
     pre_checkin = db.Column(db.Boolean, default=False)
+    # Aviso de compliance armazenado (não-bloqueante)
+    compliance_warning = db.Column(db.Text, nullable=True)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     funcionario = db.relationship('Funcionario', backref='alocacoes')
@@ -387,3 +391,37 @@ class HorarioSecullum(db.Model):
 
     def __repr__(self):
         return f'<HorarioSecullum {self.numero} – {self.descricao}>'
+
+
+# ── Fase PRD: Solicitação de Troca de Turno ───────────────────────────────────
+
+class SolicitacaoTroca(db.Model):
+    """Pedido de troca de turno entre dois funcionários, com aprovação do gestor."""
+    __tablename__ = 'solicitacoes_troca'
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Quem solicita e qual alocação quer abrir mão
+    solicitante_id   = db.Column(db.String(50), db.ForeignKey('funcionarios.id'), nullable=False)
+    alocacao_origem_id = db.Column(db.Integer, db.ForeignKey('alocacoes_diarias.id'), nullable=False)
+
+    # Quem aceita e qual alocação irá receber (preenchidos na aceitação)
+    candidato_id     = db.Column(db.String(50), db.ForeignKey('funcionarios.id'), nullable=True)
+    alocacao_destino_id = db.Column(db.Integer, db.ForeignKey('alocacoes_diarias.id'), nullable=True)
+
+    # PENDENTE → AGUARDANDO_APROVACAO → APROVADO / REJEITADO
+    status = db.Column(db.String(30), default='PENDENTE', nullable=False)
+    obs_solicitante = db.Column(db.Text, nullable=True)
+    obs_gestor      = db.Column(db.Text, nullable=True)
+
+    criado_em      = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_em  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    solicitante   = db.relationship('Funcionario', foreign_keys=[solicitante_id],
+                                    backref='trocas_solicitadas')
+    candidato     = db.relationship('Funcionario', foreign_keys=[candidato_id],
+                                    backref='trocas_candidato')
+    alocacao_origem  = db.relationship('AlocacaoDiaria', foreign_keys=[alocacao_origem_id])
+    alocacao_destino = db.relationship('AlocacaoDiaria', foreign_keys=[alocacao_destino_id])
+
+    def __repr__(self):
+        return f'<SolicitacaoTroca {self.id} [{self.status}]>'

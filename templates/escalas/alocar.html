@@ -17,6 +17,25 @@
             <input type="date" name="data" id="dataInput" class="form-control"
                    value="{{ data_sel }}" required>
         </div>
+        <!-- Filtros de Departamento / Função -->
+        <div class="row g-2 mb-3">
+            <div class="col-6">
+                <label class="form-label text-muted small fw-bold">DEPARTAMENTO</label>
+                <select id="filtDept" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    {% for d in departamentos %}
+                    <option value="{{ d }}">{{ d }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-6">
+                <label class="form-label text-muted small fw-bold">FUNÇÃO</label>
+                <select id="filtFuncao" class="form-select form-select-sm">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+        </div>
+
         <div class="mb-3">
             <label class="form-label text-muted small fw-bold">FUNCIONÁRIO</label>
             <select name="funcionario_id" id="selectFuncionario" class="form-select" required>
@@ -67,6 +86,41 @@
 
 {% block extra_js %}
 <script>
+// Lista completa de funcionários para filtragem client-side
+const todosFunc = [
+    {% for f in funcionarios %}
+    {"id": {{ f.id | tojson }}, "nome": {{ f.nome | tojson }}, "dept": {{ (f.departamento or '') | tojson }}, "funcao": {{ (f.funcao or '') | tojson }}},
+    {% endfor %}
+];
+
+async function carregarFuncoes(dept) {
+    const resp = await fetch(`/escalas/cargo-mensal/funcoes?dept=${encodeURIComponent(dept)}`);
+    const funcoes = await resp.json();
+    const sel = document.getElementById('filtFuncao');
+    sel.innerHTML = '<option value="">Todas</option>';
+    funcoes.forEach(f => sel.appendChild(new Option(f, f)));
+}
+
+function filtrarFuncionarios() {
+    const dept   = document.getElementById('filtDept').value;
+    const funcao = document.getElementById('filtFuncao').value;
+    const lista  = todosFunc.filter(f =>
+        (!dept   || f.dept   === dept) &&
+        (!funcao || f.funcao === funcao)
+    );
+    $('#selectFuncionario').empty().append('<option value="">Selecione...</option>');
+    lista.forEach(f => {
+        $('#selectFuncionario').append(new Option(`${f.nome} – ${f.dept || 'S/D'}`, f.id));
+    });
+    $('#selectFuncionario').trigger('change');
+}
+
+document.getElementById('filtDept').addEventListener('change', async function() {
+    await carregarFuncoes(this.value);
+    filtrarFuncionarios();
+});
+document.getElementById('filtFuncao').addEventListener('change', filtrarFuncionarios);
+
 // Select2 autocomplete
 $(function() {
     $('#selectFuncionario').select2({

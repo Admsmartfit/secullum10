@@ -49,6 +49,7 @@ def turno_novo():
             dias_semana=','.join(dias) if dias else '0,1,2,3,4',
             dias_complexos_json=json.dumps(complex_data) if complex_data else None,
             departamento=request.form.get('departamento', '').strip() or None,
+            color=request.form.get('color', '#4f46e5') or '#4f46e5',
         )
         db.session.add(turno)
         db.session.commit()
@@ -86,6 +87,7 @@ def turno_editar(turno_id):
         turno.dias_semana = ','.join(dias) if dias else '0,1,2,3,4'
         turno.dias_complexos_json = json.dumps(complex_data) if complex_data else None
         turno.departamento = request.form.get('departamento', '').strip() or None
+        turno.color = request.form.get('color', '#4f46e5') or '#4f46e5'
         db.session.commit()
         flash(f'Turno "{turno.nome}" atualizado!', 'success')
         return redirect(url_for('escalas.index'))
@@ -137,10 +139,13 @@ def alocar():
 
         turno = Turno.query.get_or_404(turno_id)
 
-        # Validação CLT
+        # Validação CLT — bloqueante vs. warning
         infracoes = validar_alocacao(func_id, data_aloc, turno)
-        if infracoes:
-            return jsonify({'ok': False, 'infracoes': infracoes}), 422
+        bloqueantes = [i for i in infracoes if i.get('severity', 'error') == 'error']
+        avisos      = [i for i in infracoes if i.get('severity', 'error') != 'error']
+        if bloqueantes:
+            return jsonify({'ok': False, 'infracoes': bloqueantes}), 422
+        compliance_warn = '; '.join(i['message'] for i in avisos) or None
 
         aplicar_futuro = request.form.get('aplicar_futuro') == '1'
 
@@ -158,20 +163,26 @@ def alocar():
             aloc = AlocacaoDiaria.query.filter_by(funcionario_id=func_id, data=data_aloc).first()
             if aloc:
                 aloc.turno_id = turno_id
+                aloc.compliance_warning = compliance_warn
             else:
-                aloc = AlocacaoDiaria(funcionario_id=func_id, turno_id=turno_id, data=data_aloc)
+                aloc = AlocacaoDiaria(funcionario_id=func_id, turno_id=turno_id,
+                                      data=data_aloc, compliance_warning=compliance_warn)
                 db.session.add(aloc)
             db.session.commit()
+            msg = 'Alocação salva!'
+            if avisos:
+                msg += ' Atenção: ' + '; '.join(i['message'] for i in avisos)
             if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({'ok': True, 'message': 'Alocação salva!'})
-            flash('Alocação salva com sucesso!', 'success')
+                return jsonify({'ok': True, 'message': msg, 'warnings': avisos})
+            flash(msg, 'success' if not avisos else 'warning')
 
         return redirect(url_for('escalas.alocar'))
 
     # Pré-selecionar data
     data_sel = request.args.get('data', date.today().strftime('%Y-%m-%d'))
     return render_template('escalas/alocar.html',
-                           funcionarios=funcionarios, turnos=turnos, data_sel=data_sel)
+                           funcionarios=funcionarios, turnos=turnos, data_sel=data_sel,
+                           departamentos=_departamentos())
 
 
 # ── Divergências ──────────────────────────────────────────────────────────────
@@ -240,6 +251,7 @@ def eventos():
     end_str   = request.args.get('end', '')
     dept      = request.args.get('dept', '').strip()
     func_id   = request.args.get('func_id', '').strip()
+    funcao    = request.args.get('funcao', '').strip()
 
     try:
         d_ini = date.fromisoformat(start_str[:10])
@@ -256,6 +268,8 @@ def eventos():
     )
     if dept:
         q = q.filter(Funcionario.departamento == dept)
+    if funcao:
+        q = q.filter(Funcionario.funcao == funcao)
     if func_id:
         q = q.filter(AlocacaoDiaria.funcionario_id == func_id)
 
@@ -273,22 +287,27 @@ def eventos():
         nome_parts = aloc.funcionario.nome.split()
         titulo = nome_parts[0] + (f' {nome_parts[1][0]}.' if len(nome_parts) > 1 else '')
 
+        base_color = aloc.turno.color or '#4f46e5'
         events.append({
             'id': aloc.id,
+            'resourceId': str(aloc.funcionario_id),   # para resource view
             'title': titulo,
             'start': f"{aloc.data}T{hora_ini}",
             'end':   f"{aloc.data}T{hora_fim}",
-            'backgroundColor': '#ef4444' if infracoes else '#4f46e5',
-            'borderColor':     '#b91c1c' if infracoes else '#4338ca',
+            'backgroundColor': '#ef4444' if infracoes else base_color,
+            'borderColor':     '#b91c1c' if infracoes else base_color,
+            'classNames':      ['fc-evento-clt'] if infracoes else [],
             'extendedProps': {
                 'func_id':    str(aloc.funcionario_id),
                 'func_nome':  aloc.funcionario.nome,
                 'turno_id':   aloc.turno_id,
                 'turno_nome': aloc.turno.nome,
+                'turno_color': base_color,
                 'hora_inicio': hora_ini,
                 'hora_fim':    hora_fim,
                 'infracoes':   [i['message'] for i in infracoes],
                 'aloc_id':     aloc.id,
+                'warning':     aloc.compliance_warning,
             },
         })
     return jsonify(events)
@@ -321,6 +340,177 @@ def alocar_excluir(aloc_id):
     db.session.delete(aloc)
     db.session.commit()
     return jsonify({'ok': True})
+
+
+# ── Phase 1B: Resource Scheduler endpoints ────────────────────────────────────
+
+@escalas_bp.route('/resources')
+@login_required
+def resources():
+    """Retorna funcionários como recursos para FullCalendar Resource Timeline."""
+    dept    = request.args.get('dept', '').strip()
+    func_id = request.args.get('func_id', '').strip()
+    q = Funcionario.query.filter_by(ativo=True)
+    if dept:    q = q.filter(Funcionario.departamento == dept)
+    if func_id: q = q.filter(Funcionario.id == func_id)
+    funcs = q.order_by(Funcionario.departamento, Funcionario.nome).all()
+    return jsonify([{
+        'id':    str(f.id),
+        'title': f.nome,
+        'extendedProps': {
+            'departamento': f.departamento or '—',
+            'funcao': f.funcao or '—',
+        },
+    } for f in funcs])
+
+
+@escalas_bp.route('/alocar-ajax', methods=['POST'])
+@login_required
+def alocar_ajax():
+    """Cria alocação via drag-and-drop do sidebar (turno externo → recurso/data)."""
+    data_json = request.get_json(force=True) or {}
+    try:
+        func_id  = str(data_json['funcionario_id'])
+        turno_id = int(data_json['turno_id'])
+        nova_data = date.fromisoformat(data_json['data'][:10])
+    except (KeyError, ValueError):
+        return jsonify({'ok': False, 'error': 'Dados inválidos'}), 400
+
+    turno = Turno.query.get_or_404(turno_id)
+    infracoes = validar_alocacao(func_id, nova_data, turno)
+
+    # Infrações bloqueantes vs. warnings
+    bloqueantes = [i for i in infracoes if i.get('severity', 'error') == 'error']
+    warnings    = [i for i in infracoes if i.get('severity', 'error') != 'error']
+
+    if bloqueantes and not data_json.get('force'):
+        return jsonify({'ok': False, 'infracoes': bloqueantes, 'warnings': warnings}), 422
+
+    aloc = AlocacaoDiaria.query.filter_by(funcionario_id=func_id, data=nova_data).first()
+    warning_txt = '; '.join(i['message'] for i in warnings) or None
+    if aloc:
+        aloc.turno_id = turno_id
+        aloc.compliance_warning = warning_txt
+    else:
+        aloc = AlocacaoDiaria(funcionario_id=func_id, turno_id=turno_id,
+                               data=nova_data, compliance_warning=warning_txt)
+        db.session.add(aloc)
+    db.session.commit()
+    return jsonify({'ok': True, 'aloc_id': aloc.id, 'warnings': warnings})
+
+
+@escalas_bp.route('/alocar/<int:aloc_id>/trocar-recurso', methods=['PATCH'])
+@login_required
+def alocar_trocar_recurso(aloc_id):
+    """Move alocação para outro funcionário (drag entre linhas no resource view)."""
+    aloc = AlocacaoDiaria.query.get_or_404(aloc_id)
+    data_json = request.get_json(force=True) or {}
+    try:
+        novo_func_id = str(data_json['funcionario_id'])
+        nova_data    = date.fromisoformat(data_json.get('data', str(aloc.data))[:10])
+    except (KeyError, ValueError):
+        return jsonify({'ok': False, 'error': 'Dados inválidos'}), 400
+
+    infracoes = validar_alocacao(novo_func_id, nova_data, aloc.turno)
+    bloqueantes = [i for i in infracoes if i.get('severity', 'error') == 'error']
+    if bloqueantes and not data_json.get('force'):
+        return jsonify({'ok': False, 'infracoes': bloqueantes}), 422
+
+    aloc.funcionario_id = novo_func_id
+    aloc.data = nova_data
+    aloc.compliance_warning = '; '.join(i['message'] for i in infracoes) or None
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@escalas_bp.route('/scheduler')
+@login_required
+def scheduler():
+    """Resource Timeline (Gantt-style schedule per employee)."""
+    departamentos = _departamentos()
+    turnos = Turno.query.order_by(Turno.nome).all()
+    funcionarios = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
+    return render_template('escalas/scheduler.html',
+                           departamentos=departamentos,
+                           turnos=turnos,
+                           funcionarios=funcionarios)
+
+
+# ── Phase 4: Gantt planejado vs. realizado ────────────────────────────────────
+
+@escalas_bp.route('/gantt')
+@login_required
+def gantt():
+    """Visão Gantt do dia: planejado (AlocacaoDiaria) vs. realizado (Batida)."""
+    data_str = request.args.get('data', date.today().strftime('%Y-%m-%d'))
+    try:
+        data_ref = date.fromisoformat(data_str)
+    except ValueError:
+        data_ref = date.today()
+
+    dept    = request.args.get('dept', '').strip()
+    func_id = request.args.get('func_id', '').strip()
+
+    departamentos = _departamentos()
+    funcionarios  = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
+
+    return render_template('escalas/gantt.html',
+                           data=data_str,
+                           data_ref=data_ref,
+                           departamentos=departamentos,
+                           funcionarios=funcionarios,
+                           dept_sel=dept,
+                           func_sel=func_id)
+
+
+@escalas_bp.route('/gantt/dados')
+@login_required
+def gantt_dados():
+    """JSON: linhas do Gantt para a data e filtros selecionados."""
+    data_str = request.args.get('data', date.today().strftime('%Y-%m-%d'))
+    dept     = request.args.get('dept', '').strip()
+    func_id  = request.args.get('func_id', '').strip()
+
+    try:
+        data_ref = date.fromisoformat(data_str)
+    except ValueError:
+        return jsonify([])
+
+    q = (
+        AlocacaoDiaria.query
+        .filter_by(data=data_ref)
+        .join(Turno)
+        .join(Funcionario)
+        .filter(Funcionario.ativo == True)
+    )
+    if dept:    q = q.filter(Funcionario.departamento == dept)
+    if func_id: q = q.filter(AlocacaoDiaria.funcionario_id == func_id)
+    alocacoes = q.order_by(Funcionario.nome).all()
+
+    # Pega todas as batidas do dia (agrupadas por funcionário)
+    batidas_q = Batida.query.filter_by(data=data_ref)
+    if func_id: batidas_q = batidas_q.filter_by(funcionario_id=func_id)
+    batidas_por_func = {}
+    for b in batidas_q.all():
+        batidas_por_func.setdefault(b.funcionario_id, []).append(b.hora)
+
+    rows = []
+    for aloc in alocacoes:
+        h_ini, h_fim, _ = aloc.turno.get_horario_dia(data_ref.weekday())
+        batidas = sorted(batidas_por_func.get(aloc.funcionario_id, []))
+        rows.append({
+            'funcionario_id':   str(aloc.funcionario_id),
+            'funcionario_nome': aloc.funcionario.nome,
+            'departamento':     aloc.funcionario.departamento or '—',
+            'turno_nome':       aloc.turno.nome,
+            'turno_color':      aloc.turno.color or '#4f46e5',
+            'planejado_inicio': h_ini.strftime('%H:%M'),
+            'planejado_fim':    h_fim.strftime('%H:%M'),
+            'batidas':          batidas,
+            'presente':         bool(batidas),
+            'compliance_warning': aloc.compliance_warning,
+        })
+    return jsonify(rows)
 
 
 _DIAS_PT = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']

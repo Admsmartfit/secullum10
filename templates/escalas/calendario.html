@@ -67,11 +67,16 @@
             <h6 class="fw-semibold mb-3 small text-muted text-uppercase">Filtros</h6>
 
             <label class="form-label small fw-bold mb-1">Departamento</label>
-            <select id="filtDept" class="form-select form-select-sm mb-3">
+            <select id="filtDept" class="form-select form-select-sm mb-2">
                 <option value="">Todos</option>
                 {% for dept in departamentos %}
                 <option value="{{ dept }}">{{ dept }}</option>
                 {% endfor %}
+            </select>
+
+            <label class="form-label small fw-bold mb-1">Função</label>
+            <select id="filtFuncao" class="form-select form-select-sm mb-3">
+                <option value="">Todas</option>
             </select>
 
             <label class="form-label small fw-bold mb-1">Funcionário</label>
@@ -133,7 +138,25 @@ $(function() {
     // Select2 para filtro de funcionário
     $('#filtFunc').select2({ placeholder: 'Todos os funcionários', allowClear: true, width: '100%' });
 
-    $('#filtDept, #filtFunc').on('change select2:select select2:unselect', function() {
+    // Carregar funções ao trocar departamento
+    async function carregarFuncoes(dept) {
+        const resp = await fetch(`/escalas/cargo-mensal/funcoes?dept=${encodeURIComponent(dept)}`);
+        const funcoes = await resp.json();
+        const sel = document.getElementById('filtFuncao');
+        sel.innerHTML = '<option value="">Todas</option>';
+        funcoes.forEach(f => sel.appendChild(new Option(f, f)));
+    }
+
+    document.getElementById('filtDept').addEventListener('change', async function() {
+        await carregarFuncoes(this.value);
+        if (calendar) calendar.refetchEvents();
+    });
+
+    document.getElementById('filtFuncao').addEventListener('change', function() {
+        if (calendar) calendar.refetchEvents();
+    });
+
+    $('#filtFunc').on('change select2:select select2:unselect', function() {
         if (calendar) calendar.refetchEvents();
     });
 
@@ -153,8 +176,9 @@ $(function() {
 
         events: function(fetchInfo, successCb, failureCb) {
             const dept   = document.getElementById('filtDept').value;
+            const funcao = document.getElementById('filtFuncao').value;
             const funcId = $('#filtFunc').val() || '';
-            fetch(`/escalas/eventos?start=${fetchInfo.startStr}&end=${fetchInfo.endStr}&dept=${encodeURIComponent(dept)}&func_id=${funcId}`)
+            fetch(`/escalas/eventos?start=${fetchInfo.startStr}&end=${fetchInfo.endStr}&dept=${encodeURIComponent(dept)}&funcao=${encodeURIComponent(funcao)}&func_id=${funcId}`)
                 .then(r => r.json())
                 .then(successCb)
                 .catch(failureCb);

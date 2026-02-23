@@ -1,187 +1,179 @@
-PRD: Secullum10 Enterprise - Evolution v2.0
-1. Visão Geral
-Transformar o sistema atual em uma plataforma de gestão de RH moderna, minimalista e proativa. O foco sai de apenas "visualizar dados" para "gerir exceções e comunicação", garantindo compliance CLT e automatizando a comunicação via WhatsApp.
+Com base na análise do código atual do seu sistema (que utiliza Python/Flask, SQLAlchemy e integração com a API da Secullum) e nos requisitos solicitados, elaborei este **Documento de Requisitos de Produto (PRD)**.
 
-📅 Fase 1: Correções Críticas & Estabilidade (Imediato)
-Objetivo: Garantir que o básico funcione perfeitamente antes de embelezar ou adicionar complexidade.
+Este documento foi desenhado para ser tecnicamente viável dentro da sua arquitetura atual, aproveitando modelos já existentes como `Funcionario`, `Turno` e `EscalaTrabalho`.
 
-1.1. Correção do Bug: Espelho de Ponto Individual
-Problema: A rota /espelho?funcionario_id=259 carrega dados, mas exibe todos os funcionários.
+---
 
-Causa Provável: No arquivo blueprints/espelho.py (ou app.py), a query ao banco de dados não está aplicando o filtro .filter_by(funcionario_id=...) ou WHERE quando o parâmetro GET é recebido.
+# Documento de Requisitos de Produto (PRD)
 
-Solução Técnica:
+**Projeto:** Gestão Visual de Escalas e Compliance (Secullum10 Evolution)
+**Versão:** 1.0
+**Status:** Rascunho / Aprovação
 
-Capturar o request.args.get('funcionario_id').
+## 1. Visão Geral
 
-Se existir, filtrar a query SQL/SQLAlchemy de Batidas e Calculos.
+Implementar uma interface visual interativa para o gerenciamento de escalas de trabalho, substituindo a entrada manual de dados por uma interface de "Arrastar e Soltar". O sistema incluirá validações automáticas de leis trabalhistas (CLT/Compliance) e um portal de autoatendimento para colaboradores, sincronizando as alterações finais com o Ponto Secullum Web.
 
-Garantir que o template batidas.html ou espelho.html receba apenas o objeto do funcionário filtrado, não a lista completa.
+## 2. Público-Alvo
 
-1.2. Refatoração de Base
-Organização: Garantir que todas as rotas estejam usando o padrão de Blueprints (já iniciado, mas precisa verificar se app.py ainda tem lógica solta).
+1. **Gestores de RH/Departamento Pessoal:** Responsáveis pelo planejamento das escalas.
+2. **Gerentes de Loja/Unidade:** Responsáveis pela operação diária.
+3. **Colaboradores:** Usuários finais que consultarão escalas e solicitarão trocas.
 
-Banco de Dados: Confirmar a migração total para PostgreSQL (usando migrate_sqlite_to_pg.py) para suportar as queries complexas do motor de regras.
+---
 
-🎨 Fase 2: Redesign UI/UX (Moderno & Minimalista)
-Objetivo: Limpar a interface, reduzir o ruído visual e facilitar a navegação.
+## 3. Requisitos Funcionais
 
-2.1. Novo Design System
-Estilo: Migrar para um layout "Clean Dashboard" (Fundo cinza muito claro #f8f9fa, Cards brancos com sombras suaves, Tipografia Sans-serif moderna como Inter ou Roboto).
+### 3.1. Interface de Arrastar e Soltar (Drag-and-Drop)
 
-Menu Lateral: Substituir o menu superior por uma Sidebar retrátil escura ou branca minimalista, liberando espaço vertical.
+**Objetivo:** Permitir a alocação de turnos de forma visual.
 
-Paleta de Cores:
+* **Descrição:** Implementar uma "Visão de Recursos" (Resource View) no calendário.
+* **Linhas (Y-Axis):** Lista de Funcionários (agrupados por Departamento/Loja).
+* **Colunas (X-Axis):** Dias do mês ou horas do dia.
+* **Elementos:** Os "Turnos" serão blocos arrastáveis listados em uma barra lateral.
 
-Primária: Azul Índigo (Ação).
 
-Alerta: Laranja Suave (Atrasos).
+* **Comportamento:**
+* O gestor arrasta um bloco de "Turno" (ex: 08:00 - 17:00) da barra lateral para a célula correspondente ao Funcionário/Dia.
+* O gestor pode arrastar um turno já alocado de um dia para outro ou de um funcionário para outro.
+* **Backend:** Ao soltar (evento `drop`), o sistema deve disparar uma requisição AJAX para atualizar a tabela `escala_trabalho`.
 
-Erro: Vermelho Suave (Faltas/CLT).
 
-Sucesso: Verde Esmeralda (Compliance).
 
-2.2. Melhorias Específicas de UX
-Filtros Inteligentes: Em todas as listas (Funcionários, Escalas), substituir dropdowns nativos por componentes de busca com autocomplete (ex: Select2 ou similar).
+### 3.2. Codificação por Cores (Color Coding)
 
-Dashboards: Remover tabelas gigantes da tela inicial. Substituir por "Widgets de Resumo" (Ex: "3 Funcionários Atrasados Hoje", "5 Conflitos de Escala").
+**Objetivo:** Identificação visual rápida de tipos de turno e status.
 
-⚖️ Fase 3: Módulo de Escalas Avançado (Visual & Compliance)
-Objetivo: Tornar a gestão de escalas visual e à prova de multas trabalhistas.
+* **Descrição:**
+* Utilizar o campo `color` já existente no modelo `Turno` (`models.py`) para renderizar o fundo do bloco do evento.
+* **Legenda Visual:**
+* **Turnos:** Manhã (Verde), Tarde (Azul), Noite (Roxo), Madrugada (Laranja).
+* **Folgas:** Cinza ou Hachurado.
+* **Status de Aprovação:** Adicionar uma borda ou ícone ao evento (Borda Pontilhada = Pendente, Borda Sólida = Confirmado).
+* **Alertas:** Ícone vermelho pulsante no canto do evento em caso de violação de regra.
 
-3.1. Interface de Calendário (Visual)
-Visualização: Implementar biblioteca de calendário (ex: FullCalendar).
 
-Filtros de View:
 
-Visão Mensal (Grid clássico).
 
-Visão Semanal (Detalhada por hora).
 
-Filtros Laterais: Checkbox por Cargo, Departamento ou Empresa.
+### 3.3. Visão de Linha do Tempo (Gantt Style)
 
-Edição: Drag & Drop para mover um funcionário de um turno para outro. Clique no dia para abrir modal de edição rápida.
+**Objetivo:** Visualizar a cobertura da equipe ao longo das horas do dia.
 
-3.2. Motor de Validação CLT (O "Guardião")
-Funcionamento: Ao tentar salvar uma escala, o backend (services/motor_clt.py) deve validar:
+* **Descrição:** Uma visão alternativa ao calendário mensal, focada no dia ou semana.
+* O eixo X representa as 24 horas do dia.
+* As barras mostram o início e fim exato do trabalho.
+* Visualização clara de intervalos (buracos) onde não há ninguém escalado para um departamento específico.
 
-Interjornada: Alerta se intervalo entre fim do turno D e início do turno D+1 for < 11h.
 
-Intrajornada: Alerta se turno > 6h não tiver intervalo de 1h (ou conforme regra).
+* **Requisito Técnico:** Utilizar biblioteca frontend compatível (ex: FullCalendar Scheduler ou biblioteca Gantt JS).
 
-Carga Semanal: Somar horas planejadas na semana (Seg-Dom). Se > 44h, exibir alerta vermelho crítico.
+### 3.4. Alertas de Compliance e Regras Automáticas
 
-DSR: Verificar se existe pelo menos 1 folga em 7 dias (preferencialmente domingo).
+**Objetivo:** "Camada de Inteligência" para prevenir passivo trabalhista.
 
-Feedback Visual: Turnos problemáticos ficam com borda vermelha e ícone de alerta no calendário.
+* **Mecanismo:** Antes de salvar qualquer alteração no banco de dados (no evento `onEventDrop` ou `onEventResize`), o backend deve validar as regras.
+* **Regras Obrigatórias (MVP):**
+1. **Interjornada:** Verificar se há menos de 11 horas entre o fim do turno do dia anterior e o início do novo turno.
+2. **Folga Semanal (DSR):** Alertar se o funcionário trabalhar mais de 6 dias consecutivos sem folga.
+3. **Duplicidade:** Impedir dois turnos no mesmo dia para o mesmo funcionário (exceto se configurado como extra).
+4. **Conflito de Férias/Afastamento:** Verificar na tabela de `Afastamentos` (integrada via API Secullum) se o funcionário está disponível.
 
-3.3. Integração na Tela de Funcionários
-Aba "Escala Atual": Em /funcionarios/<id>, adicionar uma aba ou card que mostra: "Turno de Hoje: 08:00 - 17:00" e "Próxima Folga: Sábado".
 
-🤖 Fase 4: Motor de Regras de WhatsApp (Automação)
-Objetivo: Criar um sistema flexível de "Gatilho -> Condição -> Ação".
+* **Interface:** Exibir um modal de confirmação ("Este turno viola a regra de interjornada. Deseja forçar a escalação?") ou bloquear a ação dependendo da gravidade.
 
-4.1. Construtor de Regras (Interface)
-Criar uma nova tela Configurações > Regras de Notificação com um formulário lógico:
+### 3.5. Gestão de Disponibilidade e Trocas (Self-Service)
 
-Gatilho (Quando analisar?):
+**Objetivo:** Descentralizar a gestão de trocas.
 
-Tempo: Diário (ex: 08:00), Semanal (ex: Sexta 14:00).
+* **App/Portal do Colaborador:**
+* **Minha Escala:** Visualização apenas dos seus turnos.
+* **Ofertar Turno:** Botão para disponibilizar um turno para troca.
+* **Pegar Turno:** Visualizar turnos ofertados por colegas do mesmo departamento e candidatar-se.
 
-Evento: Ao sincronizar batida, Ao detectar ausência.
 
-Condições (O que procurar?):
+* **Fluxo de Aprovação:**
+1. Colaborador A solicita troca.
+2. Colaborador B aceita.
+3. Gestor recebe notificação (Email ou Dashboard).
+4. Gestor aprova -> Sistema valida Compliance para ambos -> Escala atualizada.
 
-Atraso: Batida realizada > X minutos após início da escala.
 
-Antecipação: Batida realizada > X minutos antes do início.
 
-Falta: Sem batida após X minutos do início.
+---
 
-Hora Extra: Saída > X minutos após fim da escala.
+## 4. Arquitetura Técnica (Baseado no seu código)
 
-Compliance: Violação de Interjornada detectada.
+### 4.1. Banco de Dados (PostgreSQL via SQLAlchemy)
 
-Destinatário (Quem recebe?):
+Será necessário ajustar/criar as seguintes tabelas no `models.py`:
 
-O próprio Funcionário.
+**Atualizar `Turno`:**
 
-O Gerente do Departamento (precisa ter vínculo no cadastro).
+* Garantir que o campo `color` (já existente) seja hexadecimal.
+* Adicionar campo `tipo` (Enum: 'TRABALHO', 'FOLGA', 'FERIAS').
 
-Grupo de RH.
+**Atualizar `EscalaTrabalho`:**
 
-Janela de Envio (Restrição de Horário):
+* Adicionar `status` (Enum: 'RASCUNHO', 'PUBLICADO').
+* Adicionar `compliance_warning` (Texto: Armazena o aviso de erro legal, se houver).
 
-Checkbox: "Enviar apenas durante expediente do funcionário?" (Sim/Não).
+**Nova Tabela `SolicitacaoTroca`:**
 
-Checkbox: "Enviar imediatamente (24h)?" (Para alertas críticos ao gestor).
+```python
+class SolicitacaoTroca(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    solicitante_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'))
+    turno_origem_id = db.Column(db.Integer, db.ForeignKey('escala_trabalho.id'))
+    candidato_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'), nullable=True)
+    turno_destino_id = db.Column(db.Integer, db.ForeignKey('escala_trabalho.id'), nullable=True)
+    status = db.Column(db.String(20)) # PENDENTE, APROVADO, REJEITADO
+    data_solicitacao = db.Column(db.DateTime, default=datetime.utcnow)
 
-4.2. Regras de Envio de Escala
-Configuração específica para envio de PDF/Texto da escala:
+```
 
-Frequência: Mensal (dia 25), Semanal (Sexta-feira), ou 3 Dias Antes.
+### 4.2. API Endpoints (Flask Blueprints)
 
-Formato: Resumo texto ("Sua escala: Seg 8-17, Ter 8-17...") ou PDF anexo.
+Criar rotas em `blueprints/escalas.py` ou um novo `blueprints/scheduler.py`:
 
-🛠️ Detalhamento Técnico das Tarefas (Backlog)
-Sprint 1: Fixes & Setup
-Fix: Alterar query em blueprints/espelho.py para suportar filtro por ID.
+* `GET /api/scheduler/events`: Retorna JSON com eventos para o calendário (formato FullCalendar).
+* `POST /api/scheduler/move`: Endpoint para Drag-and-Drop. Recebe `{funcionario_id, data, turno_id}`. Executa validação de compliance e retorna 200 (OK) ou 409 (Conflito/Alerta).
+* `POST /api/scheduler/publish`: Efetiva as escalas de "Rascunho" para "Publicado" e dispara a sincronização com a API Secullum.
 
-DB: Validar integridade do banco PostgreSQL com as novas tabelas de regras.
+### 4.3. Integração com Secullum Ponto Web
 
-Frontend: Instalar novo template base (Jinja2 + CSS framework novo).
+* **Referência:** `Integracao_Externa_Ponto_Web.pdf` (Página 9 - Cadastro de Horários e Página 23 - Cadastro de Funcionários).
+* **Lógica:** O Secullum Ponto Web trabalha vinculando um `HorarioNumero` ao funcionário.
+* Ao alterar a escala no seu sistema, o `tasks.py` deve identificar qual "Horário" no Secullum corresponde à combinação de turnos da semana/mês ou utilizar a funcionalidade de **Escala Cíclica** ou **Alteração de Horário Provisória** se a API suportar (verificar endpoints de *Troca de Horário* ou *Inclusão de Ponto* caso a escala seja tratada como exceção).
+* *Nota:* Se a API da Secullum não permitir alterar turnos por dia facilmente, o sistema funcionará como a "verdade" gerencial, e a exportação para o Secullum pode ser feita via arquivo texto (layout de importação) ou ajustando o horário do funcionário via API (`PUT /Funcionarios`).
 
-Sprint 2: Escalas Visual
-Frontend: Integrar FullCalendar na rota /escalas.
 
-API: Criar endpoint JSON que retorna eventos de escala formatados para o calendário.
 
-Backend: Implementar lógica de verificação de 44h semanais e Interjornada no save da escala.
+---
 
-Sprint 3: Motor de Notificação (Backend)
-Model: Criar tabela NotificationRules (tipo, threshold_minutos, target_audience, schedule_config).
+## 5. Plano de Implementação (Fases)
 
-Service: Criar NotificationProcessor que roda via Cron/Celery.
+### Fase 1: Visualização e Drag-and-Drop (Front-end Core)
 
-Logica:
+* Instalar biblioteca de calendário no frontend (recomendação: **FullCalendar** com plugin de *ResourceTimeline*).
+* Criar API `GET` para alimentar o calendário com dados de `EscalaTrabalho`.
+* Implementar API `POST` simples para salvar a movimentação.
+* Habilitar renderização de cores baseada na tabela `Turno`.
 
-Buscar regras ativas.
+### Fase 2: Motor de Compliance (Back-end Logic)
 
-Comparar Batidas (Real) vs Alocacoes (Escala).
+* Criar serviço `ComplianceService` em Python.
+* Implementar regra de 11h de descanso (Interjornada).
+* Implementar verificação de folga no 7º dia.
+* Conectar serviço ao endpoint de `POST` (salvamento).
 
-Gerar fila de mensagens.
+### Fase 3: Autoatendimento e Trocas
 
-Verificar "Janela de Envio" (Se for fora do expediente e a regra proibir, agendar para o próximo início de turno).
+* Criar interface móvel simplificada para colaboradores.
+* Implementar fluxo de solicitação e aprovação de trocas.
 
-Sprint 4: Frontend de Regras e Finalização
-UI: Criar formulário de criação de regras de WhatsApp.
+### Fase 4: Sincronização Bidirecional
 
-UI: Atualizar tela de detalhes do funcionário com dados da escala.
-
-Testes: Simular cenários de atraso e verificar geração de mensagem.
-
-Exemplo de Estrutura de Regra (JSON no Banco de Dados)
-JSON
-{
-  "rule_name": "Alerta de Atraso Crítico",
-  "trigger_type": "EVENT_SYNC",
-  "conditions": {
-    "type": "LATE_ENTRY",
-    "threshold_minutes": 15
-  },
-  "actions": [
-    {
-      "channel": "WHATSAPP",
-      "recipient": "MANAGER",
-      "template": "O funcionário {name} está atrasado há {minutes} minutos."
-    },
-    {
-      "channel": "WHATSAPP",
-      "recipient": "EMPLOYEE",
-      "template": "Identificamos um atraso no seu ponto. Por favor, justifique."
-    }
-  ],
-  "constraints": {
-    "only_working_hours": true
-  }
-}
+* Garantir que alterações feitas no sistema reflitam no Ponto Secullum (via API `secullum_api.py`).
+* Importar batidas realizadas (`Integracao_Externa_Ponto_Web.pdf` - Rota Batidas) para comparar **Planejado vs. Realizado** na visão de Gantt.
