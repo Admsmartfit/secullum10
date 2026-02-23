@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+{% block title %}Escala por Cargo / Mês{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">Escala por Cargo / Mês</h1>
+    <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Voltar
+    </a>
+</div>
+
+<div class="row g-4">
+    <!-- Formulário -->
+    <div class="col-lg-5">
+        <div class="card p-4 h-100">
+            <h6 class="fw-bold mb-3 text-muted">DEFINIR ESCALA EM MASSA</h6>
+            <p class="small text-muted mb-4">
+                Selecione o mês, a unidade (departamento), o cargo e o turno.<br>
+                O sistema irá gerar ou substituir as alocações de <strong>todos os funcionários</strong>
+                com esse cargo nessa unidade, nos dias da semana configurados no turno.
+            </p>
+
+            <form method="POST">
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold">MÊS / ANO</label>
+                    <input type="month" name="mes_ano" class="form-control"
+                           value="{{ mes_atual }}" required>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold">UNIDADE (DEPARTAMENTO)</label>
+                    <select name="departamento" id="selDept" class="form-select">
+                        <option value="">Todos os departamentos</option>
+                        {% for d in departamentos %}
+                        <option value="{{ d }}" {{ 'selected' if d == dept_sel }}>{{ d }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold">CARGO / FUNÇÃO</label>
+                    <select name="funcao" id="selFuncao" class="form-select">
+                        <option value="">Todos os cargos</option>
+                        {% for f in funcoes %}
+                        <option value="{{ f }}">{{ f }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label text-muted small fw-bold">TURNO</label>
+                    <select name="turno_id" class="form-select" required>
+                        <option value="">Selecione um turno...</option>
+                        {% for t in turnos %}
+                        <option value="{{ t.id }}">
+                            {{ t.nome }}
+                            ({{ t.hora_inicio.strftime('%H:%M') }} – {{ t.hora_fim.strftime('%H:%M') }})
+                            {% if t.departamento %} · {{ t.departamento }}{% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="alert alert-warning small mb-4">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Atenção:</strong> Alocações existentes no período serão substituídas.
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100"
+                        onclick="return confirm('Confirma aplicar escala para todos os funcionários do cargo/departamento selecionado?')">
+                    <i class="fas fa-calendar-check me-2"></i>Aplicar Escala
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Preview de funcionários afetados -->
+    <div class="col-lg-7">
+        <div class="card p-4">
+            <h6 class="fw-bold mb-3 text-muted">FUNCIONÁRIOS POR DEPARTAMENTO / CARGO</h6>
+            <div id="previewFuncionarios">
+                <div class="text-muted small text-center py-4">
+                    Selecione um departamento ou cargo para ver os funcionários afetados.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const selDept   = document.getElementById('selDept');
+const selFuncao = document.getElementById('selFuncao');
+const preview   = document.getElementById('previewFuncionarios');
+
+async function carregarPreview() {
+    const dept   = selDept.value;
+    const funcao = selFuncao.value;
+    if (!dept && !funcao) {
+        preview.innerHTML = '<div class="text-muted small text-center py-4">Selecione um departamento ou cargo para ver os funcionários afetados.</div>';
+        return;
+    }
+    const params = new URLSearchParams();
+    if (dept)   params.set('dept', dept);
+    if (funcao) params.set('funcao', funcao);
+
+    preview.innerHTML = '<div class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+    try {
+        const resp = await fetch(`/escalas/cargo-mensal/preview?${params}`);
+        const data = await resp.json();
+        if (!data.length) {
+            preview.innerHTML = '<div class="text-muted small text-center py-4">Nenhum funcionário encontrado.</div>';
+            return;
+        }
+        preview.innerHTML = `
+            <p class="small text-muted mb-2">${data.length} funcionário(s) serão afetados:</p>
+            <div class="table-responsive">
+            <table class="table table-sm">
+                <thead><tr><th>Nome</th><th>Cargo</th><th>Departamento</th></tr></thead>
+                <tbody>
+                ${data.map(f => `<tr>
+                    <td>${f.nome}</td>
+                    <td><span class="badge bg-secondary">${f.funcao || '–'}</span></td>
+                    <td>${f.departamento || '–'}</td>
+                </tr>`).join('')}
+                </tbody>
+            </table>
+            </div>`;
+    } catch(e) {
+        preview.innerHTML = '<div class="text-danger small">Erro ao carregar preview.</div>';
+    }
+}
+
+// Ao mudar departamento, recarregar funções disponíveis
+selDept.addEventListener('change', async function() {
+    const dept = this.value;
+    const funcaoAtual = selFuncao.value;
+    const resp = await fetch(`/escalas/cargo-mensal/funcoes?dept=${encodeURIComponent(dept)}`);
+    const funcoes = await resp.json();
+    selFuncao.innerHTML = '<option value="">Todos os cargos</option>' +
+        funcoes.map(f => `<option value="${f}" ${f===funcaoAtual?'selected':''}>${f}</option>`).join('');
+    carregarPreview();
+});
+
+selFuncao.addEventListener('change', carregarPreview);
+
+// Carrega preview inicial se há filtro na URL
+if (selDept.value || selFuncao.value) carregarPreview();
+</script>
+{% endblock %}

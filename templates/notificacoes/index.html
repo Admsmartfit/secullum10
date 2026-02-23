@@ -1,0 +1,488 @@
+{% extends 'base.html' %}
+{% block title %}Regras de Notificação – Secullum Hub{% endblock %}
+
+{% block extra_css %}
+<style>
+    .rule-card {
+        border: 1px solid var(--border-color);
+        border-radius: 0.75rem;
+        background: var(--card-bg);
+        padding: 1.25rem;
+        transition: box-shadow 0.15s;
+    }
+    .rule-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    .rule-card.inactive { opacity: 0.55; }
+
+    .badge-trigger { background-color: var(--primary-soft); color: var(--primary); }
+    .badge-condition { background-color: var(--warning-soft); color: var(--warning); }
+
+    .var-chip {
+        display: inline-block;
+        background: #f1f5f9;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 0.72rem;
+        font-family: monospace;
+        padding: 0.15em 0.5em;
+        cursor: pointer;
+        user-select: none;
+        margin: 2px;
+    }
+    .var-chip:hover { background: var(--primary-soft); }
+
+    .form-section {
+        background: #f8fafc;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    .form-section-title {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--text-muted);
+        margin-bottom: 0.75rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-0 fw-bold">Regras de Notificação</h1>
+        <p class="text-muted small mb-0 mt-1">Automatize alertas WhatsApp com base em eventos e condições de RH</p>
+    </div>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalRegra"
+            onclick="abrirNovaRegra()">
+        <i class="fas fa-plus me-2"></i>Nova Regra
+    </button>
+</div>
+
+{% if regras %}
+<div class="d-flex flex-column gap-3">
+    {% for r in regras %}
+    <div class="rule-card {% if not r.ativo %}inactive{% endif %}">
+        <div class="d-flex align-items-start justify-content-between gap-3">
+            <div class="flex-grow-1">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <h6 class="mb-0 fw-semibold">{{ r.nome }}</h6>
+                    {% if r.ativo %}
+                    <span class="badge bg-success-subtle text-success" style="font-size:0.68rem;">Ativa</span>
+                    {% else %}
+                    <span class="badge bg-secondary-subtle text-secondary" style="font-size:0.68rem;">Pausada</span>
+                    {% endif %}
+                </div>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <span class="badge badge-trigger small">
+                        <i class="fas fa-bolt me-1"></i>{{ trigger_labels.get(r.trigger_type, r.trigger_type) }}
+                    </span>
+                    <span class="badge badge-condition small">
+                        <i class="fas fa-filter me-1"></i>{{ condition_labels.get(r.condition_type, r.condition_type) }}
+                        {% if r.threshold_minutes and r.condition_type not in ['ABSENCE','INTERJORNADA','ESCALA_ENVIO'] %}
+                        (+{{ r.threshold_minutes }}min)
+                        {% endif %}
+                    </span>
+                    {% if r.dest_employee %}<span class="badge bg-blue-soft small"><i class="fas fa-user me-1"></i>Funcionário</span>{% endif %}
+                    {% if r.dest_manager  %}<span class="badge bg-purple-soft small"><i class="fas fa-user-tie me-1"></i>Gestor</span>{% endif %}
+                    {% if r.dest_rh       %}<span class="badge bg-orange-soft small"><i class="fas fa-building me-1"></i>RH</span>{% endif %}
+                </div>
+                <div class="small text-muted">
+                    {% if r.ultima_execucao %}
+                    Última execução: {{ r.ultima_execucao.strftime('%d/%m %H:%M') }} —
+                    <span class="text-success fw-semibold">{{ r.mensagens_enviadas }} mensagens enviadas</span>
+                    {% else %}
+                    Nunca executada
+                    {% endif %}
+                    {% if r.only_working_hours %}
+                    <span class="ms-2"><i class="fas fa-clock me-1"></i>Só durante expediente</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="d-flex gap-2 flex-shrink-0">
+                <button class="btn btn-sm btn-outline-light" title="Executar agora"
+                        onclick="executarRegra({{ r.id }}, '{{ r.nome|e }}')"
+                        data-rid="{{ r.id }}">
+                    <i class="fas fa-play"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-light" title="Editar"
+                        data-bs-toggle="modal" data-bs-target="#modalRegra"
+                        onclick="abrirEditar({{ r|tojson }})">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm {% if r.ativo %}btn-warning{% else %}btn-outline-success{% endif %}"
+                        title="{% if r.ativo %}Pausar{% else %}Ativar{% endif %}"
+                        onclick="toggleRegra({{ r.id }}, this)">
+                    <i class="fas {% if r.ativo %}fa-pause{% else %}fa-play{% endif %}"></i>
+                </button>
+                <form method="POST" action="{{ url_for('notificacoes.excluir', rid=r.id) }}"
+                      class="d-inline" onsubmit="return confirm('Excluir regra?')">
+                    <button class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card p-5 text-center text-muted">
+    <i class="fas fa-bell-slash fa-3x mb-3 opacity-25"></i>
+    <h5>Nenhuma regra configurada</h5>
+    <p class="small mb-3">Crie regras para enviar alertas automáticos via WhatsApp quando<br>
+    funcionários atrasam, faltam, fazem hora extra, entre outros.</p>
+    <button class="btn btn-primary mx-auto" data-bs-toggle="modal" data-bs-target="#modalRegra"
+            onclick="abrirNovaRegra()" style="width:fit-content;">
+        <i class="fas fa-plus me-2"></i>Criar Primeira Regra
+    </button>
+</div>
+{% endif %}
+
+
+<!-- ── Modal criar / editar regra ─────────────────────────────────────────── -->
+<div class="modal fade" id="modalRegra" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered" style="max-height:95vh;">
+        <div class="modal-content" style="max-height:90vh;display:flex;flex-direction:column;">
+            <div class="modal-header border-bottom py-3" style="background:#f8fafc;flex-shrink:0;">
+                <h5 class="modal-title fw-bold" id="modalRegraTitle">Nova Regra</h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formRegra" method="POST" action="{{ url_for('notificacoes.nova') }}"
+                  style="overflow-y:auto;overflow-x:hidden;flex:1 1 auto;">
+                <input type="hidden" name="_rid" id="inputRid" value="">
+                <div class="p-3">
+
+                    <!-- Nome e status -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold">Nome da Regra</label>
+                            <input type="text" name="nome" id="inputNome" class="form-control form-control-sm"
+                                   placeholder="Ex: Alerta de Atraso Crítico" required>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-check form-switch ms-1">
+                                <input class="form-check-input" type="checkbox" name="ativo"
+                                       value="1" id="inputAtivo" checked>
+                                <label class="form-check-label small fw-bold" for="inputAtivo">Regra Ativa</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accordion com as seções -->
+                    <div class="accordion accordion-flush" id="accRegra" style="border:1px solid #e2e8f0;border-radius:.5rem;overflow:hidden;">
+
+                        <!-- 1. Gatilho -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button py-2 small fw-bold" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#acc1">
+                                    <i class="fas fa-bolt text-warning me-2"></i>Gatilho — Quando executar?
+                                </button>
+                            </h2>
+                            <div id="acc1" class="accordion-collapse collapse show" data-bs-parent="">
+                                <div class="accordion-body py-2">
+                                    <div class="row g-2">
+                                        <div class="col-md-5">
+                                            <label class="form-label small fw-bold">Tipo de Gatilho</label>
+                                            <select name="trigger_type" id="selTrigger" class="form-select form-select-sm"
+                                                    onchange="updateTriggerFields()">
+                                                <option value="EVENT_SYNC">Ao sincronizar batidas</option>
+                                                <option value="EVENT_ABSENCE">Ao detectar ausência <i>(bot de ausência)</i></option>
+                                                <option value="DAILY">Diário (hora configurável)</option>
+                                                <option value="WEEKLY">Semanal (dia configurável)</option>
+                                            </select>
+                                            <div id="triggerHelp" class="form-text mt-1"></div>
+                                        </div>
+                                        <div class="col-md-3" id="divTriggerHour" style="display:none;">
+                                            <label class="form-label small fw-bold">Hora</label>
+                                            <input type="number" name="trigger_hour" id="inputTriggerHour"
+                                                   class="form-control form-control-sm" min="0" max="23" value="8">
+                                        </div>
+                                        <div class="col-md-4" id="divTriggerWeekday" style="display:none;">
+                                            <label class="form-label small fw-bold">Dia da Semana</label>
+                                            <select name="trigger_weekday" id="selWeekday" class="form-select form-select-sm">
+                                                <option value="0">Segunda</option>
+                                                <option value="1">Terça</option>
+                                                <option value="2">Quarta</option>
+                                                <option value="3">Quinta</option>
+                                                <option value="4" selected>Sexta</option>
+                                                <option value="5">Sábado</option>
+                                                <option value="6">Domingo</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. Condição -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed py-2 small fw-bold" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#acc2">
+                                    <i class="fas fa-filter text-primary me-2"></i>Condição — O que verificar?
+                                </button>
+                            </h2>
+                            <div id="acc2" class="accordion-collapse collapse" data-bs-parent="">
+                                <div class="accordion-body py-2">
+                                    <div class="row g-2">
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-bold">Tipo de Condição</label>
+                                            <select name="condition_type" id="selCondition" class="form-select form-select-sm"
+                                                    onchange="updateConditionFields(); loadDefaults()">
+                                                {% for k, v in condition_labels.items() %}
+                                                <option value="{{ k }}">{{ v }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4" id="divThreshold">
+                                            <label class="form-label small fw-bold">Tolerância (minutos)</label>
+                                            <input type="number" name="threshold_minutes" id="inputThreshold"
+                                                   class="form-control form-control-sm" min="1" max="480" value="15">
+                                            <div class="form-text small">Dispara quando exceder este valor</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. Destinatários -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed py-2 small fw-bold" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#acc3">
+                                    <i class="fas fa-users text-success me-2"></i>Destinatários
+                                </button>
+                            </h2>
+                            <div id="acc3" class="accordion-collapse collapse" data-bs-parent="">
+                                <div class="accordion-body py-2">
+                                    <div class="d-flex gap-4 flex-wrap">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="dest_employee"
+                                                   id="chkEmployee" onchange="updateTemplateVisibility()">
+                                            <label class="form-check-label small" for="chkEmployee">O próprio Funcionário</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="dest_manager"
+                                                   id="chkManager" checked onchange="updateTemplateVisibility()">
+                                            <label class="form-check-label small" for="chkManager">Gestor do Departamento</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="dest_rh"
+                                                   id="chkRh" onchange="updateTemplateVisibility()">
+                                            <label class="form-check-label small" for="chkRh">Grupo de RH</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 4. Mensagens -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed py-2 small fw-bold" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#acc4">
+                                    <i class="fas fa-comment-alt text-info me-2"></i>Mensagens WhatsApp
+                                </button>
+                            </h2>
+                            <div id="acc4" class="accordion-collapse collapse" data-bs-parent="">
+                                <div class="accordion-body py-2">
+                                    <div class="mb-2 small text-muted">
+                                        Clique nas variáveis para inserir no campo de texto focado:
+                                        <span class="var-chip" onclick="insertVar('{name}', event)">{name}</span>
+                                        <span class="var-chip" onclick="insertVar('{full_name}', event)">{full_name}</span>
+                                        <span class="var-chip" onclick="insertVar('{minutes}', event)">{minutes}</span>
+                                        <span class="var-chip" onclick="insertVar('{turno}', event)">{turno}</span>
+                                        <span class="var-chip" onclick="insertVar('{inicio}', event)">{inicio}</span>
+                                        <span class="var-chip" onclick="insertVar('{fim}', event)">{fim}</span>
+                                        <span class="var-chip" onclick="insertVar('{data}', event)">{data}</span>
+                                    </div>
+                                    <div id="divTemplateManager" class="mb-2">
+                                        <label class="form-label small fw-bold">Mensagem para Gestor / RH</label>
+                                        <textarea name="template_manager" id="txaManager" class="form-control form-control-sm"
+                                                  rows="2" placeholder="Mensagem enviada ao gestor/RH..."></textarea>
+                                    </div>
+                                    <div id="divTemplateEmployee" style="display:none;">
+                                        <label class="form-label small fw-bold">Mensagem para o Funcionário</label>
+                                        <textarea name="template_employee" id="txaEmployee" class="form-control form-control-sm"
+                                                  rows="2" placeholder="Mensagem enviada ao próprio funcionário..."></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 5. Restrições -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed py-2 small fw-bold" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#acc5">
+                                    <i class="fas fa-shield-alt text-secondary me-2"></i>Restrições de Envio
+                                </button>
+                            </h2>
+                            <div id="acc5" class="accordion-collapse collapse" data-bs-parent="">
+                                <div class="accordion-body py-2">
+                                    <div class="d-flex gap-4 flex-wrap">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="only_working_hours"
+                                                   id="chkWorkingHours" checked>
+                                            <label class="form-check-label small" for="chkWorkingHours">
+                                                Enviar apenas durante expediente do funcionário
+                                            </label>
+                                        </div>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="send_immediately"
+                                                   id="chkSendImm">
+                                            <label class="form-check-label small" for="chkSendImm">
+                                                Envio imediato 24h (alertas críticos)
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div><!-- /accordion -->
+                </div>
+                <div class="modal-footer border-top py-2" style="flex-shrink:0;">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="fas fa-save me-1"></i>Salvar Regra
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const DEFAULTS = {{ defaults_json | tojson }};
+let _lastTextarea = null;
+
+// ── Abrir modal nova regra ──────────────────────────────────────────────────
+function abrirNovaRegra() {
+    document.getElementById('modalRegraTitle').textContent = 'Nova Regra';
+    document.getElementById('formRegra').action = '{{ url_for("notificacoes.nova") }}';
+    document.getElementById('formRegra').reset();
+    document.getElementById('inputRid').value = '';
+    document.getElementById('inputAtivo').checked = true;
+    document.getElementById('chkManager').checked = true;
+    updateTriggerFields();
+    updateConditionFields();
+    updateTemplateVisibility();
+    loadDefaults();
+}
+
+// ── Abrir modal editar ──────────────────────────────────────────────────────
+function abrirEditar(r) {
+    document.getElementById('modalRegraTitle').textContent = 'Editar Regra';
+    document.getElementById('formRegra').action = `/notificacoes/${r.id}/editar`;
+    document.getElementById('inputRid').value = r.id;
+    document.getElementById('inputNome').value = r.nome;
+    document.getElementById('inputAtivo').checked = r.ativo;
+    document.getElementById('selTrigger').value = r.trigger_type;
+    document.getElementById('inputTriggerHour').value = r.trigger_hour || 8;
+    document.getElementById('selWeekday').value = r.trigger_weekday ?? 4;
+    document.getElementById('selCondition').value = r.condition_type;
+    document.getElementById('inputThreshold').value = r.threshold_minutes || 15;
+    document.getElementById('chkEmployee').checked = r.dest_employee;
+    document.getElementById('chkManager').checked = r.dest_manager;
+    document.getElementById('chkRh').checked = r.dest_rh;
+    document.getElementById('txaManager').value = r.template_manager || '';
+    document.getElementById('txaEmployee').value = r.template_employee || '';
+    document.getElementById('chkWorkingHours').checked = r.only_working_hours;
+    document.getElementById('chkSendImm').checked = r.send_immediately;
+    updateTriggerFields();
+    updateConditionFields();
+    updateTemplateVisibility();
+}
+
+// ── Campos dinâmicos de trigger ──────────────────────────────────────────────
+const TRIGGER_HELP = {
+    'EVENT_SYNC':    'Executa após cada ciclo de sincronização de batidas (Celery).',
+    'EVENT_ABSENCE': 'Executa junto ao bot de ausência — verifica funcionários sem ponto no dia.',
+    'DAILY':         'Executa todo dia na hora configurada (via Celery beat).',
+    'WEEKLY':        'Executa uma vez por semana no dia e hora configurados.',
+};
+function updateTriggerFields() {
+    const t = document.getElementById('selTrigger').value;
+    const showHour = ['DAILY', 'WEEKLY'].includes(t);
+    document.getElementById('divTriggerHour').style.display = showHour ? '' : 'none';
+    document.getElementById('divTriggerWeekday').style.display = t === 'WEEKLY' ? '' : 'none';
+    document.getElementById('triggerHelp').textContent = TRIGGER_HELP[t] || '';
+}
+
+// ── Campos dinâmicos de condição ────────────────────────────────────────────
+function updateConditionFields() {
+    const c = document.getElementById('selCondition').value;
+    const noThreshold = ['ABSENCE', 'INTERJORNADA', 'ESCALA_ENVIO'];
+    document.getElementById('divThreshold').style.display = noThreshold.includes(c) ? 'none' : '';
+}
+
+// ── Visibilidade templates ──────────────────────────────────────────────────
+function updateTemplateVisibility() {
+    const empChecked = document.getElementById('chkEmployee').checked;
+    const mgrChecked = document.getElementById('chkManager').checked || document.getElementById('chkRh').checked;
+    document.getElementById('divTemplateEmployee').style.display = empChecked ? '' : 'none';
+    document.getElementById('divTemplateManager').style.display = mgrChecked ? '' : 'none';
+}
+
+// ── Carregar defaults de template ──────────────────────────────────────────
+function loadDefaults() {
+    const cond = document.getElementById('selCondition').value;
+    const d = DEFAULTS[cond] || { manager: '', employee: '' };
+    const mgrField = document.getElementById('txaManager');
+    const empField = document.getElementById('txaEmployee');
+    if (!mgrField.value) mgrField.value = d.manager || '';
+    if (!empField.value) empField.value = d.employee || '';
+}
+
+// ── Inserir variável no textarea focado ─────────────────────────────────────
+document.querySelectorAll('textarea').forEach(ta => {
+    ta.addEventListener('focus', () => { _lastTextarea = ta; });
+});
+
+function insertVar(v, e) {
+    e.preventDefault();
+    const ta = _lastTextarea;
+    if (!ta) return;
+    const s = ta.selectionStart, end = ta.selectionEnd;
+    ta.value = ta.value.slice(0, s) + v + ta.value.slice(end);
+    ta.selectionStart = ta.selectionEnd = s + v.length;
+    ta.focus();
+}
+
+// ── Toggle ativa/pausa ───────────────────────────────────────────────────────
+function toggleRegra(rid, btn) {
+    fetch(`/notificacoes/${rid}/toggle`, { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) location.reload();
+        });
+}
+
+// ── Executar manualmente ────────────────────────────────────────────────────
+function executarRegra(rid, nome) {
+    if (!confirm(`Executar regra "${nome}" agora?\nIsso pode enviar mensagens WhatsApp.`)) return;
+    const btn = document.querySelector(`[data-rid="${rid}"]`);
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+    fetch(`/notificacoes/${rid}/executar`, { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            alert(`Execução concluída: ${d.mensagens} mensagem(s) enviada(s).`);
+            location.reload();
+        })
+        .catch(() => {
+            alert('Erro ao executar a regra.');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play"></i>'; }
+        });
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+    updateTriggerFields();
+    updateConditionFields();
+    updateTemplateVisibility();
+});
+</script>
+{% endblock %}

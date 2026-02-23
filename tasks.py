@@ -11,13 +11,11 @@ def register_tasks(celery):
 
     @celery.task(name='tasks.sync_secullum')
     def sync_secullum():
-        from services.sync_service import sync_funcionarios, sync_batidas
+        from services.sync_service import sync_funcionarios, sync_batidas_incremental
         logger.info('[CELERY] Sync Secullum...')
         ok_f, msg_f = sync_funcionarios()
         logger.info(f'Funcionarios: {msg_f}')
-        data_fim = date.today().strftime('%Y-%m-%d')
-        data_inicio = (date.today() - timedelta(days=2)).strftime('%Y-%m-%d')
-        ok_b, msg_b = sync_batidas(data_inicio, data_fim)
+        ok_b, msg_b = sync_batidas_incremental()
         logger.info(f'Batidas: {msg_b}')
         return {'funcionarios': msg_f, 'batidas': msg_b}
 
@@ -89,6 +87,35 @@ def register_tasks(celery):
     def processar_webhook_whatsapp(data: dict):
         from blueprints.whatsapp import _processar_mensagem
         _processar_mensagem(data)
+
+    @celery.task(name='tasks.processar_regras_agendadas')
+    def processar_regras_agendadas():
+        """Processa regras DAILY/WEEKLY para a hora atual."""
+        from services.notification_processor import processar_regras_agendadas as _proc
+        result = _proc()
+        logger.info(f'[regras_agendadas] {result}')
+        return result
+
+    @celery.task(name='tasks.processar_regras_evento_sync')
+    def processar_regras_evento_sync():
+        """Processa regras EVENT_SYNC após cada ciclo de sync de batidas."""
+        from services.notification_processor import processar_regras_evento
+        result = processar_regras_evento('EVENT_SYNC')
+        logger.info(f'[regras_evento_sync] {result}')
+        return result
+
+    @celery.task(name='tasks.sync_horarios_e_alocacoes')
+    def sync_horarios_e_alocacoes():
+        """Sincroniza Horários da API Secullum e gera AlocacaoDiaria para 60 dias."""
+        from datetime import date, timedelta
+        from services.sync_service import sync_horarios, sync_alocacoes
+        ok_h, msg_h = sync_horarios()
+        logger.info(f'[sync_horarios] {msg_h}')
+        data_ini = date.today().strftime('%Y-%m-%d')
+        data_fim = (date.today() + timedelta(days=60)).strftime('%Y-%m-%d')
+        ok_a, msg_a = sync_alocacoes(data_ini, data_fim)
+        logger.info(f'[sync_alocacoes] {msg_a}')
+        return {'horarios': msg_h, 'alocacoes': msg_a}
 
     @celery.task(name='tasks.alerta_documentos_vencendo')
     def alerta_documentos_vencendo():

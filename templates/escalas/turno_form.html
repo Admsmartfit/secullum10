@@ -3,47 +3,181 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 mb-0">{{ 'Editar' if turno else 'Novo' }} Turno</h1>
-    <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-light">
+    <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-secondary">
         <i class="fas fa-arrow-left me-2"></i>Voltar
     </a>
 </div>
 
-<div class="card p-4" style="max-width:600px;">
+<div class="card p-4 mx-auto" style="max-width:860px;">
     <form method="POST">
-        <div class="mb-3">
-            <label class="form-label text-muted small fw-bold">NOME DO TURNO</label>
-            <input type="text" name="nome" class="form-control bg-dark text-white border-secondary"
-                   value="{{ turno.nome if turno else '' }}" placeholder="Ex: Manhã 6h-14h" required>
-        </div>
-        <div class="row g-3 mb-3">
-            <div class="col-md-6">
-                <label class="form-label text-muted small fw-bold">HORA INÍCIO</label>
-                <input type="time" name="hora_inicio" class="form-control bg-dark text-white border-secondary"
-                       value="{{ turno.hora_inicio.strftime('%H:%M') if turno else '06:00' }}" required>
+
+        <!-- Nome + Departamento -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-7">
+                <label class="form-label text-muted small fw-bold">NOME DO TURNO</label>
+                <input type="text" name="nome" class="form-control"
+                    value="{{ turno.nome if turno else '' }}"
+                    placeholder="Ex: Manhã 08h-17h" required>
             </div>
-            <div class="col-md-6">
-                <label class="form-label text-muted small fw-bold">HORA FIM</label>
-                <input type="time" name="hora_fim" class="form-control bg-dark text-white border-secondary"
-                       value="{{ turno.hora_fim.strftime('%H:%M') if turno else '14:00' }}" required>
+            <div class="col-md-5">
+                <label class="form-label text-muted small fw-bold">UNIDADE / DEPARTAMENTO</label>
+                <input type="text" name="departamento" class="form-control" list="deptList"
+                    value="{{ turno.departamento if turno else '' }}"
+                    placeholder="Todos (global)">
+                <datalist id="deptList">
+                    {% for d in departamentos %}
+                    <option value="{{ d }}">{{ d }}</option>
+                    {% endfor %}
+                </datalist>
+                <div class="form-text">Deixe vazio para turno global (todas as unidades).</div>
             </div>
         </div>
-        <div class="mb-4">
-            <label class="form-label text-muted small fw-bold">DIAS DA SEMANA</label>
-            <div class="d-flex gap-2 flex-wrap mt-2">
-                {% for dia in dias %}
-                {% set i = loop.index0 %}
-                <div class="form-check form-check-inline">
-                    <input class="form-check-input" type="checkbox" name="dias_semana"
-                           value="{{ i }}" id="dia_{{ i }}"
-                           {{ 'checked' if turno and i in turno.dias_semana_list else ('checked' if not turno and i < 5 else '') }}>
-                    <label class="form-check-label" for="dia_{{ i }}">{{ dia }}</label>
+
+        <!-- Padrões -->
+        <div class="card bg-light border-0 p-3 mb-4">
+            <div class="fw-bold small text-muted mb-2">HORÁRIO PADRÃO (aplicado a Seg–Sex automaticamente)</div>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label text-muted small fw-bold">HORA INÍCIO</label>
+                    <input type="time" id="padrao_inicio" name="hora_inicio" class="form-control"
+                        value="{{ turno.hora_inicio.strftime('%H:%M') if turno else '08:00' }}" required>
                 </div>
-                {% endfor %}
+                <div class="col-md-4">
+                    <label class="form-label text-muted small fw-bold">HORA FIM</label>
+                    <input type="time" id="padrao_fim" name="hora_fim" class="form-control"
+                        value="{{ turno.hora_fim.strftime('%H:%M') if turno else '17:00' }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label text-muted small fw-bold">INTERVALO</label>
+                    <select id="padrao_intervalo" name="intervalo_minutos" class="form-select">
+                        <option value="15"  {{ 'selected' if turno and turno.intervalo_minutos==15  }}>15 min</option>
+                        <option value="30"  {{ 'selected' if turno and turno.intervalo_minutos==30  }}>30 min</option>
+                        <option value="60"  {{ 'selected' if (not turno) or turno.intervalo_minutos==60 }}>1 hora</option>
+                        <option value="90"  {{ 'selected' if turno and turno.intervalo_minutos==90  }}>1h 30m</option>
+                        <option value="120" {{ 'selected' if turno and turno.intervalo_minutos==120 }}>2 horas</option>
+                    </select>
+                </div>
             </div>
         </div>
-        <button type="submit" class="btn btn-primary px-4">
+
+        <!-- Por dia -->
+        <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label text-muted small fw-bold mb-0">HORÁRIOS POR DIA DA SEMANA</label>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnAplicarPadrao">
+                    <i class="fas fa-copy me-1"></i>Aplicar padrão a Seg–Sex
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle text-center">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:50px;">Ativo</th>
+                            <th class="text-start">Dia</th>
+                            <th>Início</th>
+                            <th>Fim</th>
+                            <th>Intervalo (min)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for dia in dias %}
+                        {% set i = loop.index0 %}
+                        {% set complex = (turno.dias_complexos[i|string] if turno else none) %}
+                        {% if i == 5 %}
+                        <tr class="table-warning">
+                            <td colspan="5" class="text-start py-1 px-2">
+                                <small class="fw-bold text-warning-emphasis">
+                                    <i class="fas fa-sun me-1"></i>FIM DE SEMANA – configure separadamente se necessário
+                                </small>
+                            </td>
+                        </tr>
+                        {% endif %}
+                        <tr data-dia="{{ i }}">
+                            <td>
+                                <input class="form-check-input dia-checkbox" type="checkbox"
+                                    name="dias_semana" value="{{ i }}" id="dia_{{ i }}"
+                                    {{ 'checked' if (turno and (i in turno.dias_semana_list)) or (not turno and i < 5) }}>
+                            </td>
+                            <td class="text-start">
+                                <label class="form-check-label" for="dia_{{ i }}">{{ dia }}</label>
+                            </td>
+                            <td>
+                                <input type="time" name="dia_{{ i }}_inicio"
+                                    class="form-control form-control-sm daily-input"
+                                    value="{{ complex.inicio if complex else (turno.hora_inicio.strftime('%H:%M') if turno else '08:00') }}">
+                            </td>
+                            <td>
+                                <input type="time" name="dia_{{ i }}_fim"
+                                    class="form-control form-control-sm daily-input"
+                                    value="{{ complex.fim if complex else (turno.hora_fim.strftime('%H:%M') if turno else '17:00') }}">
+                            </td>
+                            <td>
+                                <input type="number" name="dia_{{ i }}_intervalo"
+                                    class="form-control form-control-sm daily-input" placeholder="60" min="0" max="240"
+                                    value="{{ complex.intervalo if complex else (turno.intervalo_minutos if turno else 60) }}">
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary px-5">
             <i class="fas fa-save me-2"></i>Salvar Turno
         </button>
     </form>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // ── Habilitar/desabilitar campos por linha ──────────────────────────────
+    const checkboxes = document.querySelectorAll('.dia-checkbox');
+    function updateRow(cb) {
+        const row = cb.closest('tr');
+        row.querySelectorAll('.daily-input').forEach(inp => {
+            inp.disabled = !cb.checked;
+        });
+        row.style.opacity = cb.checked ? '1' : '0.4';
+    }
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', () => updateRow(cb));
+        updateRow(cb);
+    });
+
+    // ── Auto-fill Seg–Sex ao mudar padrão ──────────────────────────────────
+    function propagarPadrao() {
+        const inicio   = document.getElementById('padrao_inicio').value;
+        const fim      = document.getElementById('padrao_fim').value;
+        const intervalo = document.getElementById('padrao_intervalo').value;
+        for (let i = 0; i <= 4; i++) {
+            const row = document.querySelector(`tr[data-dia="${i}"]`);
+            if (!row) continue;
+            const cb = row.querySelector('.dia-checkbox');
+            if (!cb || !cb.checked) continue; // só altera dias marcados
+            row.querySelector(`[name="dia_${i}_inicio"]`).value    = inicio;
+            row.querySelector(`[name="dia_${i}_fim"]`).value       = fim;
+            row.querySelector(`[name="dia_${i}_intervalo"]`).value = intervalo;
+        }
+    }
+
+    document.getElementById('padrao_inicio').addEventListener('change', propagarPadrao);
+    document.getElementById('padrao_fim').addEventListener('change', propagarPadrao);
+    document.getElementById('padrao_intervalo').addEventListener('change', propagarPadrao);
+
+    document.getElementById('btnAplicarPadrao').addEventListener('click', function() {
+        // Aplica mesmo em dias desmarcados (para pré-preencher antes de marcar)
+        const inicio    = document.getElementById('padrao_inicio').value;
+        const fim       = document.getElementById('padrao_fim').value;
+        const intervalo = document.getElementById('padrao_intervalo').value;
+        for (let i = 0; i <= 4; i++) {
+            const row = document.querySelector(`tr[data-dia="${i}"]`);
+            if (!row) continue;
+            row.querySelector(`[name="dia_${i}_inicio"]`).value    = inicio;
+            row.querySelector(`[name="dia_${i}_fim"]`).value       = fim;
+            row.querySelector(`[name="dia_${i}_intervalo"]`).value = intervalo;
+        }
+    });
+});
+</script>
 {% endblock %}

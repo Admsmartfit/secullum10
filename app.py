@@ -36,6 +36,7 @@ def create_app():
     from blueprints.marketplace import marketplace_bp
     from blueprints.prontuario import prontuario_bp
     from blueprints.config_hub import config_hub_bp
+    from blueprints.notificacoes import notificacoes_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -49,6 +50,7 @@ def create_app():
     app.register_blueprint(marketplace_bp)
     app.register_blueprint(prontuario_bp)
     app.register_blueprint(config_hub_bp)
+    app.register_blueprint(notificacoes_bp)
 
     # ── Celery beat schedule ───────────────────────────────────────────────────
     from extensions import make_celery
@@ -77,6 +79,14 @@ def create_app():
         'alerta-documentos-daily': {
             'task': 'tasks.alerta_documentos_vencendo',
             'schedule': crontab(hour=8, minute=0),
+        },
+        'processar-regras-agendadas-hourly': {
+            'task': 'tasks.processar_regras_agendadas',
+            'schedule': crontab(minute=5),  # :05 de cada hora
+        },
+        'sync-horarios-daily': {
+            'task': 'tasks.sync_horarios_e_alocacoes',
+            'schedule': crontab(hour=2, minute=0),  # 02:00 – gera alocações dos próximos 60 dias
         },
     }
     celery.conf.timezone = 'America/Sao_Paulo'

@@ -83,14 +83,14 @@
 <!-- Modal de Detalhes -->
 <div class="modal fade" id="detalhesModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content bg-secondary text-white border-0">
-            <div class="modal-header border-0">
-                <h5 class="modal-title">Detalhes do Funcionário</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        <div class="modal-content border-0" style="background:#fff;">
+            <div class="modal-header border-bottom" style="background:#f8fafc;">
+                <h5 class="modal-title fw-bold text-dark">Detalhes do Funcionário</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="modalContent">
                 <div class="text-center py-4">
-                    <div class="spinner-border text-info" role="status"></div>
+                    <div class="spinner-border text-primary" role="status"></div>
                 </div>
             </div>
         </div>
@@ -110,59 +110,118 @@
             ? `<a href="https://wa.me/55${func.celular.replace(/\D/g, '')}" target="_blank" class="text-success"><i class="fab fa-whatsapp me-1"></i>${func.celular}</a>`
             : '---';
 
+        const scoreHtml = func.score !== null && func.score !== undefined
+            ? `<span class="badge ${func.score >= 90 ? 'bg-success' : func.score >= 70 ? 'bg-warning text-dark' : 'bg-danger'}">${Math.round(func.score)}% pontualidade</span>`
+            : '';
+
         const content = `
-            <div class="row g-4">
-                <div class="col-12">
-                    <h4 class="text-accent mb-3"><i class="fas fa-user-circle me-2"></i>${func.nome}</h4>
-                </div>
-
-                <div class="col-md-6">
-                    <h6 class="text-muted text-uppercase small mb-3">Documentos</h6>
-                    <div class="mb-2"><strong>CPF:</strong> ${func.cpf}</div>
-                    <div class="mb-2"><strong>RG:</strong> ${func.rg}</div>
-                    <div class="mb-2"><strong>PIS:</strong> ${func.pis}</div>
-                    <div class="mb-2"><strong>Nº Folha:</strong> ${func.numero_folha}</div>
-                </div>
-
-                <div class="col-md-6">
-                    <h6 class="text-muted text-uppercase small mb-3">Contatos</h6>
-                    <div class="mb-2"><strong>Email:</strong> ${func.email}</div>
-                    <div class="mb-2"><strong>Celular:</strong> ${whatsappLink}</div>
-                    <div class="mb-2"><strong>Telefone:</strong> ${func.telefone}</div>
-                </div>
-
-                <div class="col-12">
-                    <h6 class="text-muted text-uppercase small mb-3">Endereço</h6>
-                    <div class="mb-2"><strong>Logradouro:</strong> ${func.endereco}</div>
-                    <div class="row">
-                        <div class="col-md-6 mb-2"><strong>Bairro:</strong> ${func.bairro}</div>
-                        <div class="col-md-6 mb-2"><strong>CEP:</strong> ${func.cep}</div>
+            <div class="row g-3">
+                <div class="col-12 d-flex align-items-center gap-3 mb-1">
+                    <div>
+                        <h5 class="fw-bold mb-0 text-dark">${func.nome}</h5>
+                        <div class="text-muted small">${func.funcao} · ${func.departamento} ${scoreHtml}</div>
                     </div>
-                    <div class="mb-2"><strong>Cidade:</strong> ${func.cidade} - ${func.uf}</div>
+                </div>
+
+                <!-- Escala Atual – preenchida via AJAX -->
+                <div class="col-12" id="escala-section-${id}">
+                    <div class="d-flex align-items-center gap-2 text-muted small p-3 rounded" style="background:#f1f5f9;">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                        Carregando escala...
+                    </div>
+                </div>
+
+                <div class="col-12"><hr class="my-1"></div>
+
+                <div class="col-md-6">
+                    <p class="text-muted text-uppercase fw-bold small mb-2">Documentos</p>
+                    <div class="mb-1 small"><span class="text-muted">CPF:</span> ${func.cpf}</div>
+                    <div class="mb-1 small"><span class="text-muted">RG:</span> ${func.rg}</div>
+                    <div class="mb-1 small"><span class="text-muted">PIS:</span> ${func.pis}</div>
+                    <div class="mb-1 small"><span class="text-muted">Nº Folha:</span> ${func.numero_folha}</div>
                 </div>
 
                 <div class="col-md-6">
-                    <h6 class="text-muted text-uppercase small mb-3">Dados Profissionais</h6>
-                    <div class="mb-2"><strong>Departamento:</strong> ${func.departamento}</div>
-                    <div class="mb-2"><strong>Função:</strong> ${func.funcao}</div>
-                    <div class="mb-2"><strong>Admissão:</strong> ${func.admissao}</div>
+                    <p class="text-muted text-uppercase fw-bold small mb-2">Contatos</p>
+                    <div class="mb-1 small"><span class="text-muted">Email:</span> ${func.email}</div>
+                    <div class="mb-1 small"><span class="text-muted">Celular:</span> ${whatsappLink}</div>
+                    <div class="mb-1 small"><span class="text-muted">Telefone:</span> ${func.telefone}</div>
+                </div>
+
+                <div class="col-12">
+                    <p class="text-muted text-uppercase fw-bold small mb-2">Endereço</p>
+                    <div class="small">${func.endereco}, ${func.bairro} — ${func.cidade}/${func.uf} · CEP ${func.cep}</div>
                 </div>
 
                 <div class="col-md-6">
-                    <h6 class="text-muted text-uppercase small mb-3">Informações Pessoais</h6>
-                    <div class="mb-2"><strong>Nascimento:</strong> ${func.nascimento}</div>
+                    <p class="text-muted text-uppercase fw-bold small mb-2">Dados Profissionais</p>
+                    <div class="mb-1 small"><span class="text-muted">Admissão:</span> ${func.admissao}</div>
+                    <div class="mb-1 small"><span class="text-muted">Nascimento:</span> ${func.nascimento}</div>
                 </div>
 
-                <div class="col-12 mt-4">
-                    <a href="/espelho?funcionario_id=${id}" class="btn btn-primary w-100">
-                        <i class="fas fa-calendar-alt me-2"></i>Ver Espelho de Ponto
+                <div class="col-12 mt-2">
+                    <a href="/espelho?funcionario_id=${id}" class="btn btn-primary btn-sm me-2">
+                        <i class="fas fa-calendar-alt me-1"></i>Espelho de Ponto
+                    </a>
+                    <a href="/escalas/calendario" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-calendar-week me-1"></i>Calendário de Escalas
                     </a>
                 </div>
             </div>
         `;
 
         document.getElementById('modalContent').innerHTML = content;
-        new bootstrap.Modal(document.getElementById('detalhesModal')).show();
+        const modal = new bootstrap.Modal(document.getElementById('detalhesModal'));
+        modal.show();
+
+        // Busca escala atual via AJAX
+        fetch(`/escalas/funcionario/${id}/proximos`)
+            .then(r => r.json())
+            .then(sched => {
+                const sec = document.getElementById(`escala-section-${id}`);
+                if (!sec) return;
+
+                let html = '<p class="text-muted text-uppercase fw-bold small mb-2"><i class="fas fa-calendar-check me-1"></i>Escala</p>';
+
+                if (sched.turno_hoje) {
+                    html += `<div class="d-flex align-items-center gap-2 p-2 rounded mb-2" style="background:#eef2ff;border:1px solid #c7d2fe;">
+                        <i class="fas fa-clock text-primary"></i>
+                        <div>
+                            <div class="fw-semibold text-dark small">Hoje: ${sched.turno_hoje.nome}</div>
+                            <div class="text-muted" style="font-size:.78rem;">${sched.turno_hoje.inicio} às ${sched.turno_hoje.fim}</div>
+                        </div>
+                    </div>`;
+                } else {
+                    html += `<div class="d-flex align-items-center gap-2 p-2 rounded mb-2" style="background:#f1f5f9;border:1px solid #e2e8f0;">
+                        <i class="fas fa-moon text-muted"></i>
+                        <span class="small text-muted">Sem escala hoje (folga ou não alocado)</span>
+                    </div>`;
+                }
+
+                if (sched.proxima_folga) {
+                    html += `<div class="small text-muted mb-2"><i class="fas fa-umbrella-beach me-1"></i><strong>Próxima folga:</strong> ${sched.proxima_folga}</div>`;
+                }
+
+                if (sched.proximos && sched.proximos.length > 0) {
+                    html += '<div class="rounded overflow-hidden" style="border:1px solid #e2e8f0;">';
+                    sched.proximos.forEach((p, i) => {
+                        html += `<div class="d-flex justify-content-between align-items-center px-3 py-2 small ${i % 2 === 0 ? '' : 'bg-light'}">
+                            <span class="text-muted" style="min-width:80px;">${p.dia} <strong>${p.data}</strong></span>
+                            <span class="badge rounded-pill" style="background:#eef2ff;color:#4f46e5;">${p.turno}</span>
+                            <span class="text-muted">${p.inicio}–${p.fim}</span>
+                        </div>`;
+                    });
+                    html += '</div>';
+                } else {
+                    html += '<div class="text-muted small">Sem alocações nos próximos 7 dias.</div>';
+                }
+
+                sec.innerHTML = html;
+            })
+            .catch(() => {
+                const sec = document.getElementById(`escala-section-${id}`);
+                if (sec) sec.innerHTML = '<div class="small text-muted">Não foi possível carregar a escala.</div>';
+            });
     }
 
     document.getElementById('filterInput').addEventListener('keyup', function () {

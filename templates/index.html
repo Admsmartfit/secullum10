@@ -77,72 +77,89 @@
 {% endif %}
 
 <div class="row g-4">
+    <!-- Atividade recente (feed compacto) -->
     <div class="col-lg-8">
-        <div class="card p-4">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h5 class="mb-0">Últimas Batidas Registradas</h5>
-                <a href="/espelho" class="btn btn-sm btn-outline-light">Ver todos</a>
+        <div class="card">
+            <div class="d-flex justify-content-between align-items-center px-4 pt-4 pb-2">
+                <h6 class="mb-0 fw-semibold">Atividade de Hoje</h6>
+                <a href="/espelho" class="btn btn-sm btn-outline-light">Ver espelho completo</a>
             </div>
-            <div class="table-responsive">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Funcionário</th>
-                            <th>Data</th>
-                            <th>Hora</th>
-                            <th>Tipo</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% if batidas %}
-                        {% for batida in batidas %}
-                        <tr>
-                            <td class="fw-bold">{{ batida.funcionario.nome if batida.funcionario else '—' }}</td>
-                            <td class="text-muted small">{{ batida.data.strftime('%d/%m') }}</td>
-                            <td>{{ batida.hora or '—' }}</td>
-                            <td><span class="badge {{ 'bg-success' if batida.tipo == 'Entrada' else 'bg-secondary' }}">{{ batida.tipo }}</span></td>
-                            <td><span class="badge {{ 'bg-danger' if batida.inconsistente else 'bg-success' }}">{{ 'Inconsist.' if batida.inconsistente else 'OK' }}</span></td>
-                        </tr>
-                        {% endfor %}
-                        {% else %}
-                        <tr>
-                            <td colspan="5" class="text-center text-muted py-4">Nenhuma batida encontrada para hoje.
-                            </td>
-                        </tr>
-                        {% endif %}
-                    </tbody>
-                </table>
+            <div class="px-4 pb-4">
+                {% if batidas %}
+                <div class="d-flex flex-column gap-1 mt-2">
+                    {% for batida in batidas %}
+                    <div class="d-flex align-items-center py-2" style="border-bottom: 1px solid #f1f5f9;">
+                        <div class="flex-shrink-0 me-3">
+                            <span class="badge rounded-pill px-2
+                                {% if batida.inconsistente %}bg-danger
+                                {% elif batida.tipo == 'Entrada' %}bg-success
+                                {% else %}bg-secondary{% endif %}"
+                                style="font-size:0.7rem; min-width:52px; text-align:center;">
+                                {{ batida.hora or '—' }}
+                            </span>
+                        </div>
+                        <div class="flex-grow-1 small fw-semibold text-truncate" style="max-width:220px;">
+                            {{ batida.funcionario.nome if batida.funcionario else '—' }}
+                        </div>
+                        <div class="flex-shrink-0 ms-auto d-flex align-items-center gap-2">
+                            <span class="text-muted small">{{ batida.tipo or '—' }}</span>
+                            {% if batida.inconsistente %}
+                            <span class="badge bg-danger-subtle text-danger" style="font-size:0.68rem;">Incompleto</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-5">
+                    <i class="fas fa-clock fa-2x mb-3 d-block opacity-25"></i>
+                    Nenhuma batida registrada hoje.
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
-    <div class="col-lg-4">
-        <div class="card p-4 mb-4">
-            <h5 class="mb-4">Ações Rápidas</h5>
-            <button class="btn btn-primary w-100 mb-3" data-bs-toggle="modal" data-bs-target="#syncModal">
-                <i class="fas fa-sync me-2"></i> Sincronizar Tudo
+
+    <!-- Painel lateral -->
+    <div class="col-lg-4 d-flex flex-column gap-4">
+        <!-- Ações rápidas -->
+        <div class="card p-4">
+            <h6 class="fw-semibold mb-3">Ações Rápidas</h6>
+            <button class="btn btn-primary w-100 mb-2" data-bs-toggle="modal" data-bs-target="#syncModal">
+                <i class="fas fa-sync me-2"></i>Sincronizar Tudo
             </button>
-            <button class="btn btn-outline-light w-100" onclick="window.location.href='/relatorios'">
-                <i class="fas fa-file-pdf me-2"></i> Relatório do Dia
-            </button>
+            <a class="btn btn-outline-light w-100 mb-2" href="/relatorios">
+                <i class="fas fa-file-pdf me-2"></i>Relatório do Dia
+            </a>
+            <a class="btn btn-outline-light w-100" href="/escalas/">
+                <i class="fas fa-calendar-week me-2"></i>Gerenciar Escalas
+            </a>
         </div>
 
+        <!-- Resumo do dia -->
         <div class="card p-4">
-            <h5 class="mb-4">Status da Conexão</h5>
-            <div class="d-flex align-items-center mb-3">
-                <div class="flex-shrink-0">
-                    <div class="bg-success rounded-circle" style="width: 10px; height: 10px;"></div>
+            <h6 class="fw-semibold mb-3">Resumo do Dia</h6>
+            <div class="d-flex flex-column gap-2">
+                <div class="d-flex justify-content-between align-items-center small">
+                    <span class="text-muted"><i class="fas fa-fingerprint me-2 text-primary opacity-75"></i>Batidas registradas</span>
+                    <span class="fw-bold">{{ batidas_hoje }}</span>
                 </div>
-                <div class="flex-grow-1 ms-3 small">
-                    API Secullum: <span class="text-green fw-bold">Online</span>
+                <div class="d-flex justify-content-between align-items-center small">
+                    <span class="text-muted"><i class="fas fa-user-clock me-2 text-success opacity-75"></i>Em jornada agora</span>
+                    <span class="fw-bold text-success">{{ em_jornada }}</span>
                 </div>
-            </div>
-            <div class="d-flex align-items-center">
-                <div class="flex-shrink-0">
-                    <div class="bg-success rounded-circle" style="width: 10px; height: 10px;"></div>
+                <div class="d-flex justify-content-between align-items-center small">
+                    <span class="text-muted"><i class="fas fa-exclamation-triangle me-2 text-warning opacity-75"></i>Inconsistências</span>
+                    <span class="fw-bold {{ 'text-danger' if inconsistencias else '' }}">{{ inconsistencias }}</span>
                 </div>
-                <div class="flex-grow-1 ms-3 small">
-                    Banco de Dados: <span class="text-green fw-bold">Conectado</span>
+                <div class="d-flex justify-content-between align-items-center small">
+                    <span class="text-muted"><i class="fas fa-user-xmark me-2 text-danger opacity-75"></i>Ausências</span>
+                    <span class="fw-bold {{ 'text-danger' if ausencias else '' }}">{{ ausencias|length }}</span>
+                </div>
+                <hr class="my-1" style="border-color: var(--border-color);">
+                <div class="d-flex justify-content-between align-items-center small text-muted">
+                    <span><i class="fas fa-clock-rotate-left me-2"></i>Última sync</span>
+                    <span>{{ last_sync }}</span>
                 </div>
             </div>
         </div>

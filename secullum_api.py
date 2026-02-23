@@ -71,9 +71,11 @@ class SecullumAPI:
             print(f"Erro listar_horarios: {e}")
         return []
 
-    def buscar_batidas(self, data_inicio, data_fim):
+    def buscar_batidas(self, data_inicio, data_fim, hora_inicio=None, hora_fim=None):
         """
-        Busca todas as batidas no período (formato YYYY-MM-DD).
+        Busca todas as batidas no período. 
+        data_inicio/data_fim: YYYY-MM-DD
+        hora_inicio/hora_fim: HH:mm (opcional)
         """
         if not self.token:
             if not self.autenticar(): return []
@@ -83,6 +85,11 @@ class SecullumAPI:
             "dataInicio": data_inicio,
             "dataFim": data_fim
         }
+        if hora_inicio:
+            params["horaInicio"] = hora_inicio
+        if hora_fim:
+            params["horaFim"] = hora_fim
+            
         response = requests.get(url, headers=self._get_headers(), params=params)
         if response.status_code == 200:
             return response.json()

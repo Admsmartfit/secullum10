@@ -1,0 +1,250 @@
+{% extends 'base.html' %}
+{% block title %}Calendário de Escalas – Secullum Hub{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet">
+<style>
+    #calendario-wrapper {
+        display: flex;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+
+    /* Sidebar de filtros */
+    #filtros-sidebar {
+        min-width: 200px;
+        max-width: 210px;
+        flex-shrink: 0;
+    }
+
+    #fcCalendar {
+        flex: 1;
+        min-width: 0;
+    }
+
+    /* FullCalendar overrides */
+    .fc .fc-toolbar-title { font-size: 1.1rem; font-weight: 700; color: var(--text-main); }
+    .fc .fc-button { border-radius: 0.4rem !important; font-size: 0.8rem; font-weight: 500; }
+    .fc .fc-button-primary { background-color: var(--primary) !important; border-color: var(--primary) !important; }
+    .fc .fc-button-primary:hover { background-color: var(--primary-hover) !important; }
+    .fc .fc-button-primary:not(.fc-button-active):not(.fc-button-group .fc-button-primary:hover) {
+        background-color: var(--primary) !important;
+    }
+    .fc .fc-button-active { background-color: var(--primary-hover) !important; }
+    .fc-theme-standard .fc-scrollgrid { border-color: var(--border-color); }
+    .fc-theme-standard td, .fc-theme-standard th { border-color: var(--border-color); }
+    .fc .fc-daygrid-day-number { color: var(--text-main); font-size: 0.8rem; }
+    .fc .fc-col-header-cell-cushion { color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+    .fc .fc-daygrid-day.fc-day-today { background-color: var(--primary-soft); }
+    .fc-event { border-radius: 4px !important; font-size: 0.72rem !important; padding: 1px 4px !important; }
+    .fc-event-inner { line-height: 1.2; }
+    .fc-event-inner small { opacity: 0.85; }
+    .fc-timegrid-event { border-radius: 4px !important; font-size: 0.72rem !important; }
+    .fc-daygrid-more-link { font-size: 0.72rem; color: var(--primary); }
+
+    /* Legends */
+    .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0 fw-bold">Calendário de Escalas</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('escalas.alocar') }}" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus me-1"></i>Nova Alocação
+        </a>
+        <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-light btn-sm">
+            <i class="fas fa-list me-1"></i>Turnos
+        </a>
+    </div>
+</div>
+
+<div id="calendario-wrapper">
+    <!-- Filtros laterais -->
+    <div id="filtros-sidebar">
+        <div class="card p-3">
+            <h6 class="fw-semibold mb-3 small text-muted text-uppercase">Filtros</h6>
+
+            <label class="form-label small fw-bold mb-1">Departamento</label>
+            <select id="filtDept" class="form-select form-select-sm mb-3">
+                <option value="">Todos</option>
+                {% for dept in departamentos %}
+                <option value="{{ dept }}">{{ dept }}</option>
+                {% endfor %}
+            </select>
+
+            <label class="form-label small fw-bold mb-1">Funcionário</label>
+            <select id="filtFunc" class="form-select form-select-sm mb-3">
+                <option value="">Todos</option>
+                {% for f in funcionarios %}
+                <option value="{{ f.id }}">{{ f.nome }}</option>
+                {% endfor %}
+            </select>
+
+            <hr style="border-color: var(--border-color);">
+
+            <div class="small text-muted mb-1 fw-semibold">Legenda</div>
+            <div class="d-flex align-items-center gap-2 mb-1 small">
+                <span class="legend-dot" style="background:#4f46e5;"></span> Normal
+            </div>
+            <div class="d-flex align-items-center gap-2 small">
+                <span class="legend-dot" style="background:#ef4444;"></span> Infração CLT
+            </div>
+        </div>
+    </div>
+
+    <!-- Calendário -->
+    <div class="card p-3" style="flex:1; min-width:0;">
+        <div id="fcCalendar"></div>
+    </div>
+</div>
+
+<!-- Modal detalhe do evento -->
+<div class="modal fade" id="modalEvento" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title fw-bold" id="modalEventoTitulo"></h6>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modalEventoBody"></div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button class="btn btn-outline-danger btn-sm" id="btnExcluirAloc">
+                    <i class="fas fa-trash me-1"></i>Excluir Alocação
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.10/locales/pt-br.global.min.js"></script>
+<script>
+let calendar;
+let eventoAtual = null;
+
+$(function() {
+    // Select2 para filtro de funcionário
+    $('#filtFunc').select2({ placeholder: 'Todos os funcionários', allowClear: true, width: '100%' });
+
+    $('#filtDept, #filtFunc').on('change select2:select select2:unselect', function() {
+        if (calendar) calendar.refetchEvents();
+    });
+
+    const calEl = document.getElementById('fcCalendar');
+    calendar = new FullCalendar.Calendar(calEl, {
+        locale: 'pt-br',
+        initialView: 'dayGridMonth',
+        height: 'auto',
+        headerToolbar: {
+            left:   'prev,next today',
+            center: 'title',
+            right:  'dayGridMonth,timeGridWeek',
+        },
+        editable: true,
+        dayMaxEvents: 4,
+        eventDisplay: 'block',
+
+        events: function(fetchInfo, successCb, failureCb) {
+            const dept   = document.getElementById('filtDept').value;
+            const funcId = $('#filtFunc').val() || '';
+            fetch(`/escalas/eventos?start=${fetchInfo.startStr}&end=${fetchInfo.endStr}&dept=${encodeURIComponent(dept)}&func_id=${funcId}`)
+                .then(r => r.json())
+                .then(successCb)
+                .catch(failureCb);
+        },
+
+        eventContent: function(arg) {
+            const p = arg.event.extendedProps;
+            const clt = p.infracoes && p.infracoes.length > 0;
+            return {
+                html: `<div class="fc-event-inner">
+                    ${clt ? '<i class="fas fa-exclamation-triangle me-1" title="Infração CLT"></i>' : ''}
+                    <strong>${arg.event.title}</strong>
+                    <br><small>${p.hora_inicio}–${p.hora_fim}</small>
+                </div>`
+            };
+        },
+
+        eventClick: function(info) {
+            eventoAtual = info.event;
+            const p = info.event.extendedProps;
+            document.getElementById('modalEventoTitulo').textContent = p.func_nome;
+
+            let html = `
+                <div class="d-flex gap-3 mb-3">
+                    <div>
+                        <div class="text-muted small fw-bold">TURNO</div>
+                        <div class="fw-semibold">${p.turno_nome}</div>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-bold">HORÁRIO</div>
+                        <div class="fw-semibold">${p.hora_inicio} – ${p.hora_fim}</div>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-bold">DATA</div>
+                        <div class="fw-semibold">${info.event.startStr.substring(0,10).split('-').reverse().join('/')}</div>
+                    </div>
+                </div>`;
+
+            if (p.infracoes && p.infracoes.length > 0) {
+                html += `<div class="alert alert-danger py-2 small mb-0">
+                    <strong><i class="fas fa-exclamation-triangle me-1"></i>Infrações CLT detectadas:</strong><br>
+                    ${p.infracoes.map(m => `• ${m}`).join('<br>')}
+                </div>`;
+            }
+            document.getElementById('modalEventoBody').innerHTML = html;
+            document.getElementById('btnExcluirAloc').dataset.id = p.aloc_id;
+            new bootstrap.Modal(document.getElementById('modalEvento')).show();
+        },
+
+        // Clique em dia vazio → alocar
+        dateClick: function(info) {
+            window.location.href = `/escalas/alocar?data=${info.dateStr}`;
+        },
+
+        // Drag & drop → mover alocação
+        eventDrop: function(info) {
+            const alocId  = info.event.extendedProps.aloc_id;
+            const newDate = info.event.startStr.substring(0, 10);
+            fetch(`/escalas/alocar/${alocId}/mover`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: newDate }),
+            }).then(async r => {
+                if (!r.ok) {
+                    info.revert();
+                    const data = await r.json();
+                    const msgs = (data.infracoes || []).map(i => '• ' + i.message).join('\n');
+                    alert('Não foi possível mover:\n' + msgs);
+                } else {
+                    calendar.refetchEvents();
+                }
+            }).catch(() => info.revert());
+        },
+    });
+
+    calendar.render();
+
+    // Excluir alocação via modal
+    document.getElementById('btnExcluirAloc').addEventListener('click', function() {
+        const id = this.dataset.id;
+        if (!confirm('Excluir esta alocação?')) return;
+        fetch(`/escalas/alocar/${id}/excluir`, { method: 'DELETE' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    bootstrap.Modal.getInstance(document.getElementById('modalEvento')).hide();
+                    calendar.refetchEvents();
+                }
+            });
+    });
+});
+</script>
+{% endblock %}

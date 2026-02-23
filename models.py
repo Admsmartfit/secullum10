@@ -58,6 +58,10 @@ class Funcionario(db.Model):
     demissao = db.Column(db.Date)
     nascimento = db.Column(db.Date)
 
+    # Horário Secullum (schedule assigned via API)
+    horario_secullum_numero = db.Column(db.Integer, nullable=True)
+    horario_secullum_nome = db.Column(db.String(100), nullable=True)
+
     # Status e controles
     ativo = db.Column(db.Boolean, default=True)
     data_ultima_sincronizacao = db.Column(db.DateTime, default=datetime.utcnow)
@@ -125,9 +129,39 @@ class Turno(db.Model):
     hora_fim = db.Column(db.Time, nullable=False)
     # dias_semana: lista de ints 0=seg..6=dom, armazenada como string "0,1,2"
     dias_semana = db.Column(db.String(20), default='0,1,2,3,4')
+    intervalo_minutos = db.Column(db.Integer, default=60)  # Descanso em minutos (15, 60, etc.)
+    # dias_complexos_json: { "0": {"inicio": "08:00", "fim": "17:00", "intervalo": 60}, ... }
+    dias_complexos_json = db.Column(db.Text, nullable=True)
+    # Escopo: departamento (unidade/CNPJ) ao qual o turno pertence. Null = global.
+    departamento = db.Column(db.String(200), nullable=True)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
-    alocacoes = db.relationship('AlocacaoDiaria', backref='turno', lazy='dynamic')
+    alocacoes = db.relationship('AlocacaoDiaria', backref='turno', lazy='dynamic', cascade="all, delete-orphan")
+    vagas_marketplace = db.relationship('MarketplaceTurno', backref='turno', lazy='dynamic', cascade="all, delete-orphan")
+
+    @property
+    def dias_complexos(self):
+        import json
+        if self.dias_complexos_json:
+            try:
+                return json.loads(self.dias_complexos_json)
+            except Exception:
+                return {}
+        return {}
+
+    def get_horario_dia(self, dia_semana: int):
+        """Retorna (inicio, fim, intervalo) para o dia da semana (0-6)."""
+        complexos = self.dias_complexos
+        dia_str = str(dia_semana)
+        if dia_str in complexos:
+            d = complexos[dia_str]
+            from datetime import datetime as dt
+            return (
+                dt.strptime(d['inicio'], '%H:%M').time(),
+                dt.strptime(d['fim'], '%H:%M').time(),
+                d.get('intervalo', self.intervalo_minutos)
+            )
+        return (self.hora_inicio, self.hora_fim, self.intervalo_minutos)
 
     @property
     def dias_semana_list(self):
@@ -135,13 +169,27 @@ class Turno(db.Model):
 
     @property
     def duracao_horas(self):
+        # Para escalas complexas, a duração pode variar por dia. 
+        # Esta propriedade retorna a duração média ou base.
         from datetime import datetime as dt
         inicio = dt.combine(dt.today(), self.hora_inicio)
         fim = dt.combine(dt.today(), self.hora_fim)
         if fim < inicio:
             from datetime import timedelta
             fim += timedelta(days=1)
-        return (fim - inicio).seconds / 3600
+        duracao = (fim - inicio).seconds / 3600
+        return max(0, duracao - (self.intervalo_minutos / 60))
+
+    def duracao_horas_no_dia(self, data_ref):
+        """Calcula duração exata considerando o dia específico."""
+        h_ini, h_fim, intervalo = self.get_horario_dia(data_ref.weekday())
+        from datetime import datetime as dt, timedelta
+        inicio = dt.combine(data_ref, h_ini)
+        fim = dt.combine(data_ref, h_fim)
+        if fim < inicio:
+            fim += timedelta(days=1)
+        duracao = (fim - inicio).seconds / 3600
+        return max(0, duracao - (intervalo / 60))
 
     def __repr__(self):
         return f'<Turno {self.nome}>'
@@ -218,7 +266,7 @@ class MarketplaceTurno(db.Model):
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     gestor = db.relationship('Usuario', backref='vagas_criadas')
-    turno = db.relationship('Turno', backref='vagas_marketplace')
+    # Relacionamento 'turno' é definido via backref em Turno.vagas_marketplace
     candidaturas = db.relationship('Candidatura', backref='vaga', lazy='dynamic')
 
 
@@ -257,6 +305,45 @@ class ProntuarioDoc(db.Model):
     )
 
 
+# ── Fase 4: Motor de Regras de Notificação WhatsApp ──────────────────────────
+
+class NotificationRule(db.Model):
+    __tablename__ = 'notification_rules'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(200), nullable=False)
+    ativo = db.Column(db.Boolean, default=True)
+
+    # Trigger: EVENT_SYNC | EVENT_ABSENCE | DAILY | WEEKLY
+    trigger_type    = db.Column(db.String(50), nullable=False, default='EVENT_SYNC')
+    trigger_hour    = db.Column(db.Integer, nullable=True, default=8)     # hour for DAILY/WEEKLY
+    trigger_weekday = db.Column(db.Integer, nullable=True, default=4)     # 0=Mon … 6=Sun
+
+    # Condition: LATE_ENTRY | EARLY_LEAVE | ABSENCE | OVERTIME | INTERJORNADA | ESCALA_ENVIO
+    condition_type      = db.Column(db.String(50), nullable=False, default='LATE_ENTRY')
+    threshold_minutes   = db.Column(db.Integer, nullable=True, default=15)
+
+    # Recipients
+    dest_employee = db.Column(db.Boolean, default=False)
+    dest_manager  = db.Column(db.Boolean, default=True)
+    dest_rh       = db.Column(db.Boolean, default=False)
+
+    # Message templates (support variables: {name} {full_name} {minutes} {turno} {inicio} {fim} {data})
+    template_manager  = db.Column(db.Text, nullable=True)
+    template_employee = db.Column(db.Text, nullable=True)
+
+    # Constraints
+    only_working_hours = db.Column(db.Boolean, default=True)
+    send_immediately   = db.Column(db.Boolean, default=False)
+
+    # Stats
+    criado_em         = db.Column(db.DateTime, default=datetime.utcnow)
+    ultima_execucao   = db.Column(db.DateTime, nullable=True)
+    mensagens_enviadas = db.Column(db.Integer, default=0)
+
+    def __repr__(self):
+        return f'<NotificationRule {self.nome} ({self.condition_type})>'
+
+
 # ── Módulo de Configuração: Unidades / Líderes ────────────────────────────────
 
 class UnidadeLider(db.Model):
@@ -283,3 +370,20 @@ class FeedbackAula(db.Model):
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     alocacao = db.relationship('AlocacaoDiaria', backref='feedbacks')
+
+
+# ── Horários Secullum (cache da API) ──────────────────────────────────────────
+
+class HorarioSecullum(db.Model):
+    """Cache dos horários vindos da API Secullum.
+    dias_json: dict serializado {dia_semana_str: {entrada, saida, tipo}}
+    onde dia_semana 0=Segunda … 6=Domingo (igual ao weekday() do Python).
+    """
+    __tablename__ = 'horarios_secullum'
+    numero = db.Column(db.Integer, primary_key=True)  # HorarioNumero da API
+    descricao = db.Column(db.String(100))
+    dias_json = db.Column(db.Text)  # JSON {dia: {entrada, saida, tipo}}
+    sincronizado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<HorarioSecullum {self.numero} – {self.descricao}>'

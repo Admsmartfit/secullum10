@@ -7,60 +7,91 @@
     <title>{% block title %}Secullum Monitor{% endblock %}</title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Select2 -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
     <style>
         :root {
-            --primary-bg: #0f172a;
-            --secondary-bg: #1e293b;
-            --accent-color: #38bdf8;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --card-bg: #1e293b;
-            --navbar-height: 70px;
-            --sidebar-width: 250px;
+            --primary:          #4f46e5;
+            --primary-hover:    #4338ca;
+            --primary-soft:     rgba(79, 70, 229, 0.08);
+            --success:          #10b981;
+            --success-soft:     rgba(16, 185, 129, 0.1);
+            --warning:          #f97316;
+            --warning-soft:     rgba(249, 115, 22, 0.1);
+            --danger:           #ef4444;
+            --danger-soft:      rgba(239, 68, 68, 0.1);
+            --purple:           #8b5cf6;
+            --purple-soft:      rgba(139, 92, 246, 0.1);
+
+            --body-bg:          #f1f5f9;
+            --sidebar-bg:       #ffffff;
+            --navbar-bg:        #ffffff;
+            --card-bg:          #ffffff;
+            --text-main:        #1e293b;
+            --text-muted:       #64748b;
+            --border-color:     #e2e8f0;
+
+            --navbar-height:    60px;
+            --sidebar-width:    250px;
             --sidebar-collapsed-width: 60px;
             --sidebar-transition: 0.25s ease;
         }
 
         body {
             font-family: 'Inter', sans-serif;
-            background-color: var(--primary-bg);
+            background-color: var(--body-bg);
             color: var(--text-main);
             margin: 0;
             padding: 0;
+            font-size: 0.9rem;
         }
 
-        /* ── Navbar ── */
+        /* ── Navbar ─────────────────────────────────── */
         .navbar {
             height: var(--navbar-height);
-            background-color: var(--secondary-bg);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
+            background-color: var(--navbar-bg);
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
+            top: 0; left: 0; right: 0;
             z-index: 1100;
         }
 
         .navbar-brand {
             font-weight: 700;
-            color: var(--accent-color) !important;
-            letter-spacing: -1px;
+            color: var(--primary) !important;
+            letter-spacing: -0.5px;
+            font-size: 1rem;
         }
 
-        /* ── Sidebar ── */
+        .navbar .btn-outline-secondary {
+            border-color: var(--border-color);
+            color: var(--text-muted);
+        }
+
+        .navbar .dropdown-toggle {
+            border-color: var(--border-color);
+            color: var(--text-main);
+            background: transparent;
+        }
+
+        .navbar .dropdown-toggle:hover {
+            background-color: var(--body-bg);
+        }
+
+        /* ── Sidebar ─────────────────────────────────── */
         .sidebar {
             position: fixed;
             top: var(--navbar-height);
             left: 0;
             bottom: 0;
             width: var(--sidebar-width);
-            background-color: var(--secondary-bg);
-            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
             z-index: 1000;
             display: flex;
             flex-direction: column;
@@ -68,77 +99,78 @@
             overflow: hidden;
         }
 
-        /* Recolhido */
         .sidebar.collapsed {
             width: var(--sidebar-collapsed-width);
         }
 
-        /* Área rolável das opções */
+        /* scrollable nav area */
         .sidebar-inner {
             flex: 1;
             overflow-y: auto;
             overflow-x: hidden;
-            padding: 1rem 0.5rem;
+            padding: 0.75rem;
             scrollbar-width: thin;
-            scrollbar-color: rgba(255,255,255,0.15) transparent;
+            scrollbar-color: var(--border-color) transparent;
         }
 
-        .sidebar-inner::-webkit-scrollbar {
-            width: 4px;
-        }
-        .sidebar-inner::-webkit-scrollbar-track {
-            background: transparent;
-        }
+        .sidebar-inner::-webkit-scrollbar { width: 4px; }
+        .sidebar-inner::-webkit-scrollbar-track { background: transparent; }
         .sidebar-inner::-webkit-scrollbar-thumb {
-            background: rgba(255,255,255,0.15);
+            background: var(--border-color);
             border-radius: 4px;
         }
 
-        /* Botão de recolher no rodapé da sidebar */
+        /* toggle button at bottom */
         .sidebar-toggle-btn {
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 0.8rem;
-            border-top: 1px solid rgba(255,255,255,0.08);
+            padding: 0.75rem;
+            border-top: 1px solid var(--border-color);
             cursor: pointer;
             color: var(--text-muted);
-            transition: color 0.2s;
+            transition: color 0.15s;
             flex-shrink: 0;
         }
 
-        .sidebar-toggle-btn:hover {
-            color: var(--accent-color);
-        }
+        .sidebar-toggle-btn:hover { color: var(--primary); }
 
-        /* Links do menu */
+        /* nav links */
         .nav-link {
             color: var(--text-muted);
-            padding: 0.75rem 0.75rem;
+            padding: 0.6rem 0.75rem;
             border-radius: 0.5rem;
-            margin-bottom: 0.25rem;
-            transition: all 0.2s ease;
+            margin-bottom: 0.1rem;
+            transition: all 0.15s ease;
             display: flex;
             align-items: center;
             white-space: nowrap;
             overflow: hidden;
+            font-size: 0.85rem;
+            font-weight: 500;
         }
 
         .nav-link i {
-            min-width: 20px;
+            min-width: 18px;
             text-align: center;
             margin-right: 10px;
             flex-shrink: 0;
             transition: margin var(--sidebar-transition);
+            font-size: 0.875rem;
         }
 
-        .nav-link:hover, .nav-link.active {
-            background-color: rgba(56, 189, 248, 0.1);
-            color: var(--accent-color);
+        .nav-link:hover {
+            background-color: var(--primary-soft);
+            color: var(--primary);
         }
 
-        /* Textos e labels que somem quando recolhido */
-        .sidebar .nav-label,
+        .nav-link.active {
+            background-color: var(--primary-soft);
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        /* fade out text when collapsed */
         .sidebar .nav-link-text,
         .sidebar .section-label {
             opacity: 1;
@@ -146,57 +178,56 @@
             overflow: hidden;
         }
 
-        .sidebar.collapsed .nav-label,
         .sidebar.collapsed .nav-link-text,
         .sidebar.collapsed .section-label {
             opacity: 0;
             width: 0;
         }
 
-        .sidebar.collapsed .nav-link i {
-            margin-right: 0;
-        }
+        .sidebar.collapsed .nav-link i { margin-right: 0; }
 
         .sidebar.collapsed .nav-link {
             justify-content: center;
-            padding: 0.75rem 0;
-        }
-
-        /* Tooltip quando recolhido */
-        .sidebar.collapsed .nav-link {
+            padding: 0.6rem 0;
             position: relative;
         }
 
+        /* tooltip on collapsed */
         .sidebar.collapsed .nav-link:hover::after {
             content: attr(data-tooltip);
             position: absolute;
-            left: calc(var(--sidebar-collapsed-width) - 2px);
-            background: var(--secondary-bg);
-            color: var(--text-main);
-            padding: 0.4rem 0.75rem;
-            border-radius: 0.4rem;
-            font-size: 0.82rem;
+            left: calc(var(--sidebar-collapsed-width) + 2px);
+            background: var(--text-main);
+            color: #fff;
+            padding: 0.35rem 0.7rem;
+            border-radius: 0.35rem;
+            font-size: 0.78rem;
             white-space: nowrap;
-            border: 1px solid rgba(255,255,255,0.1);
             z-index: 2000;
             pointer-events: none;
         }
 
-        /* Badges somem quando recolhido */
-        .sidebar.collapsed .badge {
-            display: none;
-        }
+        .sidebar.collapsed .badge { display: none; }
 
-        /* Separador */
         .sidebar-separator {
-            border-color: rgba(255,255,255,0.08);
-            margin: 0.5rem 0;
+            border-color: var(--border-color);
+            margin: 0.4rem 0;
         }
 
-        /* Conteúdo principal */
+        .section-label {
+            font-size: 0.62rem;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 0 0.25rem;
+            margin-bottom: 0.25rem;
+        }
+
+        /* ── Main content ─────────────────────────────── */
         .main-content {
             margin-left: var(--sidebar-width);
-            padding: 2rem;
+            padding: 1.5rem;
             margin-top: var(--navbar-height);
             min-height: calc(100vh - var(--navbar-height));
             transition: margin-left var(--sidebar-transition);
@@ -206,77 +237,209 @@
             margin-left: var(--sidebar-collapsed-width);
         }
 
-        /* ── Cards ── */
+        /* ── Cards ─────────────────────────────────────── */
         .card {
             background-color: var(--card-bg);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 1rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s ease;
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
         }
 
-        .card:hover {
-            transform: translateY(-5px);
+        .stats-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
-        .btn-primary {
-            background-color: var(--accent-color);
-            border: none;
-            padding: 0.6rem 1.2rem;
-            border-radius: 0.5rem;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-
-        .btn-primary:hover {
-            background-color: #0ea5e9;
-            box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+        .stats-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 18px rgba(0,0,0,0.1);
         }
 
         .stats-card .icon-box {
-            width: 50px;
-            height: 50px;
+            width: 44px;
+            height: 44px;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 0.75rem;
-            margin-bottom: 1rem;
+            border-radius: 0.625rem;
+            margin-bottom: 0.75rem;
         }
 
-        .bg-blue-soft { background-color: rgba(56, 189, 248, 0.1); color: #38bdf8; }
-        .bg-green-soft { background-color: rgba(34, 197, 94, 0.1); color: #22c55e; }
-        .bg-purple-soft { background-color: rgba(168, 85, 247, 0.1); color: #a855f7; }
-        .bg-orange-soft { background-color: rgba(249, 115, 22, 0.1); color: #f97316; }
+        /* color helpers */
+        .bg-blue-soft   { background-color: var(--primary-soft); color: var(--primary); }
+        .bg-green-soft  { background-color: var(--success-soft); color: var(--success); }
+        .bg-purple-soft { background-color: var(--purple-soft);  color: var(--purple); }
+        .bg-orange-soft { background-color: var(--warning-soft); color: var(--warning); }
 
-        .table { color: var(--text-main); }
+        .text-accent, .text-primary { color: var(--primary)  !important; }
+        .text-green  { color: var(--success) !important; }
+        .text-orange { color: var(--warning) !important; }
+
+        /* ── Buttons ─────────────────────────────────── */
+        .btn-primary {
+            background-color: var(--primary);
+            border-color: var(--primary);
+            color: #fff;
+            font-weight: 500;
+            border-radius: 0.5rem;
+        }
+
+        .btn-primary:hover, .btn-primary:focus {
+            background-color: var(--primary-hover);
+            border-color: var(--primary-hover);
+            color: #fff;
+        }
+
+        .btn-outline-primary {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .btn-outline-primary:hover {
+            background-color: var(--primary);
+            color: #fff;
+        }
+
+        .btn-outline-light {
+            border-color: var(--border-color);
+            color: var(--text-main);
+            background: #fff;
+        }
+
+        .btn-outline-light:hover {
+            background-color: var(--body-bg);
+            color: var(--text-main);
+            border-color: var(--border-color);
+        }
+
+        /* ── Tables ─────────────────────────────────── */
+        .table { color: var(--text-main); --bs-table-bg: transparent; }
 
         .table thead th {
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: 2px solid var(--border-color);
             color: var(--text-muted);
             font-weight: 600;
             text-transform: uppercase;
-            font-size: 0.8rem;
+            font-size: 0.7rem;
+            letter-spacing: 0.06em;
+            background-color: #f8fafc;
+            padding-top: 0.75rem;
+            padding-bottom: 0.75rem;
         }
 
         .table td {
             vertical-align: middle;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid #f1f5f9;
+            color: var(--text-main);
+            padding-top: 0.65rem;
+            padding-bottom: 0.65rem;
         }
 
-        /* ── Mobile ── */
+        .table-hover tbody tr:hover td {
+            background-color: #f8fafc;
+        }
+
+        /* ── Form controls – override dark Bootstrap classes in main content ── */
+        .main-content .form-control,
+        .main-content .form-select {
+            background-color: #fff !important;
+            color: var(--text-main) !important;
+            border-color: var(--border-color) !important;
+        }
+
+        .main-content .form-control::placeholder { color: var(--text-muted); }
+
+        .main-content .form-control:focus,
+        .main-content .form-select:focus {
+            border-color: var(--primary) !important;
+            box-shadow: 0 0 0 0.2rem var(--primary-soft) !important;
+        }
+
+        .main-content .input-group-text {
+            background-color: #f8fafc;
+            border-color: var(--border-color);
+            color: var(--text-muted);
+        }
+
+        /* ── Alerts ─────────────────────────────────── */
+        .alert { border-radius: 0.625rem; border: 1px solid transparent; }
+
+        /* ── Badges ─────────────────────────────────── */
+        .badge { font-weight: 500; padding: 0.3em 0.65em; border-radius: 0.4rem; }
+
+        /* ── Dropdown menus ─────────────────────────── */
+        .dropdown-menu {
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+            border-radius: 0.625rem;
+            font-size: 0.875rem;
+        }
+
+        .dropdown-item { color: var(--text-main); padding: 0.5rem 1rem; }
+        .dropdown-item:hover { background-color: var(--body-bg); color: var(--primary); }
+
+        /* ── Modals ─────────────────────────────────── */
+        .modal-content {
+            border-radius: 0.75rem;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+        }
+
+        /* keep modal forms dark where templates use bg-secondary */
+        .modal-content.bg-secondary {
+            background-color: #1e293b !important;
+            border-color: rgba(255,255,255,0.1) !important;
+        }
+
+        /* ── Select2 theme ─────────────────────────── */
+        .select2-container--default .select2-selection--single {
+            height: calc(1.5em + 0.75rem + 2px);
+            border-color: var(--border-color);
+            border-radius: 0.375rem;
+            background-color: #fff;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            line-height: calc(1.5em + 0.75rem);
+            color: var(--text-main);
+            padding-left: 0.75rem;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: calc(1.5em + 0.75rem);
+        }
+
+        .select2-container--default.select2-container--focus .select2-selection--single {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 0.2rem var(--primary-soft);
+            outline: none;
+        }
+
+        .select2-dropdown {
+            border-color: var(--border-color);
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            font-size: 0.875rem;
+        }
+
+        .select2-container--default .select2-results__option--highlighted[aria-selected] {
+            background-color: var(--primary);
+        }
+
+        .select2-search--dropdown .select2-search__field {
+            border-color: var(--border-color);
+            border-radius: 0.25rem;
+            padding: 0.4rem 0.75rem;
+            font-size: 0.875rem;
+        }
+
+        .select2-container { width: 100% !important; }
+
+        /* ── Mobile ─────────────────────────────────── */
         @media (max-width: 768px) {
-            .sidebar {
-                width: 0;
-            }
-            .sidebar.mobile-open {
-                width: var(--sidebar-width);
-            }
-            .main-content {
-                margin-left: 0;
-            }
-            .main-content.expanded {
-                margin-left: 0;
-            }
+            .sidebar { width: 0; }
+            .sidebar.mobile-open { width: var(--sidebar-width); }
+            .main-content { margin-left: 0; }
+            .main-content.expanded { margin-left: 0; }
         }
     </style>
     {% block extra_css %}{% endblock %}
@@ -284,26 +447,26 @@
 <body>
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
-            <!-- Botão hambúrguer (mobile) / seta (desktop) na navbar -->
             <button id="sidebarToggleNav" class="btn btn-sm btn-outline-secondary me-2 d-lg-none" type="button">
                 <i class="fas fa-bars"></i>
             </button>
             <a class="navbar-brand" href="/">
                 <i class="fas fa-clock-rotate-left me-2"></i>SECULLUM HUB
             </a>
-            <div class="d-flex align-items-center ms-auto">
-                <span class="text-muted small me-3 d-none d-md-inline">
-                    <i class="fas fa-database me-1"></i> Banco: {{ session.get('banco', '73365') }}
+            <div class="d-flex align-items-center ms-auto gap-2">
+                <span class="text-muted small d-none d-md-inline">
+                    <i class="fas fa-database me-1"></i>{{ session.get('banco', '—') }}
                 </span>
                 <div class="dropdown">
-                    <button class="btn btn-outline-light btn-sm dropdown-toggle rounded-circle p-0"
-                            style="width: 32px; height: 32px;" type="button" data-bs-toggle="dropdown">
-                        <i class="fas fa-user-circle"></i>
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle rounded-pill px-3"
+                            type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-user-circle me-1"></i>
+                        <span class="d-none d-md-inline">{{ current_user.nome.split()[0] if current_user.is_authenticated else 'Conta' }}</span>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Config</a></li>
+                        <li><a class="dropdown-item" href="/config/"><i class="fas fa-cog me-2 text-muted"></i>Configurações</a></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="/logout"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
+                        <li><a class="dropdown-item text-danger" href="/logout"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
                     </ul>
                 </div>
             </div>
@@ -311,53 +474,67 @@
     </nav>
 
     <div class="sidebar" id="sidebar">
-        <!-- Área rolável -->
         <div class="sidebar-inner">
             <nav class="nav flex-column">
-                <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/" data-tooltip="Dashboard">
+                <a class="nav-link {% if request.path == '/' %}active{% endif %}"
+                   href="/" data-tooltip="Dashboard">
                     <i class="fas fa-chart-line"></i>
                     <span class="nav-link-text">Dashboard</span>
                 </a>
-                <a class="nav-link {% if request.path == '/espelho' %}active{% endif %}" href="/espelho" data-tooltip="Espelho de Ponto">
+                <a class="nav-link {% if request.path == '/espelho' %}active{% endif %}"
+                   href="/espelho" data-tooltip="Espelho de Ponto">
                     <i class="fas fa-calendar-alt"></i>
                     <span class="nav-link-text">Espelho de Ponto</span>
                 </a>
-                <a class="nav-link {% if request.path == '/funcionarios' %}active{% endif %}" href="/funcionarios" data-tooltip="Funcionários">
+                <a class="nav-link {% if request.path == '/funcionarios' %}active{% endif %}"
+                   href="/funcionarios" data-tooltip="Funcionários">
                     <i class="fas fa-users"></i>
                     <span class="nav-link-text">Funcionários</span>
                 </a>
-                <a class="nav-link {% if request.path == '/relatorios' %}active{% endif %}" href="/relatorios" data-tooltip="Relatórios">
+                <a class="nav-link {% if request.path == '/relatorios' %}active{% endif %}"
+                   href="/relatorios" data-tooltip="Relatórios">
                     <i class="fas fa-file-export"></i>
                     <span class="nav-link-text">Relatórios</span>
                 </a>
 
                 <hr class="sidebar-separator">
-                <div class="section-label text-muted small fw-bold text-uppercase px-1 mb-1" style="font-size:0.65rem;letter-spacing:0.08em;">Gestão</div>
+                <div class="section-label">Gestão</div>
 
-                <a class="nav-link {% if request.path.startswith('/escalas') %}active{% endif %}" href="/escalas/" data-tooltip="Escalas">
+                <a class="nav-link {% if request.path.startswith('/escalas') %}active{% endif %}"
+                   href="/escalas/" data-tooltip="Escalas">
                     <i class="fas fa-calendar-week"></i>
                     <span class="nav-link-text">Escalas</span>
                 </a>
-                <a class="nav-link {% if request.path == '/banco-horas' or request.path == '/banco-horas/alertas' %}active{% endif %}" href="/banco-horas" data-tooltip="Banco de Horas">
+                <a class="nav-link {% if request.path == '/banco-horas' or request.path == '/banco-horas/alertas' %}active{% endif %}"
+                   href="/banco-horas" data-tooltip="Banco de Horas">
                     <i class="fas fa-hourglass-half"></i>
                     <span class="nav-link-text">Banco de Horas</span>
                     {% if alertas_banco_horas > 0 %}
                     <span class="badge bg-warning text-dark ms-auto" style="font-size:0.65rem;">{{ alertas_banco_horas }}</span>
                     {% endif %}
                 </a>
-                <a class="nav-link {% if request.path == '/financeiro' %}active{% endif %}" href="/financeiro" data-tooltip="Financeiro">
+                <a class="nav-link {% if request.path == '/financeiro' %}active{% endif %}"
+                   href="/financeiro" data-tooltip="Financeiro">
                     <i class="fas fa-chart-pie"></i>
                     <span class="nav-link-text">Financeiro</span>
                 </a>
-                <a class="nav-link {% if request.path.startswith('/whatsapp') %}active{% endif %}" href="/whatsapp/logs" data-tooltip="WhatsApp">
+                <a class="nav-link {% if request.path.startswith('/whatsapp') %}active{% endif %}"
+                   href="/whatsapp/logs" data-tooltip="WhatsApp">
                     <i class="fab fa-whatsapp"></i>
                     <span class="nav-link-text">WhatsApp</span>
                 </a>
-                <a class="nav-link {% if request.path.startswith('/marketplace') %}active{% endif %}" href="/marketplace/" data-tooltip="Marketplace">
+                <a class="nav-link {% if request.path.startswith('/notificacoes') %}active{% endif %}"
+                   href="/notificacoes/" data-tooltip="Regras de Notificação">
+                    <i class="fas fa-bell"></i>
+                    <span class="nav-link-text">Regras de Notificação</span>
+                </a>
+                <a class="nav-link {% if request.path.startswith('/marketplace') %}active{% endif %}"
+                   href="/marketplace/" data-tooltip="Marketplace">
                     <i class="fas fa-store"></i>
                     <span class="nav-link-text">Marketplace</span>
                 </a>
-                <a class="nav-link {% if request.path.startswith('/prontuario') %}active{% endif %}" href="/prontuario/alertas" data-tooltip="Prontuário">
+                <a class="nav-link {% if request.path.startswith('/prontuario') %}active{% endif %}"
+                   href="/prontuario/alertas" data-tooltip="Prontuário">
                     <i class="fas fa-folder-open"></i>
                     <span class="nav-link-text">Prontuário</span>
                     {% if alertas_docs > 0 %}
@@ -366,9 +543,10 @@
                 </a>
 
                 <hr class="sidebar-separator">
-                <div class="section-label text-muted small fw-bold text-uppercase px-1 mb-1" style="font-size:0.65rem;letter-spacing:0.08em;">Sistema</div>
+                <div class="section-label">Sistema</div>
 
-                <a class="nav-link {% if request.path.startswith('/config') %}active{% endif %}" href="/config/" data-tooltip="Configurações">
+                <a class="nav-link {% if request.path.startswith('/config') %}active{% endif %}"
+                   href="/config/" data-tooltip="Configurações">
                     <i class="fas fa-cog"></i>
                     <span class="nav-link-text">Configurações</span>
                 </a>
@@ -383,7 +561,7 @@
             </nav>
         </div>
 
-        <!-- Botão recolher (rodapé da sidebar) -->
+        <!-- collapse toggle -->
         <div class="sidebar-toggle-btn" id="sidebarToggle" title="Recolher menu">
             <i class="fas fa-chevron-left" id="toggleIcon"></i>
         </div>
@@ -407,23 +585,24 @@
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Select2 -->
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
         (function () {
-            const sidebar = document.getElementById('sidebar');
+            const sidebar    = document.getElementById('sidebar');
             const mainContent = document.getElementById('mainContent');
-            const toggleBtn = document.getElementById('sidebarToggle');
+            const toggleBtn  = document.getElementById('sidebarToggle');
             const toggleIcon = document.getElementById('toggleIcon');
-            const navToggle = document.getElementById('sidebarToggleNav');
+            const navToggle  = document.getElementById('sidebarToggleNav');
 
-            // Restaura estado salvo
-            const collapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-            if (collapsed) {
+            // restore saved state
+            if (localStorage.getItem('sidebarCollapsed') === 'true') {
                 sidebar.classList.add('collapsed');
                 mainContent.classList.add('expanded');
                 toggleIcon.classList.replace('fa-chevron-left', 'fa-chevron-right');
             }
 
-            // Toggle desktop (botão no rodapé da sidebar)
+            // desktop toggle
             toggleBtn.addEventListener('click', function () {
                 const isCollapsed = sidebar.classList.toggle('collapsed');
                 mainContent.classList.toggle('expanded', isCollapsed);
@@ -432,19 +611,17 @@
                 localStorage.setItem('sidebarCollapsed', isCollapsed);
             });
 
-            // Toggle mobile (hambúrguer na navbar)
+            // mobile toggle
             if (navToggle) {
                 navToggle.addEventListener('click', function () {
                     sidebar.classList.toggle('mobile-open');
                 });
             }
 
-            // Fecha sidebar mobile ao clicar em link
+            // close mobile sidebar on link click
             document.querySelectorAll('.sidebar .nav-link').forEach(function (link) {
                 link.addEventListener('click', function () {
-                    if (window.innerWidth <= 768) {
-                        sidebar.classList.remove('mobile-open');
-                    }
+                    if (window.innerWidth <= 768) sidebar.classList.remove('mobile-open');
                 });
             });
         })();

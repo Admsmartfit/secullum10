@@ -14,18 +14,24 @@ def espelho():
     data_inicio_str = request.args.get('data_inicio', date.today().strftime('%Y-%m-%d'))
     data_fim_str = request.args.get('data_fim', date.today().strftime('%Y-%m-%d'))
     export = request.args.get('export', 'false') == 'true'
+    funcionario_id = request.args.get('funcionario_id', '').strip()
 
     data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
     data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
 
-    batidas_query = (
+    q = (
         Batida.query
         .filter(Batida.data >= data_inicio, Batida.data <= data_fim)
         .join(Funcionario)
         .filter(Funcionario.ativo == True)
-        .order_by(Batida.data.desc(), Batida.hora)
-        .all()
     )
+    if funcionario_id:
+        q = q.filter(Batida.funcionario_id == funcionario_id)
+
+    batidas_query = q.order_by(Batida.data.desc(), Batida.hora).all()
+
+    funcionario_selecionado = Funcionario.query.get(funcionario_id) if funcionario_id else None
+    todos_func = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
 
     if export:
         rows = [{
@@ -72,6 +78,9 @@ def espelho():
         data_inicio=data_inicio_str,
         data_fim=data_fim_str,
         funcionarios_com_batida=funcionarios_com_batida,
+        funcionario_id=funcionario_id,
+        funcionario_selecionado=funcionario_selecionado,
+        todos_func=todos_func,
     )
 
 

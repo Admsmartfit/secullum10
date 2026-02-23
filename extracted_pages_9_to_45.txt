@@ -1,0 +1,1162 @@
+Total pages: 54
+
+=== PAGE 9 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 9 de 54
+UtilizaRepA BooleanoSe a empresa utiliza equipamentos  
+do tipo REP-A ou nãoObrigatório
+UtilizaRepP BooleanoSe a empresa utiliza equipamentos  
+do tipo REP-P ou nãoObrigatório
+Abaixo estão descritas as requisições disponíveis no webservice para manipulação de  
+empresas:
+Rota MétodoDescrição
+Empresas GETRetorna lista de empresas
+Empresas?cnpjCpf=<documento> GETRetorna dados da empresa de acordo com o  
+CNPJ ou CPF
+Empresas POSTInclui  ou  altera  os  dados  da  empresa  (o  
+campo chave utilizado para identificar se é  
+uma inclusão ou alteração dos dados é o  
+“Documento”)
+Empresas?cnpjCpf=<documento> DELETEApaga a empresa de acordo com o CNPJ ou  
+CPF
+Cadastro de Horários
+Para manipulação dos dados de horários, deve-se utilizar a rota “Horarios”:
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/Horarios
+Os dados disponibilizados nesta rota estão descritos na tabela a seguir.
+Campo Tipo Descrição Preenchimento
+Id Inteiro Id do horário Auto Preenchido
+Numero Inteiro Número do horário Obrigatório
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 10 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 10 de 54
+Descricao Texto(50)Descrição do 
+horárioObrigatório
+Opcoes HorariosOpcoes Opções do horário Obrigatório
+Extras HorarioExtras Opções de extras Obrigatório
+Descanso HorarioDescanso Opções de DSR Obrigatório
+Dias Lista de HorarioDia Dias Obrigatório
+FaixasExtras Lista de HorarioFaixasExtras Faixas de extras Obrigatório
+ToleranciaEspecifica HorarioToleranciaEspecificaTolerâncias 
+específicasOpcional
+Abaixo tabelas descrevendo os tipos de dados acima mencionados:
+HorariosOpcoes
+Campo Tipo Descrição Preenchimento
+HorarioId InteiroId do horário vinculado Obrigatório
+ToleranciaArtigo58 BooleanoFixar  tolerância  de  extras/faltas  
+em 5 minutos e 10 minutos diários  
+(CLT - Art 58)Opcional
+IgnorarLimiteMinimoCas
+oBatidaGerarExtrasSupe
+riorAToleranciaBooleanoIgnorar limite mínimo caso batida  
+gerar extras superior a tolerânciaOpcional
+QualquerMinutoAdiantad
+oComoExtraBooleanoMarcar qualquer minuto adiantado  
+como extraOpcional
+QualquerMinutoAtrasado
+ComoFalta BooleanoMarcar qualquer minuto atrasado  
+como faltaOpcional
+IgnorarLimiteMinimoCas BooleanoIgnorar limite mínimo caso batida  Opcional
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 11 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 11 de 54
+oBatidaGerarFaltasSuper
+iorAToleranciagerar faltas superior a tolerância
+DescontarToleranciaDas
+HorasExtrasBooleanoDescontar  tolerância  das  horas  
+extrasOpcional
+DescontarToleranciaDas
+HorasFaltasBooleanoDescontar  tolerância  das  horas  
+faltasOpcional
+UsarToleranciaRefeicoes BooleanoUsar tolerância para refeições Opcional
+ToleranciaRefeicoesMinu
+tosInteiroTolerância para refeições Opcional
+LimiteMinimoDeFaltasNo
+DiaMinutosInteiroLimite mínimo de extras no dia Opcional
+LimiteMinimoDeExtrasNo
+DiaMinutosInteiroLimite mínimo de faltas no dia Opcional
+SinalizarEmVermelhoAl
+mocosCurtosBooleanoSinalizar  em  vermelho  almoços  
+curtosOpcional
+NaoCalcularNenhumaHor
+aNoturnaBooleanoNão  calcular  nenhuma  hora  
+noturna (Not. e ExNot)Opcional
+PreencherFaltasQuando
+DiaEstiverEmBrancoBooleanoPreencher Falta quando dia estiver  
+em brancoOpcional
+SepararHorasNoturnasD
+eHorasNormaisBooleanoSeparar horas noturnas de horas  
+normaisOpcional
+ConsiderarFeriadosComo
+HoraExtraBooleanoConsiderar  feriados  como  hora  
+extraOpcional
+UsarTempoMaisMenosCa
+rgaSuperiorBooleanoUsar tempo +/- se carga superior  
+a x %Opcional
+PercentualCargaUsarTe
+mpoMaisMenosMinutosDuploPercentual da carga para o tempo  
++/-Opcional
+DesconsiderarNeutroQua BooleanoDesconsidera  o  Neutro  quando  Opcional
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 12 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 12 de 54
+ndoHouverBatidasNoDia houver batidas no dia
+PeriodoEspecialAdicional
+NoturnoInicioTexto(5)Período  especial  de  Adicional  
+Noturno InicioOpcional
+PeriodoEspecialAdicional
+NoturnoFimTexto(5)Período  especial  de  Adicional  
+Noturno FimOpcional
+HorarioExtras
+Campo Tipo Descrição Preenchimento
+HorarioId InteiroId do horário vinculado Obrigatório
+AgruparExtras BooleanoAgrupar extras de mesma 
+porcentagemOpcional
+SomenteGrupoExtras BooleanoUsar  horas  somente  a  partir  do  
+grupo de extrasOpcional
+UsarInterjornada BooleanoMarcar  qualquer  minuto  adiantado  
+como extraOpcional
+Interjornada BooleanoMarcar  qualquer  minuto  atrasado  
+como faltaOpcional
+InterjornadaSeparada BooleanoIgnorar  limite  mínimo  caso  batida  
+gerar faltas superior a tolerânciaOpcional
+DescontarFaltasExtras InteiroMaisSignificativas = 0 
+MenosSignificativas = 1Opcional
+Acumulo InteiroIndependentes = 0
+UteisSabado = 1
+UteisSabadoDomingo = 2
+UteisSabadoDomingoFeriadoFolga =  
+3
+SabadoDomingo = 4
+SabadoDomingoFeriado = 5Opcional
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 13 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 13 de 54
+DomingoFeriado = 6
+UteisSabado_e_DomingoFeriado = 7
+UteisDomingo_e_SabadoFeriado = 8
+HorarioFaixasExtras
+Campo Tipo Descrição Preenchimento
+HorarioId InteiroId do horário vinculado Obrigatório
+Dia Semana InteiroUteis = 0
+Sabado = 1
+Domingo = 2
+Feriado = 3
+Folgas = 4
+Especial = 5
+NoturnoUteis = 6
+NoturnoSabado = 7
+NoturnoDomingo = 8
+NoturnoFeriado = 9
+NoturnoFolgas = 10
+IntervaloUteis = 11
+IntervaloSabado = 12
+IntervaloDomingo = 13
+IntervaloFeriado = 14
+IntervaloFolgas = 15Obrigatório
+ControleInteiroDiario = 0
+Semanal = 1
+Mensal = 2Opcional
+DiaEspecial InteiroDe Domingo (0) até Sábado (6) Opcional
+Faixas Lista de 
+HorarioFaixasFaixas de extras Obrigatório
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 14 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 14 de 54
+ExtrasItem
+HorarioFaixasExtrasItem
+Campo Tipo Descrição Preenchimento
+Ordem InteiroOrdem em que será considerada Obrigatório
+Horas DuploQuantidade de horas da faixa Obrigatório
+Coluna DuploColuna de extra correspondente Obrigatório
+HorarioDescanso
+Campo TipoDescrição Preenchimento
+HorarioId InteiroId do horário vinculado Obrigatório
+Tipo InteiroAutomático = 0
+Variável = 1Opcional
+ValorDescanso Texto(5)Valor do DSR Obrigatório
+LimiteHorasFaltas Texto(5)Limite de horas falta Obrigatório
+IncluirFeriado InteiroDescansoDomingo = 0
+DescansoDia = 1
+HoraNormalDia = 2
+HoraNormalDescanso = 3Opcional
+FeriadoDomingoApena
+sUmDescansoBooleanoCaso feriado ocorra em domingo, 
+descontar apenas um DSROpcional
+DescontarFeriadosCas
+oFaltasBooleanoDescontar feriados em caso de 
+faltasOpcional
+NaoDescontarAntesAd
+missaoBooleanoNão descontar DSR antes da 
+admissãoOpcional
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 15 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 15 de 54
+NaoDescontarDurante
+AfastamentoBooleanoNão descontar DSR durante 
+afastamentoOpcional
+FaixasLista de 
+HorarioDesc
+ansoFaixaIt
+emFaixas de Descanso Obrigatório
+HorarioDescansoFaixaItem
+Campo Tipo Descrição Preenchimento
+Ordem InteiroOrdem em que será considerada Obrigatório
+Limite Texto(5)Limite de horas faltas Obrigatório
+Desconto Texto(5)Valor do Desconto Obrigatório
+HorarioDia
+Campo Tipo Descrição Preenchimento
+HorarioId InteiroId do horário vinculado Obrigatório
+DiaSemana InteiroDe Segunda-feira (0) até
+Domingo (6)Obrigatório
+Entrada1 Texto(5)Valor no formato HH:mm Opcional
+Saida1 Texto(5)Valor no formato HH:mm Opcional
+Entrada2 Texto(5)Valor no formato HH:mm Opcional
+Saida2 Texto(5)Valor no formato HH:mm Opcional
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 16 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 16 de 54
+Entrada3 Texto(5)Valor no formato HH:mm Opcional
+Saida3 Texto(5)Valor no formato HH:mm Opcional
+Entrada4 Texto(5)Valor no formato HH:mm Opcional
+Saida4 Texto(5)Valor no formato HH:mm Opcional
+Entrada5 Texto(5)Valor no formato HH:mm Opcional
+Saida5 Texto(5)Valor no formato HH:mm Opcional
+TipoEntrada1 InteiroNormal = 0
+PreAssinalado = 1Opcional
+TipoSaida1 InteiroNormal = 0
+PreAssinalado = 1Opcional
+TipoEntrada2 InteiroNormal = 0
+PreAssinalado = 1Opcional
+TipoSaida2 InteiroNormal = 0
+PreAssinalado = 1Opcional
+TipoEntrada3 InteiroNormal = 0
+PreAssinalado = 1Opcional
+TipoSaida3 InteiroNormal = 0
+PreAssinalado = 1Opcional
+TipoEntrada4 InteiroNormal = 0
+PreAssinalado = 1Opcional
+TipoSaida4 InteiroNormal = 0
+PreAssinalado = 1Opcional
+TipoEntrada5 InteiroNormal = 0
+PreAssinalado = 1Opcional
+TipoSaida5 InteiroNormal = 0 Opcional
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 17 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 17 de 54
+PreAssinalado = 1
+Fechamento InteiroDe 0 a 23 horas Opcional
+ToleranciaExtra InteiroDe 0 a 59 minutos Opcional
+ToleranciaFalta InteiroDe 0 a 59 minutos Opcional
+GrupoDeExtra InteiroNúmero do grupo de extras Opcional
+Carga InteiroCarga em minutos Opcional
+TipoDia InteiroNormal = 0
+Extra = 1
+Folga = 2Opcional
+Compensado BooleanoCompensado Opcional
+AlmocoLivre BooleanoAlmoço Livre Opcional
+Neutro BooleanoNeutro Opcional
+SomarT BooleanoAdiciona tempo +/- na carga Opcional
+Acrescimo Texto(5)Valor do tempo +/- no formato 
+HH:mmOpcional
+HorarioToleranciaEspecifica
+Campo Tipo Descrição Preenchimento
+UsaToleranciaEspecifica BooleanoUsa tolerância específica Opcional
+Tolerancias Lista de 
+HorárioTolera
+nciaEspecificaLista de tolerâncias Opcional
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 18 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 18 de 54
+Item
+HorarioToleranciaEspecificaItem
+Campo Tipo Descrição Preenchimento
+DiaSemana BooleanoUsa tolerância específica Obrigatório
+HorarioId InteiroId do horário vinculado Obrigatório
+Entrada1De Texto(5)Valor no formato HH:mm Opcional
+Entrada1Ate Texto(5)Valor no formato HH:mm Opcional
+Saida1De Texto(5)Valor no formato HH:mm Opcional
+Saida1Ate Texto(5)Valor no formato HH:mm Opcional
+Entrada2De Texto(5)Valor no formato HH:mm Opcional
+Entrada2Ate Texto(5)Valor no formato HH:mm Opcional
+Saida2De Texto(5)Valor no formato HH:mm Opcional
+Saida2Ate Texto(5)Valor no formato HH:mm Opcional
+Entrada3De Texto(5)Valor no formato HH:mm Opcional
+Entrada3Ate Texto(5)Valor no formato HH:mm Opcional
+Saida3De Texto(5)Valor no formato HH:mm Opcional
+Saida3Ate Texto(5)Valor no formato HH:mm Opcional
+Entrada4De Texto(5)Valor no formato HH:mm Opcional
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 19 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 19 de 54
+Entrada4Ate Texto(5)Valor no formato HH:mm Opcional
+Saida4De Texto(5)Valor no formato HH:mm Opcional
+Saida4Ate Texto(5)Valor no formato HH:mm Opcional
+Entrada5De Texto(5)Valor no formato HH:mm Opcional
+Entrada5Ate Texto(5)Valor no formato HH:mm Opcional
+Saida5De Texto(5)Valor no formato HH:mm Opcional
+Saida5Ate Texto(5)Valor no formato HH:mm Opcional
+Abaixo estão disponíveis as requisições disponíveis no webservice para manipulação de  
+horários:
+Rota MétodoDescrição
+Horarios GETRetorna lista de horários
+Horarios?numero=
+<NUMERO>GETRetorna o horário de acordo com o NUMERO
+Horarios POSTInclui/Altera  os  dados  do  horário  (campo  chave  
+utilizado para identificar é uma inclusão ou alteração  
+dos dados é o campo NUMERO)
+Horarios?numero=
+<NUMERO>DELETEApaga a empresa de acordo com o NUMERO
+Cadastro de Funções
+Para manipulação dos dados de funções, deve-se utilizar a rota “Funcoes”:
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/Funcoes
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 20 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 20 de 54
+Os dados disponibilizados nesta rota estão descritos na tabela a seguir.
+CampoTipo Descrição Preenchimento
+DescricaoTexto(50)Descrição da função Obrigatório
+Abaixo estão descritas as requisições disponíveis no webservice para manipulação de  
+funções:
+Rota MétodoDescrição
+Funcoes GETRetorna lista de funções
+Funcoes?descricao=
+<DESCRICAO>GETRetorna a função de acordo com a DESCRICAO
+Funcoes POSTInclui/Altera os dados da função (campo chave  
+utilizado para identificar se é uma inclusão ou  
+alteração dos dados é o campo DESCRICAO)
+Funcoes?descricao=
+<DESCRICAO>DELETEApaga a função de acordo com a DESCRICAO
+Cadastro de Departamentos
+Para  manipulação  dos  dados  de  departamentos,  deve-se  utilizar  a  rota  
+“Departamentos”:
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/Departamentos
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 21 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 21 de 54
+Os dados disponibilizados nesta rota estão descritos na tabela a seguir.
+CampoTipo Descrição Preenchimento
+DescricaoTexto(50)Descrição do departamento Obrigatório
+Abaixo estão descritas as requisições disponíveis no webservice para manipulação de  
+departamentos:
+Rota MétodoDescrição
+Departamentos GETRetorna lista de departamentos
+Departamentos?
+descricao=<DESCRICAO>GETRetorna  o  departamento  de  acordo  com  a  
+DESCRICAO
+Departamentos POSTInclui/Altera os dados do departamento (campo  
+chave  utilizado  para  identificar  se  é  uma  
+inclusão  ou  alteração  dos  dados  é  o  campo  
+DESCRICAO)
+Departamentos?descricao=
+<DESCRICAO>DELETEApaga  o  departamento  de  acordo  com  a  
+DESCRICAO
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 22 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 22 de 54
+Cadastro de Estruturas
+Para manipulação dos dados de estruturas, deve-se utilizar a rota “Estruturas”:
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/E  struturas  
+Os dados disponibilizados nesta rota estão descritos na tabela a seguir.
+CampoTipo Descrição Preenchimento
+DescricaoTexto(50)Descrição da estrutura Obrigatório
+EstruturaPaiD
+escricaoTexto(50)Descrição da estrutura paiOpcional, quando não 
+utilizado indica que é 
+o inicio da estrutura
+ResponsaveisObjetoCPF  ou  PIS  dos  responsáveis  da  
+estruturaOpcional, quando não  
+utilizado  a  estrutura  
+não  terá  nenhum  
+responsável vinculado
+Funcionarios
+VinculadosObjetoCPF  ou  PIS  dos  funcionários  
+vinculados a estruturaOpcional, quando não  
+utilizado  a  estrutura  
+não  terá  nenhum  
+funcionário vinculado
+Abaixo estão descritas as requisições disponíveis no webservice para manipulação de  
+departamentos:
+Rota MétodoDescrição
+Estruturas POSTInclui/Altera  os  dados  da  estrutura  (campo  
+chave  utilizado  para  identificar  se  é  uma  
+inclusão ou alteração dos dados é o campo  
+DESCRICAO)
+Estruturas GETRetorna  lista  com  o  nomes  das  estruturas  
+cadastradas no sistema
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 23 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 23 de 54
+Estruturas/Funcionarios?
+drescricao=<DescricaoEstrutura
+>GETRetorna lista de funcionários vinculados a uma  
+estrutura,  conforme  campo  
+<DescricaoEstrutura>
+Estruturas/Responsaveis?
+drescricao=<DescricaoEstrutura
+>GETRetorna  lista  de  responsaveis  de  uma  
+estrutura,  conforme  campo  
+<DescricaoEstrutura>
+Estruturas?
+descricao=<DescricaoEstrutura>DELETEApaga  uma  estrutura,  conforme  campo  
+<DescricaoEstrutura>
+Cadastro de Funcionários
+Para manipulação dos dados de funcionários, deve-se utilizar a rota “Funcionarios”:
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/Funcionarios
+Os dados disponibilizados nesta rota estão descritos na tabela a seguir.
+Observação: A consulta nesta rota requer autorização do administrador do sistema  
+para acessar os dados protegidos pela LGPD (Lei Geral de Proteção de Dados).
+Campo Tipo Descrição Preenchimento
+Nome Texto(150)Nome Obrigatório
+NumeroFolha Texto(22)Nº Folha Obrigatório
+Cpf Texto(20)CPF Obrigatório
+NumeroPis Texto(20)Nº PisObrigatório 
+quando 
+desativar 
+validação  e 
+obrigatoriedade 
+de N PIS/PASEP 
+estiver 
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 24 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 24 de 54
+desmarcada e a 
+empresa possuir 
+equipamento  do 
+tipo  REP-A  ou 
+REP-C *
+NumeroIdentificador Texto(20)Nº Identificador Opcional
+Carteira Texto(50)CTPS Opcional
+Observacao Texto(255)Observação Opcional
+Endereco Texto(100)Endereço Opcional
+Bairro Texto(30)Bairro Opcional
+Cidade Texto(50)Cidade Opcional
+Uf Texto(2)Estado Opcional
+Cep Texto(9)Cep Opcional
+Telefone Texto(20)Telefone Opcional
+Celular Texto(20)Celular Opcional
+Email Texto(255)Email Opcional
+Rg Texto(255)RG Opcional
+ExpedicaoRg DataData de Expedição do RG Opcional
+Ssp Texto(2)Orgão expeditor do RG Opcional
+Mae Texto(100)Nome da mãe Opcional
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 25 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 25 de 54
+Pai Texto(100)Nome do pai Opcional
+Nascimento DataData de Nascimento Opcional
+NaoVerificarDigital BooleanoVerificar Digital Opcional
+Masculino BooleanoSexo Masculino = true, Feminino = 
+falseOpcional
+Master BooleanoMaster nos equipamentos Opcional
+Nacionalidade Texto(50)Nacionalidade Opcional
+Naturalidade Texto(50)Naturalidade Opcional
+NumeroProvisorio Texto(20)Nº Provisório Opcional
+Admissao DataData de Admissão Obrigatório
+Demissao DataData de Demissão Opcional
+EmpresaCnpjCpf Texto(20)CNPJ ou CPF da empresa Obrigatório
+HorarioNumero InteiroNº do Horário Obrigatório
+DepartamentoDescri
+caoTexto(50)Descrição do departamento Obrigatório
+DescricaoEstrutura Texto(50)Descrição do estrutura Opcional
+FuncaoDescricao Texto(50)Descrição da função Obrigatório
+MotivoDemissaoDesc
+ricaoListaLista de motivos de demissão Opcional
+Foto TextoImagem em base 64, utilizar com a 
+propriedade AlterouFoto para Opcional
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 26 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 26 de 54
+incluir ou alterar a foto de 
+funcionário. 
+Para consultar fotos utilizar a rota 
+Funcionarios/fotos
+AlterouFoto BooleanoIndica se haverá inclusão ou 
+alteração da foto do funcionárioOpcional
+CodigoHolerite Texto(20)Código Holerite Opcional
+DuplicarDemitido BooleanoIndica o comportamento do cadastro  
+caso esteja na lista de demitidos.Opcional
+*  Quando  a  opção “Desativar  validação  e  obrigatoriedade  de  Nº  PIS/PASEP”,  localizada  em  
+Manutenções > Configurações Especiais > Funcionários está desmarcada, o sistema valida o PIS e não  
+permite  o  cadastro  sem  este  campo  caso  a  empresa  possua  equipamentos  do  tipo  REP-A  e  REP-C  
+cadastrados.
+Abaixo estão descritas as requisições disponíveis no webservice para manipulação de  
+funcionários:
+Rota MétodoDescrição
+Funcionarios GETRetorna lista de funcionários
+Funcionarios?pis=<PIS> GETRetorna o funcionário de acordo com o PIS
+Funcionarios/Cpf?cpf=<CPF> GETRetorna o funcionário de acordo com o CPF
+Funcionarios POSTInclui/Altera  os  dados  do  funcionário  (campo  chave  
+utilizado para identificar se é uma inclusão ou alteração  
+dos dados é o campo CPF)
+Funcionarios?pis=<PIS> DELETEApaga o funcionário de acordo com o PIS
+Funcionarios/Cpf?cpf=<CPF> DELETEApaga o funcionário de acordo com o CPF
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 27 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 27 de 54
+Funcionarios/fotos?
+funcionarioId=<Id>GETRetorna a foto do funcionário de acordo com o ID
+Cadastro de Motivos de Demissão
+Para  manipulação  dos  dados  de  motivos  de  demissão,  deve-se  utilizar  a  rota  
+“MotivosDemissao”:
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/
+MotivosDemissao
+Os dados disponibilizados nesta rota estão descritos na tabela a seguir.
+CampoTipo Descrição Preenchimento
+DescricaoTexto(50)Descrição do motivo de demissão Obrigatório
+Abaixo estão descritas as requisições disponíveis no webservice para manipulação de  
+motivos de demissão:
+Rota MétodoDescrição
+MotivosDemissao GETRetorna lista de motivos de demissão
+MotivosDemissao?
+descricao=<DESCRICAO>GETRetorna  o  motivo  de  demissão  de  acordo  com  a  
+DESCRICAO
+MotivosDemissao POSTInclui o motivo de demissão
+MotivosDemissao?
+descricao=<DESCRICAO>DELETEApaga  o  motivo  de  demissão  de  acordo  com  a  
+DESCRICAO
+Cadastro de Afastamentos
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 28 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 28 de 54
+Para  manipulação  dos  dados  de  afastamentos,  deve-se  utilizar  a  rota  
+“FuncionariosAfastamentos”:
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/
+FuncionariosAfastamentos
+Os dados disponibilizados nesta rota estão descritos na tabela a seguir.
+Campo Tipo Descrição Preenchimento
+NumeroPis Texto(20)Nº Pis do funcionário o qual o afastamento  
+está vinculadoObrigatório  quando 
+CPF em branco
+Cpf Texto(20)CPF do funcionário o qual o afastamento  
+está vinculadoObrigatório  quando 
+PIS em branco
+Inicio DataData Início do Afastamento Obrigatório
+Fim DataData Fim do Afastamento Obrigatório
+Motivo Texto(100)Motivo do Afastamento Opcional
+JustificativaNome Texto(7)Nome da justificativa para o afastamento Obrigatório
+Abaixo estão descritas as requisições disponíveis no webservice para manipulação de  
+afastamentos:
+Rota MétodoDescrição
+FuncionariosAfastamentos GETRetorna lista de afastamentos
+FuncionariosAfastamentos
+?dataInicio=<INICIO>
+&dataFim=<FIM>
+&funcionarioPis=<NUMEROPIS>GETRetorna  a  lista  de  afastamentos  conforme  os 
+filtros INICIO e FIM, priorizando a busca pelo  
+PIS. 
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 29 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 29 de 54
+FuncionariosAfastamentos
+?dataInicio=<INICIO>
+&dataFim=<FIM>
+&funcionarioCpf=<CPF>GETRetorna  a  lista  de  afastamentos  conforme  os 
+filtros INICIO e FIM, priorizando a busca pelo  
+CPF. 
+FuncionariosAfastamentos POSTInclui o afastamento
+FuncionariosAfastamentos/Cpf
+?dataInicio=<INICIO>
+&dataFim=<FIM>
+&funcionarioCpf=<CPF>DELETEApaga  o  afastamento  de  acordo  com  os  
+campos INICIO, FIM , priorizando a busca pelo  
+CPF.
+FuncionariosAfastamentos
+?dataInicio=<INICIO>
+&dataFim=<FIM>
+&funcionarioPis=<NUMEROPIS>DELETEApaga  o  afastamento  de  acordo  com  os  
+campos INICIO, FIM , priorizando a busca pelo  
+PIS.
+Cadastro de Justificativas
+Para manipulação dos dados de justificativas, deve-se utilizar a rota “Justificativas”:
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/Justificativas
+Os dados disponibilizados nesta rota estão descritos na tabela a seguir.
+Campo Tipo Descrição Preenchimento
+NomeAbreviado Texto(7)Nome da justificativa Obrigatório
+NomeCompleto Texto(50)Descrição da justificativa Opcional
+ValorDia Texto(5)Valor da justificativa no formato HH:mm Opcional
+Ajuste BooleanoAbona automaticamente em Ajuste Opcional
+Abono2 BooleanoAbona automaticamente em Abono 2 Opcional
+Abono3 BooleanoAbona automaticamente em Abono 3 Opcional
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 30 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 30 de 54
+Abono4 BooleanoAbona automaticamente em Abono 4 Opcional
+NaoPermitirFuncion
+ariosUtilizarBooleanoNão permite a utilização desta justificativa 
+pelos funcionários na central do funcionárioOpcional
+ExigirFotoAtestado BooleanoExige o envio de uma foto ao utilizar esta 
+justificativaOpcional
+LancarComoHorasF
+altaBooleanoLança as horas calculadas da justificativa 
+como faltaOpcional
+DescontarDsr BooleanoDesconta o DSR do funcionário no dia em que 
+a justificativa é lançadaOpcional
+DescontarDsrIncluir
+FeriadosBooleanoDesconta também o DSR em dias que tem 
+feriadosOpcional
+NaoAbonarHorasNo
+turnasBooleanoNão calcula o Adicional Noturno no dia em que  
+a justificativa é lançadaOpcional
+NaoCalcularDsr BooleanoNão calcula o DSR no dia em que a 
+justificativa é lançadaOpcional
+CalcularComoFolga BooleanoCalcula as horas ajustadas pela justificativa 
+como Folga em CálculosOpcional
+Abaixo estão descritas as requisições disponíveis no webservice para manipulação de  
+justificativas:
+Rota MétodoDescrição
+Justificativas GETRetorna lista de justificativas
+Justificativas?descricao=
+<DESCRICAO>GETRetorna a justificativa de acordo com o campo  
+DESCRICAO
+Justificativas POSTInclui a justificativa
+Justificativas?descricao=
+<DESCRICAO>DELETEApaga  a  justificativa  de  acordo  com  a  
+DESCRICAO
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 31 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 31 de 54
+Cadastro de Perguntas Adicionais
+Para  manipulação  dos  dados  de  perguntas  adicionais,  deve-se  utilizar  a  rota  
+“PerguntasAdicionais”:
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/
+PerguntasAdicionais     
+Os dados disponibilizados nesta rota estão descritos na tabela a seguir.
+CampoTipo Descrição Preenchimento
+DescricaoTexto(100)Descrição da pergunta Obrigatório
+GrupoTexto(50)Grupo da pergunta Obrigatório
+OrdemInteiroOrdem  da  pergunta  em  relação  as  demais  
+perguntasObrigatório
+TamanhoInteiroTamanho máximo da resposta (de 1 a 255) Obrigatório
+Abaixo estão descritas as requisições disponíveis no webservice para manipulação de  
+perguntas adicionais:
+Rota MétodoDescrição
+PerguntasAdicionais GETRetorna lista de perguntas adicionais
+PerguntasAdicionais?
+descricao=<DESCRICAO>&
+grupo=<GRUPO>GETRetorna a pergunta adicional de acordo com os  
+campos DESCRICAO e GRUPO
+PerguntasAdicionais POSTInclui a pergunta adicional
+PerguntasAdicionais?
+descricao=<DESCRICAO>&
+grupo=<GRUPO>DELETEApaga a pergunta adicional de acordo com a  
+DESCRICAO e o GRUPO
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 32 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 32 de 54
+Visualização de Batidas
+Para visualização dos dados de batidas, deve-se utilizar a rota “Batidas”:
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/Batidas
+Diferentemente dos outros cadastros disponíveis para integração externa, a integração  
+de batidas permite apenas listar os dados de batidas.  Para isso, pode-se optar pelas seguintes  
+requisições.
+Campo Preenchimento
+DataInicio Obrigatório
+DataFim Obrigatório
+HoraInicio Opcional
+HoraFim Opcional
+FuncionarioPis Opcional
+FuncionarioCpf Opcional
+EmpresaDocumento Opcional
+Exemplo:
+Rota MétodoDescrição
+Batidas?
+dataInicio=<yyyy-MM-dd>&
+dataFim= <yyyy-MM-dd>&
+funcionarioPis=<NUMEROPIS>&
+funcionarioCpf=<CPF>GETRetorna a lista de batidas conforme os filtros  
+DATA_INICIO  e  DATA_FIM,  priorizando  a  
+busca  pelo  CPF.  Quando  o  CPF  não  estiver  
+presente, utiliza o NUMEROPIS. 
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 33 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 33 de 54
+Batidas?
+dataInicio=<yyyy-MM-dd>&
+dataFim= <yyyy-MM-dd>&
+horaInicio=<HH-mm>&
+horaFim=<HH:mm>GETRetorna a lista de batidas de acordo com os  
+filtros  DATA_INICIO,  DATA_FIM,  
+HORA_INICIO e HORA_FIM.
+Observação: Campo Hora é possível usar o  
+separador “:” ou “-”.
+Campo TipoDescrição
+FonteDados  Tipo → InteiroOriginal = 0,
+Manual = 1,
+PreAssinalado = 2,
+Desconsiderado = 3
+FonteDados  Origem → InteiroDesconhecido = 0,
+RelogioPonto = 1,
+IncluidoManualmente = 2,
+PreAssinalado = 3,
+Checkin = 4,
+CentralFuncionarioWeb = 5,
+CentralFuncionarioApp = 6,
+CentralFuncionarioAppOffline = 7,
+IntegracaoExterna = 8
+Visualização de Cálculos
+Para consultar os cálculos do funcionário através da integração externa, igual é feito em  
+Relatórios Cálculos  no  sistema  principal,  disponibilizamos  as  rotas:  “Calcular”  e →  
+“Calcular/SomenteTotais”
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/Calcular
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 34 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 34 de 54
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/Calcular  /  
+SomenteTotais
+Rota MétodoDescrição
+Calcular POSTRetorna uma lista com as colunas, as linhas e  
+os totais.
+Calcular/SomenteTotais POSTRetorna uma lista com as colunas e os totais.
+A consulta terá um limite de filtro de um mês. Além disso, em cada uma das duas rotas  
+mencionadas anteriormente, há um limite de tráfego definido, permitindo um total de 100  
+requisições por hora para cada banco.
+Os dados disponibilizados nestas rotas estão descritos na tabela a seguir.
+Campo Tipo Descrição Preenchimento
+FuncionarioCpf TextoNúmero CPF do funcionário Obrigatório quando PIS  
+estiver em branco
+FuncionarioPis TextoNúmero PIS do funcionário Obrigatório quando CPF  
+estiver em branco
+DataInicial DataData que inicia o processo de cálculos  
+do sistema.Obrigatório
+DataFinal DataData  que  finaliza  o  processo  de  cálculos  do  
+sistema.Obrigatório
+CentrosDeCustos Lista  de 
+DescriçãoLista com a descrição dos centros de  
+custos  cadastrados  no  sistema,  que  
+deseja realizar o filtro dos cálculos.Opcional
+Exemplo de requisição:
+POST /IntegracaoExterna/Calcular HTTP/1.1
+Content-Type: application/json
+secullumidbancoselecionado : 12345
+Authorization: Bearer <access_token>
+{
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 35 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 35 de 54
+ "FuncionarioCpf":"677.742.070-31",
+ "FuncionarioPis":"19",
+ "DataInicial":"2023-08-01",
+ "DataFinal":"2023-08-31",
+ "CentrosDeCustos":[
+   "CentroDeCusto1"
+ ]
+}
+Exemplo de resposta:
+{
+ "Colunas": [
+   "Data",
+   "Normais"
+],
+ "Linhas": [
+ {
+   "Key": "2023-07-01T00:00:00",
+   "Value": [
+    "01/07/2023 – Sáb",
+     "08:48"
+  ]
+ }
+],
+ "Totais": [
+     "",
+    "08:48"
+ ]
+}
+Inclusão de Ponto
+É possível realizar a inclusão de ponto via integração externa. As opções configuradas  
+no sistema para a inclusão de ponto via central do funcionário também terão efeito aqui. As  
+rotas disponíveis para essa funcionalidade são:
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 36 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 36 de 54
+RotaMétod
+oDescrição
+InclusaoPonto/Configuracoes/Cpf?
+cpf=<CPF>GETRetorna as opções configuradas para a inclusão de  
+ponto de determinado funcionário com base no CPF
+InclusaoPonto/Configuracoes?
+pis=<PIS>GETRetorna as opções configuradas para a inclusão de  
+ponto de determinado funcionário com base no PIS
+InclusaoPonto/Pendencias/Cpf?
+cpf=<CPF>GETRetorna as últimas 10 inclusões de ponto para o  
+funcionário  bem  como  o  seu  status  (se  já  foi  
+processada ou não) com base no CPF
+InclusaoPonto/Pendencias?
+pis=<PIS>GETRetorna as últimas 10 inclusões de ponto para o  
+funcionário  bem  como  o  seu  status  (se  já  foi  
+processada ou não) com base no PIS
+InclusaoPonto/Incluir POSTCria uma nova inclusão de ponto para determinado  
+funcionário
+Ao buscar as configurações, um objeto com os seguintes campos será retornado:
+Campo Tipo Descrição
+DataHoraServidor Data e HoraData e hora atual do servidor, levando em conta a  
+opção de “Ajuste” presente no sistema
+OrigemHorario Texto(1)Retorna  de  onde  será  utilizado  o  horário  para  
+inclusão de ponto:
+“0” = Servidor
+FuncionarioAfastado BooleanoRetorna  “true”  caso  tenha  algum  afastamento  
+lançado para o funcionário
+ExigirCapturaFotoPonto BooleanoRetorna “true” caso esteja configurado para exigir  
+a foto do funcionário ao incluir ponto
+TipoCameraCapturaFotoPonto Inteiro0 = Livre escolha do funcionário
+1 = Somente câmera frontal
+2 = Somente câmera traseira
+JustificativaAutomatica BooleanoRetorna  “true”  caso  esteja  configurada  alguma  
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 37 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 37 de 54
+justificativa para ser preenchida automaticamente  
+na inclusão de ponto
+Ao listar os registros pendentes do funcionário, uma lista dos últimos 10 registros com 
+os seguintes campos será retornada:
+Campo Tipo Descrição
+DataHora Data e HoraData e hora em que a inclusão foi realizada
+Endereco Texto(255)Endereço onde a inclusão de ponto foi feita
+Latitude NuméricoLatitude da localização da inclusão de ponto
+Longitude NuméricoLongitude da localização da inclusão de ponto
+Precisao NuméricoPrecisão das coordenas da inclusão de ponto
+Status Inteiro0 = Registro pendente
+1 = Registro aceito
+2 = Registro rejeitado
+MotivoRejeicao Texto(255)Motivo da rejeição, para quando Status = 2
+Ao realizar uma nova inclusão de ponto, os seguintes dados devem ser informados no 
+corpo da requisição, no formato JSON:
+Campo Tipo Descrição
+Cpf Texto(12)CPF do funcionário. Obrigatório quando PIS estiver em branco.
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 38 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 38 de 54
+Pis Texto(12)PIS do funcionário. Obrigatório quando CPF estiver em branco.
+Endereco Texto(255)Endereço  onde  a  inclusão  de  ponto  está  sendo  realizada.  
+Opcional.
+Latitude NuméricoLatitude  onde  a  inclusão  de  ponto  está  sendo  realizada.  
+Obrigatoriedade  depende  da  opção  de  “Permitir  inclusão  de  
+ponto sem buscar a localização do usuário”.
+Longitude NuméricoLongitude onde  a  inclusão  de  ponto  está  sendo  realizada.  
+Obrigatoriedade  depende  da  opção  de  “Permitir  inclusão  de  
+ponto sem buscar a localização do usuário”.
+Precisao NuméricoPrecisão das coordenadas de onde a inclusão de ponto está  
+sendo realizada. Obrigatoriedade depende da opção de “Permitir  
+inclusão de ponto sem buscar a localização do usuário”.
+MarcacaoOffline BooleanoIndica  que  a  marcação  é  offline,  sendo  possível  informar  
+qualquer valor de DataHora, caso contrário, o sistema sempre  
+pegará a informação de data e hora do servidor.
+DataHora Data e HoraData e hora em que a inclusão de ponto foi realizada.
+Essa  propriedade  deve  ser  utilizada  em  conjunto  com  
+MarcacaoOffline, caso contrário, o sistema sempre pegará a  
+informação  de  data  e  hora  do  servidor.
+Exemplo: “2024-04-17T14:30”
+Justificativa Texto(255)Justificativa  para  a  inclusão  de  ponto.  Apenas  necessário  
+informar caso a opção “Preenchimento da Justificativa” estiver  
+configurada como “Pelo funcionário no momento da inclusão”,  
+caso contrário, usará a justificativa automática cadastrada.
+Foto TextoFoto  do  funcionário  no  momento  da  inclusão  de  ponto.  
+Obrigatoriedade depende da opção “Exigir captura de foto do  
+funcionário no momento da inclusão”.
+IdentificacaoDispo
+sitivoTexto(50)Identificação do dispositivo onde o funcionário está incluindo o  
+ponto,  caso  usada  a  opção  de  “Restrição  de  Dispositivo  de  
+Origem” no cadastro do funcionário.
+Após a inclusão ser realizada, ela pode demorar alguns minutos até ser processada. 
+Consulte a lista de pendências do funcionário para monitorar o seu status.
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 39 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 39 de 54
+Edição de Cartão Ponto
+Esta API permite realizar operações relacionadas à edição de batidas de ponto dos 
+funcionários. As operações são executadas de maneira unitária, ou seja, uma operação por 
+requisição.
+Para manipulação dos dados de batidas e ajustes no cartão ponto, utilize a rota 
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/CartaoPonto .
+Abaixo estão as rotas disponíveis para cada operação, bem como os parâmetros e 
+tratamentos esperados:
+Manual
+Esse endpoint é utilizado para incluir uma batida manual.
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/CartaoPonto/Manual
+Rota MétodoDescrição
+Manual POSTIncluir uma batida manual.
+Campos:
+Campo Tipo Descrição Preenchimento
+Cpf/Pis/NumeroFolha Texto(20)Deve-se  preencher  pelo  menos  um  
+dos  identificadores:  Pis,  Cpf  ou  Obrigatório
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 40 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 40 de 54
+Número de Folha.
+Data DataData da Batida Obrigatório
+Coluna Texto(15)Coluna  (Entrada1…Saida5)  a  ser  
+editada.Obrigatório
+Hora Texto(5)Hora da batida no formato HH:mm. Obrigatório
+Motivo Texto(150)Motivo  da  edição  da  batida  (usado  
+para logs).Obrigatório
+Exemplo de requisição:
+POST /IntegracaoExterna/CartaoPonto/Manual HTTP/1.1
+Content-Type: application/json
+secullumidbancoselecionado : 12345
+Authorization: Bearer <access_token>
+{
+    "Coluna": "Entrada1",
+    "Cpf": "036.511.240-29",
+    "Data": "2024-01-30",
+    "Hora": "13:05",
+    "Motivo": "Motivo da marcação"
+}
+Tratamentos:
+Caso exista uma batida original na coluna informada, será retornado erro.
+Se houver uma justificativa, ela e seu "par" correspondente (por exemplo, Saída2 e 
+Entrada2) serão apagadas.
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 41 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 41 de 54
+Caso exista uma batida pré-assinalada, ela será excluída e a batida manual deve ser 
+colocada no lugar.
+Se existir uma batida manual, será editada.
+Se não houver valor, será incluída a batida enviada na requisição.
+Justificativa
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/CartaoPonto/
+Justificativa
+Esse endpoint é utilizado para inserir uma justificativa em um grupo de marcações (por 
+exemplo, Entrada1 e Saída1). 
+Rota MétodoDescrição
+Justificativa POSTIncluir uma justificativa em um grupo de  
+batidas.
+Campos:
+Campo Tipo Descrição Preenchimento
+Cpf/Pis/NumeroFolha Texto(20)Deve-se  preencher  pelo  menos  um  
+dos  identificadores:  Pis,  Cpf  ou  
+Número de Folha.Obrigatório
+Data DataData da Batida. Obrigatório
+Grupo InteiroGrupo de colunas (1..5). Obrigatório
+Justificativa Texto(7)Nome abreviado da justificativa. Obrigatório
+Exemplo de requisição:
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 42 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 42 de 54
+POST /IntegracaoExterna/CartaoPonto/Justificativa HTTP/1.1
+Content-Type: application/json
+secullumidbancoselecionado : 12345
+Authorization: Bearer <access_token>
+{
+    "Cpf": "036.511.240-29",
+    "Data": "2024-01-30",
+    "Justificativa": "ATEST",
+    "Grupo": 1
+}
+Tratamentos:
+Caso qualquer batida do grupo tenha uma batida original, retorna erro. 
+Se houver uma batida manual ou pré-assinalada, a fonte de dados deve ser apagada e 
+o valor sobrescrito. 
+Caso o grupo esteja vazio ou tenha outra justificativa, sobrescrever o valor. 
+Troca
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/CartaoPonto/Troca
+Esse endpoint é utilizado para trocar os valores de uma coluna por outra, podendo trocar, por 
+exemplo, a Entrada1 diretamente pela Saída5. 
+Rota MétodoDescrição
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 43 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 43 de 54
+Troca POSTTrocar valores de uma coluna por outra
+Campos:
+Campo Tipo Descrição Preenchimento
+Cpf/Pis/NumeroFolha Texto(20)Deve-se  preencher  pelo  menos  um  
+dos  identificadores:  Pis,  Cpf  ou  
+Número de Folha.Obrigatório
+Data DataData da Batida Obrigatório
+ColunaOrigem Texto(15)Coluna de origem (Entrada1..Saida5).  Obrigatório
+ColunaDestino Texto(15)Coluna de destino (Entrada1..Saida5).  Obrigatório
+Exemplo de requisição:
+POST /IntegracaoExterna/CartaoPonto/Troca HTTP/1.1
+Content-Type: application/json
+secullumidbancoselecionado : 12345
+Authorization: Bearer <access_token>
+{
+    "Cpf": "036.511.240-29",
+    "Data": "2024-01-30",
+    "ColunaOrigem": "Saida1",
+    "ColunaDestino": "Saida2"
+}
+Tratamentos: 
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 44 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 44 de 54
+Caso na origem ou no destino tenha uma justificativa, não permite a troca, retorna 
+erro. 
+Troca Dia
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/CartaoPonto/TrocaDia
+Esse endpoint é utilizado para mover uma batida para o dia anterior ou posterior. 
+Campos:
+Campo Tipo Descrição Preenchimento
+Cpf/Pis/NumeroFolha Texto(20)Deve-se  preencher  pelo  menos  um  
+dos  identificadores:  Pis,  Cpf  ou  
+Número de Folha.Obrigatório
+DataOrigem DataData de origem da batida. Obrigatório
+Coluna Texto(15)Coluna (Entrada1..Saida5).  Obrigatório
+DataDestino Texto(15)Data de destino da batida. Obrigatório
+Exemplo de requisição:
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000
+
+=== PAGE 45 ===
+Integração Ponto Web
+Ponto Web X sistemas externos
+ sexta-feira, 10 de setembro de 2021 - Página 45 de 54
+POST /IntegracaoExterna/CartaoPonto/TrocaDia HTTP/1.1
+Content-Type: application/json
+secullumidbancoselecionado : 12345
+Authorization: Bearer <access_token>
+{
+    "Cpf": "036.511.240-29",
+    "DataOrigem": "2024-01-29",
+    "Coluna": "Saida1",
+    "DataDestino": "2024-01-30"
+}
+Tratamentos: 
+Caso não haja uma batida ou haja uma justificativa na coluna selecionada, retorna erro.
+Se a diferença entre as datas for maior que 1 dia, retorna erro. 
+Se a data de destino for igual à de origem, não é realizada nenhuma operação. 
+Delete
+https://pontowebintegracaoexterna.secullum.com.br/IntegracaoExterna/CartaoPonto/
+Esse endpoint é utilizado remover os valores de uma coluna especifica.
+Campos:
+www.secullum.com.br
+Alameda da Inovação, 385 | Campo Bom | Brasil | CEP: 93700-000

@@ -6,7 +6,19 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 mb-0 font-weight-bold">Espelho de Ponto</h1>
     <div class="d-flex gap-2 flex-wrap">
-        <form method="GET" id="formEspelho" class="d-flex gap-2">
+        <form method="GET" id="formEspelho" class="d-flex gap-2 flex-wrap">
+            <select name="funcionario_id" id="selectFuncEspelho" class="form-select" style="min-width:220px">
+                <option value="">Todos os funcionários</option>
+                {% if todos_func %}
+                {% for f in todos_func %}
+                <option value="{{ f.id }}" {% if funcionario_id == f.id|string %}selected{% endif %}>{{ f.nome }}</option>
+                {% endfor %}
+                {% else %}
+                {% for fid, fname in funcionarios_com_batida %}
+                <option value="{{ fid }}" {% if funcionario_id == fid|string %}selected{% endif %}>{{ fname }}</option>
+                {% endfor %}
+                {% endif %}
+            </select>
             <input type="date" name="data_inicio" class="form-control bg-dark border-secondary text-white"
                 value="{{ data_inicio }}">
             <input type="date" name="data_fim" class="form-control bg-dark border-secondary text-white"
@@ -112,6 +124,18 @@
 
 {% block extra_js %}
 <script>
+    $(function() {
+        $('#selectFuncEspelho').select2({
+            placeholder: 'Todos os funcionários',
+            allowClear: true,
+            width: '220px',
+        });
+        // auto-submit on selection
+        $('#selectFuncEspelho').on('select2:select select2:unselect', function() {
+            document.getElementById('formEspelho').submit();
+        });
+    });
+
     function exportToExcel() {
         window.location.href = window.location.pathname + '?' + new URLSearchParams(new FormData(document.getElementById('formEspelho'))).toString() + '&export=true';
     }

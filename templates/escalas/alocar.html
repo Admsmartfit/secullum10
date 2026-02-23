@@ -14,12 +14,12 @@
     <form id="formAlocar" method="POST">
         <div class="mb-3">
             <label class="form-label text-muted small fw-bold">DATA</label>
-            <input type="date" name="data" id="dataInput" class="form-control bg-dark text-white border-secondary"
+            <input type="date" name="data" id="dataInput" class="form-control"
                    value="{{ data_sel }}" required>
         </div>
         <div class="mb-3">
             <label class="form-label text-muted small fw-bold">FUNCIONÁRIO</label>
-            <select name="funcionario_id" class="form-select bg-dark text-white border-secondary" required>
+            <select name="funcionario_id" id="selectFuncionario" class="form-select" required>
                 <option value="">Selecione...</option>
                 {% for f in funcionarios %}
                 <option value="{{ f.id }}">{{ f.nome }} – {{ f.departamento or 'S/D' }}</option>
@@ -28,7 +28,7 @@
         </div>
         <div class="mb-4">
             <label class="form-label text-muted small fw-bold">TURNO</label>
-            <select name="turno_id" id="turnoSelect" class="form-select bg-dark text-white border-secondary" required>
+            <select name="turno_id" id="turnoSelect" class="form-select" required>
                 <option value="">Selecione...</option>
                 {% for t in turnos %}
                 <option value="{{ t.id }}" data-horas="{{ '%.2f'|format(t.duracao_horas) }}">
@@ -50,6 +50,14 @@
             </div>
         </div>
 
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="aplicar_futuro" value="1" id="checkFuturo">
+            <label class="form-check-label" for="checkFuturo">
+                Aplicar a todos os dias futuros (próximos 60 dias)
+            </label>
+            <div class="form-text">Substitui a escala do funcionário a partir desta data.</div>
+        </div>
+
         <button type="submit" class="btn btn-primary w-100">
             <i class="fas fa-calendar-check me-2"></i>Salvar Alocação
         </button>
@@ -59,6 +67,15 @@
 
 {% block extra_js %}
 <script>
+// Select2 autocomplete
+$(function() {
+    $('#selectFuncionario').select2({
+        placeholder: 'Buscar funcionário...',
+        allowClear: true,
+        width: '100%',
+    });
+});
+
 // RF3.6 – Simulador de custo ao selecionar turno
 document.getElementById('turnoSelect').addEventListener('change', async function() {
     const opt = this.options[this.selectedIndex];
