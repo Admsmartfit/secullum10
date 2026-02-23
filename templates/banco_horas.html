@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+{% block title %}Banco de Horas{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">Banco de Horas</h1>
+    <div class="d-flex gap-2">
+        <button id="btnRecalcularTodos" class="btn btn-outline-info btn-sm">
+            <i class="fas fa-sync me-2"></i>Recalcular Todos
+        </button>
+        <a href="{{ url_for('financeiro.banco_horas_alertas') }}" class="btn btn-outline-warning btn-sm">
+            <i class="fas fa-bell me-2"></i>Ver Alertas
+        </a>
+        <a href="{{ url_for('financeiro.config_banco_horas') }}" class="btn btn-outline-light btn-sm">
+            <i class="fas fa-cog me-2"></i>Config
+        </a>
+    </div>
+</div>
+
+<div id="msgRecalculo"></div>
+
+<div class="card p-4 mb-4">
+    <form method="GET" id="formBH" class="row g-3">
+        <div class="col-md-4">
+            <label class="form-label text-muted small fw-bold">FUNCIONÁRIO</label>
+            <select name="funcionario_id" id="selectFunc" class="form-select bg-dark text-white border-secondary">
+                <option value="">Selecione...</option>
+                {% for f in funcionarios %}
+                <option value="{{ f.id }}" {{ 'selected' if funcionario_sel and f.id == funcionario_sel.id }}>
+                    {{ f.nome }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label text-muted small fw-bold">DATA INÍCIO</label>
+            <input type="date" name="data_inicio" id="inputIni" value="{{ data_inicio }}" class="form-control bg-dark text-white border-secondary">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label text-muted small fw-bold">DATA FIM</label>
+            <input type="date" name="data_fim" id="inputFim" value="{{ data_fim }}" class="form-control bg-dark text-white border-secondary">
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button class="btn btn-primary w-100">Calcular</button>
+        </div>
+    </form>
+</div>
+
+{% if funcionario_sel and saldos %}
+<div class="card p-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">
+            <i class="fas fa-user me-2"></i>{{ funcionario_sel.nome }}
+            {% set saldo_final = saldos[-1].saldo_acumulado if saldos else 0 %}
+            <span class="badge ms-2 {{ 'bg-success' if saldo_final >= 0 else 'bg-danger' }}">
+                Saldo: {{ '%+.1f'|format(saldo_final) }}h
+            </span>
+        </h5>
+        <div class="d-flex gap-2">
+            <button id="btnSalvarSaldos" data-func="{{ funcionario_sel.id }}" class="btn btn-success btn-sm">
+                <i class="fas fa-save me-1"></i>Salvar Saldos
+            </button>
+            <a href="{{ url_for('financeiro.exportar_banco_horas', funcionario_id=funcionario_sel.id, data_inicio=data_inicio, data_fim=data_fim) }}"
+               class="btn btn-outline-light btn-sm">
+                <i class="fas fa-file-excel me-1"></i>Excel
+            </a>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th class="text-end">Previsto</th>
+                    <th class="text-end">Realizado</th>
+                    <th class="text-end">Saldo Dia</th>
+                    <th class="text-end">Saldo Acumulado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in saldos %}
+                <tr>
+                    <td>{{ s.data.strftime('%d/%m/%Y') }}</td>
+                    <td class="text-end text-muted">{{ '%.1f'|format(s.previsto) }}h</td>
+                    <td class="text-end">{{ '%.1f'|format(s.realizado) }}h</td>
+                    <td class="text-end">
+                        <span class="{{ 'text-success' if s.saldo_dia >= 0 else 'text-danger' }}">
+                            {{ '%+.1f'|format(s.saldo_dia) }}h
+                        </span>
+                    </td>
+                    <td class="text-end">
+                        <strong class="{{ 'text-success' if s.saldo_acumulado >= 0 else 'text-danger' }}">
+                            {{ '%+.1f'|format(s.saldo_acumulado) }}h
+                        </strong>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% elif funcionario_sel %}
+<div class="alert alert-info">Nenhum dado de escala encontrado para o período.</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showMsg(text, type) {
+    const el = document.getElementById('msgRecalculo');
+    el.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show" role="alert">
+        ${text}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
+}
+
+// Salvar saldos de um funcionário
+const btnSalvar = document.getElementById('btnSalvarSaldos');
+if (btnSalvar) {
+    btnSalvar.addEventListener('click', async function() {
+        const funcId = this.dataset.func;
+        const ini = document.getElementById('inputIni').value;
+        const fim = document.getElementById('inputFim').value;
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Salvando...';
+        try {
+            const r = await fetch('/api/recalcular-banco-horas', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({funcionario_id: funcId, data_inicio: ini, data_fim: fim})
+            });
+            const data = await r.json();
+            showMsg(data.message, data.ok ? 'success' : 'danger');
+        } catch(e) { showMsg('Erro ao salvar.', 'danger'); }
+        this.disabled = false;
+        this.innerHTML = '<i class="fas fa-save me-1"></i>Salvar Saldos';
+    });
+}
+
+// Recalcular todos os funcionários
+document.getElementById('btnRecalcularTodos').addEventListener('click', async function() {
+    const ini = document.getElementById('inputIni')?.value || '';
+    const fim = document.getElementById('inputFim')?.value || '';
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Recalculando...';
+    try {
+        const r = await fetch('/api/recalcular-banco-horas', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({data_inicio: ini, data_fim: fim})
+        });
+        const data = await r.json();
+        showMsg(data.message, data.ok ? 'success' : 'danger');
+    } catch(e) { showMsg('Erro ao recalcular.', 'danger'); }
+    this.disabled = false;
+    this.innerHTML = '<i class="fas fa-sync me-2"></i>Recalcular Todos';
+});
+</script>
+{% endblock %}

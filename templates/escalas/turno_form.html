@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Editar' if turno else 'Novo' }} Turno{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">{{ 'Editar' if turno else 'Novo' }} Turno</h1>
+    <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-light">
+        <i class="fas fa-arrow-left me-2"></i>Voltar
+    </a>
+</div>
+
+<div class="card p-4" style="max-width:600px;">
+    <form method="POST">
+        <div class="mb-3">
+            <label class="form-label text-muted small fw-bold">NOME DO TURNO</label>
+            <input type="text" name="nome" class="form-control bg-dark text-white border-secondary"
+                   value="{{ turno.nome if turno else '' }}" placeholder="Ex: Manhã 6h-14h" required>
+        </div>
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label class="form-label text-muted small fw-bold">HORA INÍCIO</label>
+                <input type="time" name="hora_inicio" class="form-control bg-dark text-white border-secondary"
+                       value="{{ turno.hora_inicio.strftime('%H:%M') if turno else '06:00' }}" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label text-muted small fw-bold">HORA FIM</label>
+                <input type="time" name="hora_fim" class="form-control bg-dark text-white border-secondary"
+                       value="{{ turno.hora_fim.strftime('%H:%M') if turno else '14:00' }}" required>
+            </div>
+        </div>
+        <div class="mb-4">
+            <label class="form-label text-muted small fw-bold">DIAS DA SEMANA</label>
+            <div class="d-flex gap-2 flex-wrap mt-2">
+                {% for dia in dias %}
+                {% set i = loop.index0 %}
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" name="dias_semana"
+                           value="{{ i }}" id="dia_{{ i }}"
+                           {{ 'checked' if turno and i in turno.dias_semana_list else ('checked' if not turno and i < 5 else '') }}>
+                    <label class="form-check-label" for="dia_{{ i }}">{{ dia }}</label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary px-4">
+            <i class="fas fa-save me-2"></i>Salvar Turno
+        </button>
+    </form>
+</div>
+{% endblock %}

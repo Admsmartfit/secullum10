@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% block title %}Prontuário – {{ func.nome }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-0">Prontuário Digital</h1>
+        <div class="text-muted small mt-1">{{ func.nome }} &nbsp;|&nbsp; {{ func.funcao or '—' }}</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('prontuario.alertas_docs') }}" class="btn btn-outline-warning btn-sm">
+            <i class="fas fa-bell me-1"></i>Alertas
+        </a>
+        <a href="{{ url_for('funcionarios.funcionarios') }}" class="btn btn-outline-light btn-sm">
+            <i class="fas fa-arrow-left me-1"></i>Voltar
+        </a>
+    </div>
+</div>
+
+<!-- Upload -->
+<div class="card p-4 mb-4">
+    <h6 class="fw-bold mb-3"><i class="fas fa-upload me-2"></i>Enviar Documento</h6>
+    <form method="POST" action="{{ url_for('prontuario.upload_doc', func_id=func.id) }}" enctype="multipart/form-data" class="row g-3">
+        <div class="col-md-3">
+            <label class="form-label text-muted small fw-bold">TIPO</label>
+            <select name="tipo" class="form-select bg-dark text-white border-secondary">
+                {% for t in tipos %}
+                <option>{{ t }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label text-muted small fw-bold">VENCIMENTO</label>
+            <input type="date" name="data_vencimento" class="form-control bg-dark text-white border-secondary">
+        </div>
+        <div class="col-md-4">
+            <label class="form-label text-muted small fw-bold">ARQUIVO (PDF/JPG ≤ 10MB)</label>
+            <input type="file" name="arquivo" class="form-control bg-dark text-white border-secondary"
+                   accept=".pdf,.jpg,.jpeg,.png" required>
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button class="btn btn-primary w-100"><i class="fas fa-upload me-1"></i>Enviar</button>
+        </div>
+    </form>
+</div>
+
+<!-- Lista de documentos -->
+<div class="card p-4">
+    <h6 class="fw-bold mb-3"><i class="fas fa-folder-open me-2"></i>Documentos ({{ docs|length }})</h6>
+    {% if docs %}
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Tipo</th>
+                    <th>Arquivo</th>
+                    <th>Vencimento</th>
+                    <th>Upload</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for doc in docs %}
+                {% set vencendo = doc.data_vencimento and doc.data_vencimento <= alerta_30 %}
+                {% set vencido = doc.data_vencimento and doc.data_vencimento < hoje %}
+                <tr class="{{ 'table-danger' if vencido else ('table-warning' if vencendo else '') }}" style="--bs-table-bg:transparent;">
+                    <td><span class="badge bg-secondary">{{ doc.tipo }}</span></td>
+                    <td class="small">{{ doc.nome_arquivo }}</td>
+                    <td class="small">
+                        {% if doc.data_vencimento %}
+                        {{ doc.data_vencimento.strftime('%d/%m/%Y') }}
+                        {% if vencido %}
+                        <span class="badge bg-danger ms-1">VENCIDO</span>
+                        {% elif vencendo %}
+                        <span class="badge bg-warning text-dark ms-1">VENCENDO</span>
+                        {% endif %}
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="small text-muted">{{ doc.criado_em.strftime('%d/%m/%Y') }}</td>
+                    <td>
+                        <div class="d-flex gap-1">
+                            <a href="{{ url_for('prontuario.download_doc', doc_id=doc.id) }}"
+                               class="btn btn-outline-light btn-sm py-0" title="Baixar">
+                                <i class="fas fa-download"></i>
+                            </a>
+                            <form method="POST" action="{{ url_for('prontuario.excluir_doc', doc_id=doc.id) }}">
+                                <button class="btn btn-outline-danger btn-sm py-0" title="Excluir"
+                                        onclick="return confirm('Excluir documento?')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-4">Nenhum documento cadastrado.</div>
+    {% endif %}
+</div>
+{% endblock %}

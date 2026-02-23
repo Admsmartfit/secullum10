@@ -1,0 +1,611 @@
+{% extends 'base.html' %}
+{% block title %}Configurações — Secullum Hub{% endblock %}
+
+{% block extra_css %}
+<style>
+    .nav-tabs .nav-link { color: var(--text-muted); border-color: transparent; }
+    .nav-tabs .nav-link.active { background: var(--card-bg); color: var(--accent-color); border-color: rgba(255,255,255,0.1) rgba(255,255,255,0.1) var(--card-bg); }
+    .nav-tabs { border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .tab-content { background: var(--card-bg); border: 1px solid rgba(255,255,255,0.1); border-top: none; border-radius: 0 0 1rem 1rem; padding: 1.5rem; }
+    .form-control, .form-select { background: #0f172a; border-color: rgba(255,255,255,0.15); color: var(--text-main); }
+    .form-control:focus, .form-select:focus { background: #0f172a; border-color: var(--accent-color); color: var(--text-main); box-shadow: none; }
+    .form-control::placeholder { color: var(--text-muted); }
+    .badge-nivel-gestor { background: rgba(56,189,248,0.15); color: #38bdf8; }
+    .badge-nivel-professor { background: rgba(168,85,247,0.15); color: #a855f7; }
+    .unidade-row { background: rgba(255,255,255,0.02); border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.5rem; border: 1px solid rgba(255,255,255,0.06); }
+    .phone-preview { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem; }
+    #importPreview table { font-size: 0.85rem; }
+    .star-badge { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--accent-color); margin-right: 4px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0"><i class="fas fa-cog me-2 text-accent"></i>Configurações do Sistema</h1>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs" id="configTabs" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-usuarios">
+            <i class="fas fa-users me-1"></i> Usuários
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-unidades">
+            <i class="fas fa-sitemap me-1"></i> Unidades / Líderes
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-whatsapp">
+            <i class="fab fa-whatsapp me-1"></i> Teste WhatsApp
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-escalas">
+            <i class="fas fa-cloud-download-alt me-1"></i> Importar Escalas Secullum
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="configTabContent">
+
+    <!-- ══ TAB USUÁRIOS ══════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade show active" id="tab-usuarios">
+        <div class="row g-4">
+            <!-- Lista -->
+            <div class="col-lg-7">
+                <h5 class="mb-3">Usuários cadastrados</h5>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>E-mail</th>
+                                <th>Perfil</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for u in usuarios %}
+                        <tr>
+                            <td class="fw-bold">{{ u.nome }}</td>
+                            <td class="text-muted small">{{ u.email }}</td>
+                            <td>
+                                <span class="badge badge-nivel-{{ u.nivel_acesso }}">{{ u.nivel_acesso }}</span>
+                            </td>
+                            <td>
+                                <span class="badge {{ 'bg-success' if u.ativo else 'bg-secondary' }}">
+                                    {{ 'Ativo' if u.ativo else 'Inativo' }}
+                                </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-xs btn-outline-secondary"
+                                    onclick="abrirEdicao({{ u.id }}, '{{ u.nome|e }}', '{{ u.email|e }}', '{{ u.nivel_acesso }}', {{ 1 if u.ativo else 0 }})"
+                                    title="Editar">
+                                    <i class="fas fa-pencil"></i>
+                                </button>
+                                {% if u.id != current_user.id %}
+                                <form method="post" action="{{ url_for('config_hub.usuario_excluir', uid=u.id) }}" class="d-inline"
+                                      onsubmit="return confirm('Excluir {{ u.nome }}?')">
+                                    <button class="btn btn-xs btn-outline-danger" title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Formulário novo / edição -->
+            <div class="col-lg-5">
+                <div class="card p-3" id="formUsuarioCard">
+                    <h6 class="mb-3" id="formUsuarioTitle"><i class="fas fa-plus me-1"></i> Novo usuário</h6>
+                    <form id="formUsuario" method="post" action="{{ url_for('config_hub.usuario_novo') }}">
+                        <input type="hidden" name="_method" value="novo">
+                        <div class="mb-2">
+                            <label class="form-label small">Nome completo</label>
+                            <input type="text" class="form-control form-control-sm" name="nome" id="u_nome" required placeholder="Ex: João Silva">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">E-mail (login)</label>
+                            <input type="email" class="form-control form-control-sm" name="email" id="u_email" required placeholder="joao@empresa.com">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">Senha <span id="senhaHint" class="text-muted">(obrigatória)</span></label>
+                            <input type="password" class="form-control form-control-sm" name="senha" id="u_senha" placeholder="Mínimo 6 caracteres">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">Perfil de acesso</label>
+                            <select class="form-select form-select-sm" name="nivel_acesso" id="u_nivel">
+                                <option value="gestor">Gestor (acesso total)</option>
+                                <option value="professor">Professor (acesso limitado)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3 d-none" id="u_ativo_wrap">
+                            <label class="form-label small">Status</label>
+                            <select class="form-select form-select-sm" name="ativo" id="u_ativo">
+                                <option value="1">Ativo</option>
+                                <option value="0">Inativo</option>
+                            </select>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary btn-sm flex-grow-1" id="btnSalvarUsuario">
+                                <i class="fas fa-save me-1"></i> Salvar
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="btnCancelarEdicao" onclick="resetFormUsuario()">
+                                Cancelar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ TAB UNIDADES / LÍDERES ════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-unidades">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">Mapeamento Departamento → Líder</h5>
+            <button class="btn btn-primary btn-sm" onclick="salvarUnidades()">
+                <i class="fas fa-save me-1"></i> Salvar Todos
+            </button>
+        </div>
+        <p class="text-muted small mb-3">
+            Cada líder recebe e envia mensagens WhatsApp dos funcionários do seu departamento.
+            Deixe em branco para usar o GESTOR_CELULAR global definido no <code>.env</code>.
+        </p>
+
+        <div id="unidadesContainer">
+        {% if departamentos %}
+            {% for dept in departamentos %}
+            {% set ul = unidades.get(dept) %}
+            <div class="unidade-row">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-3">
+                        <div class="fw-bold small">{{ dept }}</div>
+                        <input type="hidden" class="dept-key" value="{{ dept }}">
+                    </div>
+                    <div class="col-md-3">
+                        <input type="text" class="form-control form-control-sm nome-unidade"
+                            placeholder="Nome amigável (opcional)"
+                            value="{{ ul.nome_unidade if ul else '' }}">
+                    </div>
+                    <div class="col-md-3">
+                        <input type="text" class="form-control form-control-sm celular-lider"
+                            placeholder="Celular líder (55DDD...)"
+                            value="{{ ul.celular_lider if ul else '' }}"
+                            oninput="previewFone(this)">
+                        <div class="phone-preview"></div>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select form-select-sm lider-id">
+                            <option value="">— Sem líder vinculado —</option>
+                            {% for u in usuarios %}
+                            <option value="{{ u.id }}" {% if ul and ul.lider_id == u.id %}selected{% endif %}>
+                                {{ u.nome }} ({{ u.nivel_acesso }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="text-muted text-center py-4">
+                <i class="fas fa-info-circle me-1"></i>
+                Nenhum departamento encontrado. Sincronize os funcionários primeiro.
+            </div>
+        {% endif %}
+        </div>
+        <div id="unidadesFeedback" class="mt-2"></div>
+    </div>
+
+    <!-- ══ TAB TESTE WHATSAPP ════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-whatsapp">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <h5 class="mb-3"><i class="fab fa-whatsapp me-2 text-success"></i>Enviar mensagem de teste</h5>
+                <p class="text-muted small">
+                    Útil para verificar se as credenciais Mega-API estão corretas antes de ativar os bots.
+                    O envio é registrado em <a href="{{ url_for('whatsapp.logs') }}" class="text-accent">WhatsApp → Logs</a>.
+                </p>
+                <form method="post" action="{{ url_for('config_hub.whatsapp_testar') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Número de destino</label>
+                        <input type="text" class="form-control" name="celular"
+                            placeholder="5541999999999  (55 + DDD + número)" required
+                            oninput="atualizarPreviewWpp(this)">
+                        <div class="form-text text-muted" id="wppPreview">Ex: 5541987654321</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Mensagem</label>
+                        <textarea class="form-control" name="mensagem" rows="4"
+                            placeholder="Digite a mensagem de teste...">Teste de comunicação — Secullum Hub ✅</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="fab fa-whatsapp me-2"></i> Enviar agora
+                    </button>
+                </form>
+
+                <hr class="border-secondary mt-4">
+                <h6 class="text-muted mb-2">Status das credenciais</h6>
+                <div class="d-flex flex-column gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="rounded-circle" style="width:10px;height:10px;background:{{ '#22c55e' if megaapi_token else '#ef4444' }}"></div>
+                        <span class="small">MEGAAPI_TOKEN: <strong>{{ 'Configurado' if megaapi_token else 'Não configurado' }}</strong></span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="rounded-circle" style="width:10px;height:10px;background:{{ '#22c55e' if megaapi_instance else '#ef4444' }}"></div>
+                        <span class="small">MEGAAPI_INSTANCE: <strong>{{ 'Configurado' if megaapi_instance else 'Não configurado' }}</strong></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ TAB IMPORTAR ESCALAS ══════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-escalas">
+        <h5 class="mb-1">Importar Escalas do Secullum</h5>
+        <p class="text-muted small mb-3">
+            Busca o horário de trabalho cadastrado no Secullum e cria automaticamente as alocações no sistema.
+        </p>
+
+        <div class="row g-4">
+            <!-- Seleção de funcionários -->
+            <div class="col-lg-5">
+                <div class="card p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">1. Selecione os funcionários</h6>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="apenasSeEscala" checked>
+                            <label class="form-check-label small" for="apenasSeEscala">Apenas sem escala (7 dias)</label>
+                        </div>
+                    </div>
+
+                    <input type="text" class="form-control form-control-sm mb-2" id="filtroFuncEscala"
+                        placeholder="Filtrar por nome...">
+
+                    <div style="max-height:320px;overflow-y:auto;" id="listaFuncEscala">
+                        <!-- sem escala por padrão -->
+                        {% set lista = sem_escala %}
+                        {% if lista %}
+                        {% for f in lista %}
+                        <div class="form-check func-item" data-nome="{{ f.nome|lower }}" data-sem-escala="1">
+                            <input class="form-check-input func-check" type="checkbox" value="{{ f.id }}" id="fc_{{ f.id }}">
+                            <label class="form-check-label small" for="fc_{{ f.id }}">
+                                {{ f.nome }}
+                                <span class="text-muted" style="font-size:0.7rem;">{{ f.departamento or '' }}</span>
+                            </label>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <div class="text-muted small text-center py-2">Todos os funcionários já têm escala nos próximos 7 dias.</div>
+                        {% endif %}
+
+                        <!-- todos os funcionários (inicialmente ocultos) -->
+                        {% for f in todos_func %}
+                        <div class="form-check func-item d-none" data-nome="{{ f.nome|lower }}" data-sem-escala="0">
+                            <input class="form-check-input func-check" type="checkbox" value="{{ f.id }}" id="fca_{{ f.id }}">
+                            <label class="form-check-label small" for="fca_{{ f.id }}">
+                                {{ f.nome }}
+                                <span class="text-muted" style="font-size:0.7rem;">{{ f.departamento or '' }}</span>
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="d-flex gap-2 mt-2">
+                        <button class="btn btn-outline-secondary btn-sm flex-grow-1" onclick="selecionarTodosFiltrados(true)">Selecionar todos</button>
+                        <button class="btn btn-outline-secondary btn-sm flex-grow-1" onclick="selecionarTodosFiltrados(false)">Limpar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuração e preview -->
+            <div class="col-lg-7">
+                <div class="card p-3 mb-3">
+                    <h6 class="mb-2">2. Período de importação</h6>
+                    <div class="row g-2">
+                        <div class="col">
+                            <label class="form-label small">De</label>
+                            <input type="date" class="form-control form-control-sm" id="escalaDataInicio"
+                                value="{{ hoje }}">
+                        </div>
+                        <div class="col">
+                            <label class="form-label small">Até</label>
+                            <input type="date" class="form-control form-control-sm" id="escalaDataFim"
+                                value="{{ fim30 }}">
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary w-100 mb-3" onclick="buscarPreview()">
+                    <i class="fas fa-search me-1"></i> Buscar horários no Secullum
+                </button>
+
+                <div id="previewSpinner" class="text-center py-3 d-none">
+                    <div class="spinner-border text-accent" role="status"></div>
+                    <div class="small text-muted mt-2">Consultando API Secullum...</div>
+                </div>
+
+                <div id="importPreview" class="d-none">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">3. Confirmar importação</h6>
+                        <span class="badge bg-blue-soft" id="previewCount"></span>
+                    </div>
+                    <div class="table-responsive" style="max-height:250px;overflow-y:auto;">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="checkAllPreview" onchange="toggleAllPreview(this)"></th>
+                                    <th>Funcionário</th>
+                                    <th>Turno</th>
+                                    <th>Início</th>
+                                    <th>Fim</th>
+                                    <th>Dias</th>
+                                </tr>
+                            </thead>
+                            <tbody id="previewTableBody"></tbody>
+                        </table>
+                    </div>
+                    <button class="btn btn-success w-100 mt-2" onclick="confirmarImportacao()">
+                        <i class="fas fa-cloud-download-alt me-1"></i> Importar selecionados
+                    </button>
+                </div>
+
+                <div id="importResultado" class="d-none alert mt-2"></div>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /tab-content -->
+
+<!-- Modal Edição de Usuário -->
+<div class="modal fade" id="modalEditUsuario" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-secondary border-0 text-white">
+            <div class="modal-header border-0">
+                <h5 class="modal-title">Editar Usuário</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formEditUsuario" method="post">
+                    <div class="mb-2">
+                        <label class="form-label small">Nome</label>
+                        <input type="text" class="form-control form-control-sm" name="nome" id="eu_nome" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">E-mail</label>
+                        <input type="email" class="form-control form-control-sm" name="email" id="eu_email" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Nova senha <span class="text-muted">(deixe em branco para manter)</span></label>
+                        <input type="password" class="form-control form-control-sm" name="senha" placeholder="Nova senha...">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Perfil</label>
+                        <select class="form-select form-select-sm" name="nivel_acesso" id="eu_nivel">
+                            <option value="gestor">Gestor</option>
+                            <option value="professor">Professor</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">Status</label>
+                        <select class="form-select form-select-sm" name="ativo" id="eu_ativo">
+                            <option value="1">Ativo</option>
+                            <option value="0">Inativo</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-save me-1"></i> Salvar alterações
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const DIAS_NOMES = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+
+// ── Usuários ──────────────────────────────────────────────────────────────────
+function abrirEdicao(id, nome, email, nivel, ativo) {
+    document.getElementById('eu_nome').value = nome;
+    document.getElementById('eu_email').value = email;
+    document.getElementById('eu_nivel').value = nivel;
+    document.getElementById('eu_ativo').value = ativo;
+    document.getElementById('formEditUsuario').action = `/config/usuarios/${id}/editar`;
+    new bootstrap.Modal(document.getElementById('modalEditUsuario')).show();
+}
+
+// Ativa tab pelo hash da URL
+(function() {
+    const hash = window.location.hash;
+    if (hash) {
+        const tabMap = {'#usuarios':'tab-usuarios','#unidades':'tab-unidades','#whatsapp':'tab-whatsapp','#escalas':'tab-escalas'};
+        const target = tabMap[hash];
+        if (target) {
+            document.querySelector(`[data-bs-target="#${target}"]`).click();
+        }
+    }
+})();
+
+// ── Preview celular ───────────────────────────────────────────────────────────
+function previewFone(el) {
+    const digits = el.value.replace(/\D/g,'');
+    const preview = el.parentElement.querySelector('.phone-preview');
+    if (preview) preview.textContent = digits.length >= 10 ? `wa.me/${digits}` : '';
+}
+function atualizarPreviewWpp(el) {
+    const d = el.value.replace(/\D/g,'');
+    document.getElementById('wppPreview').textContent = d.length >= 11 ? `wa.me/${d}` : 'Ex: 5541987654321';
+}
+
+// ── Unidades: salvar via AJAX ─────────────────────────────────────────────────
+function salvarUnidades() {
+    const rows = document.querySelectorAll('.unidade-row');
+    const unidades = Array.from(rows).map(r => ({
+        departamento: r.querySelector('.dept-key').value,
+        nome_unidade: r.querySelector('.nome-unidade').value.trim(),
+        celular_lider: r.querySelector('.celular-lider').value.trim(),
+        lider_id: r.querySelector('.lider-id').value || null,
+    }));
+    fetch('/config/unidades/salvar', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({unidades}),
+    })
+    .then(r => r.json())
+    .then(d => {
+        const fb = document.getElementById('unidadesFeedback');
+        fb.innerHTML = `<div class="alert alert-success py-2">${d.salvos} unidade(s) salva(s) com sucesso.</div>`;
+        setTimeout(() => fb.innerHTML = '', 4000);
+    })
+    .catch(() => {
+        document.getElementById('unidadesFeedback').innerHTML = '<div class="alert alert-danger py-2">Erro ao salvar.</div>';
+    });
+}
+
+// ── Escalas: filtro de funcionários ──────────────────────────────────────────
+document.getElementById('apenasSeEscala').addEventListener('change', function() {
+    const semEscalaOnly = this.checked;
+    document.querySelectorAll('.func-item').forEach(el => {
+        const ehSemEscala = el.dataset.semEscala === '1';
+        if (semEscalaOnly) {
+            el.classList.toggle('d-none', !ehSemEscala);
+        } else {
+            el.classList.remove('d-none');
+        }
+    });
+    aplicarFiltroNome();
+});
+
+document.getElementById('filtroFuncEscala').addEventListener('input', aplicarFiltroNome);
+
+function aplicarFiltroNome() {
+    const q = document.getElementById('filtroFuncEscala').value.toLowerCase();
+    const semEscalaOnly = document.getElementById('apenasSeEscala').checked;
+    document.querySelectorAll('.func-item').forEach(el => {
+        const nome = el.dataset.nome || '';
+        const ehSemEscala = el.dataset.semEscala === '1';
+        const passaFiltro = nome.includes(q) && (!semEscalaOnly || ehSemEscala);
+        el.classList.toggle('d-none', !passaFiltro);
+    });
+}
+
+function selecionarTodosFiltrados(marcar) {
+    document.querySelectorAll('.func-item:not(.d-none) .func-check').forEach(c => c.checked = marcar);
+}
+
+// ── Escalas: buscar preview ───────────────────────────────────────────────────
+let horariosBuscados = [];
+
+function buscarPreview() {
+    const checks = document.querySelectorAll('.func-check:checked');
+    if (!checks.length) {
+        alert('Selecione ao menos um funcionário.');
+        return;
+    }
+    const func_ids = Array.from(checks).map(c => c.value);
+    const spinner = document.getElementById('previewSpinner');
+    const preview = document.getElementById('importPreview');
+    const resultado = document.getElementById('importResultado');
+
+    spinner.classList.remove('d-none');
+    preview.classList.add('d-none');
+    resultado.classList.add('d-none');
+
+    fetch('/config/escalas/preview', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({func_ids}),
+    })
+    .then(r => r.json())
+    .then(d => {
+        spinner.classList.add('d-none');
+        if (d.error) {
+            resultado.className = 'alert alert-warning mt-2';
+            resultado.textContent = d.error;
+            resultado.classList.remove('d-none');
+            return;
+        }
+        horariosBuscados = d.horarios;
+        renderizarPreview(d.horarios);
+        if (d.sem_horario && d.sem_horario.length > 0) {
+            const el = document.getElementById('importResultado');
+            el.className = 'alert alert-warning mt-2';
+            el.textContent = `⚠️ Sem horário no Secullum: ${d.sem_horario.join(', ')}`;
+            el.classList.remove('d-none');
+        }
+    })
+    .catch(e => {
+        spinner.classList.add('d-none');
+        resultado.className = 'alert alert-danger mt-2';
+        resultado.textContent = 'Erro de comunicação: ' + e;
+        resultado.classList.remove('d-none');
+    });
+}
+
+function renderizarPreview(horarios) {
+    const tbody = document.getElementById('previewTableBody');
+    tbody.innerHTML = '';
+    horarios.forEach((h, i) => {
+        const dias = h.dias_label || (h.dias_semana || []).map(d => DIAS_NOMES[d] || d).join(', ');
+        tbody.innerHTML += `
+        <tr>
+            <td><input type="checkbox" class="preview-check" data-idx="${i}" checked></td>
+            <td class="fw-bold">${h.nome}</td>
+            <td>${h.nome_horario}</td>
+            <td>${h.hora_inicio}</td>
+            <td>${h.hora_fim}</td>
+            <td><small class="text-muted">${dias || '—'}</small></td>
+        </tr>`;
+    });
+    document.getElementById('previewCount').textContent = `${horarios.length} horário(s) encontrado(s)`;
+    document.getElementById('importPreview').classList.remove('d-none');
+}
+
+function toggleAllPreview(cb) {
+    document.querySelectorAll('.preview-check').forEach(c => c.checked = cb.checked);
+}
+
+function confirmarImportacao() {
+    const selecionados = Array.from(document.querySelectorAll('.preview-check:checked'))
+        .map(c => horariosBuscados[parseInt(c.dataset.idx)]);
+    if (!selecionados.length) { alert('Selecione ao menos um horário.'); return; }
+
+    const data_inicio = document.getElementById('escalaDataInicio').value;
+    const data_fim = document.getElementById('escalaDataFim').value;
+
+    fetch('/config/escalas/importar', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({horarios: selecionados, data_inicio, data_fim}),
+    })
+    .then(r => r.json())
+    .then(d => {
+        const el = document.getElementById('importResultado');
+        el.className = d.ok ? 'alert alert-success mt-2' : 'alert alert-danger mt-2';
+        el.textContent = d.ok
+            ? `✅ Importação concluída! ${d.alocacoes_criadas} alocação(ões) criada(s), ${d.turnos_criados} turno(s) novo(s).${d.erros ? ` Erros: ${d.erros}.` : ''}`
+            : (d.error || 'Erro desconhecido.');
+        el.classList.remove('d-none');
+        document.getElementById('importPreview').classList.add('d-none');
+    })
+    .catch(e => {
+        const el = document.getElementById('importResultado');
+        el.className = 'alert alert-danger mt-2';
+        el.textContent = 'Erro: ' + e;
+        el.classList.remove('d-none');
+    });
+}
+</script>
+{% endblock %}

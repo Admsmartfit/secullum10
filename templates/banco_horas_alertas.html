@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}Alertas – Banco de Horas{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">Alertas de Vencimento – Banco de Horas</h1>
+    <a href="{{ url_for('financeiro.banco_horas') }}" class="btn btn-outline-light">
+        <i class="fas fa-arrow-left me-2"></i>Voltar
+    </a>
+</div>
+<div class="alert alert-warning">
+    Funcionários com horas positivas há mais de <strong>{{ limite_dias }} dias</strong> (risco de vencimento).
+</div>
+<div class="card p-4">
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr><th>Funcionário</th><th class="text-end">Horas a Compensar</th></tr>
+            </thead>
+            <tbody>
+                {% for a in alertas %}
+                <tr>
+                    <td>{{ a.nome }}</td>
+                    <td class="text-end text-warning fw-bold">{{ '%+.1f'|format(a.saldo_total) }}h</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="2" class="text-center text-muted py-4">Nenhum alerta no momento.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

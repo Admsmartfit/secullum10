@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% block title %}Marketplace de Turnos{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">Marketplace de Turnos</h1>
+    {% if is_gestor %}
+    <a href="{{ url_for('marketplace.nova_vaga') }}" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>Nova Vaga
+    </a>
+    {% endif %}
+</div>
+
+{% if not vagas %}
+<div class="card p-5 text-center text-muted">
+    <i class="fas fa-store fa-3x mb-3 opacity-50"></i>
+    <p class="mb-0">Nenhuma vaga disponível no momento.</p>
+</div>
+{% else %}
+<div class="row g-4">
+    {% for vaga in vagas %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100 p-4">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <h5 class="mb-0">{{ vaga.titulo }}</h5>
+                <span class="badge {{ 'bg-success' if vaga.status == 'aberto' else ('bg-warning text-dark' if vaga.status == 'candidatura' else 'bg-secondary') }}">
+                    {{ vaga.status.upper() }}
+                </span>
+            </div>
+            <div class="small text-muted mb-2">
+                <i class="fas fa-calendar me-1"></i>{{ vaga.data.strftime('%d/%m/%Y') }}
+                &nbsp;|&nbsp;
+                <i class="fas fa-clock me-1"></i>{{ vaga.turno.nome }}
+                ({{ vaga.turno.hora_inicio.strftime('%H:%M') }}–{{ vaga.turno.hora_fim.strftime('%H:%M') }})
+            </div>
+            {% if vaga.valor_hora > 0 %}
+            <div class="small text-warning mb-2">
+                <i class="fas fa-dollar-sign me-1"></i>R$ {{ '%.2f'|format(vaga.valor_hora|float) }}/hora
+            </div>
+            {% endif %}
+            {% if vaga.descricao %}
+            <p class="small text-muted mb-3">{{ vaga.descricao }}</p>
+            {% endif %}
+
+            {% if is_gestor %}
+            <!-- Gestor: ver candidaturas e cancelar -->
+            {% set pendentes = vaga.candidaturas.filter_by(status='pendente').all() %}
+            {% if pendentes %}
+            <div class="border-top pt-3 mt-auto">
+                <div class="small fw-bold text-muted mb-2">CANDIDATURAS ({{ pendentes|length }})</div>
+                {% for c in pendentes %}
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="small">{{ c.funcionario.nome }}</span>
+                    <div class="d-flex gap-1">
+                        <form method="POST" action="{{ url_for('marketplace.aprovar_candidatura', cand_id=c.id) }}" class="d-inline">
+                            <button class="btn btn-success btn-sm py-0 px-2" title="Aprovar">
+                                <i class="fas fa-check"></i>
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('marketplace.rejeitar_candidatura', cand_id=c.id) }}" class="d-inline">
+                            <button class="btn btn-danger btn-sm py-0 px-2" title="Rejeitar">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if vaga.status not in ('aprovado', 'cancelado') %}
+            <form method="POST" action="{{ url_for('marketplace.cancelar_vaga', vaga_id=vaga.id) }}" class="mt-3">
+                <button class="btn btn-outline-danger btn-sm w-100">
+                    <i class="fas fa-ban me-1"></i>Cancelar Vaga
+                </button>
+            </form>
+            {% endif %}
+
+            {% else %}
+            <!-- Professor: candidatar-se -->
+            <div class="mt-auto pt-3">
+                {% set status_cand = candidaturas_usuario.get(vaga.id) %}
+                {% if status_cand == 'aprovado' %}
+                <span class="btn btn-success btn-sm w-100 disabled"><i class="fas fa-check me-1"></i>Aprovado!</span>
+                {% elif status_cand == 'pendente' %}
+                <span class="btn btn-warning btn-sm w-100 disabled text-dark"><i class="fas fa-hourglass-half me-1"></i>Candidatura Enviada</span>
+                {% elif vaga.status == 'aberto' %}
+                <form method="POST" action="{{ url_for('marketplace.candidatar', vaga_id=vaga.id) }}">
+                    <button class="btn btn-primary btn-sm w-100">
+                        <i class="fas fa-hand-paper me-2"></i>Candidatar-se
+                    </button>
+                </form>
+                {% else %}
+                <span class="btn btn-secondary btn-sm w-100 disabled">Indisponível</span>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

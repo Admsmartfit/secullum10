@@ -5,16 +5,21 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 mb-0 font-weight-bold">Espelho de Ponto</h1>
-    <div class="d-flex gap-2">
-        <form method="GET" class="d-flex gap-2">
+    <div class="d-flex gap-2 flex-wrap">
+        <form method="GET" id="formEspelho" class="d-flex gap-2">
             <input type="date" name="data_inicio" class="form-control bg-dark border-secondary text-white"
                 value="{{ data_inicio }}">
             <input type="date" name="data_fim" class="form-control bg-dark border-secondary text-white"
                 value="{{ data_fim }}">
             <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i></button>
         </form>
-        <button class="btn btn-outline-success" onclick="exportToExcel()"><i
-                class="fas fa-file-excel me-2"></i>Exportar</button>
+        <button class="btn btn-outline-success" onclick="exportToExcel()">
+            <i class="fas fa-file-excel me-2"></i>Excel
+        </button>
+        <!-- RF4.4 – Enviar Espelho via WhatsApp -->
+        <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalEnviarEspelho">
+            <i class="fab fa-whatsapp me-2"></i>Enviar Espelho
+        </button>
     </div>
 </div>
 
@@ -61,11 +66,67 @@
     </div>
 </div>
 
+<!-- RF4.4 – Modal Enviar Espelho via WhatsApp -->
+<div class="modal fade" id="modalEnviarEspelho" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-secondary text-white border-0">
+            <div class="modal-header border-0">
+                <h5 class="modal-title"><i class="fab fa-whatsapp me-2 text-success"></i>Enviar Espelho via WhatsApp</h5>
+                <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="{{ url_for('espelho.espelho_enviar_whatsapp') }}">
+                    <input type="hidden" name="data_inicio" value="{{ data_inicio }}">
+                    <input type="hidden" name="data_fim" value="{{ data_fim }}">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">FUNCIONÁRIO</label>
+                        <select name="funcionario_id" class="form-select bg-dark text-white border-secondary" required>
+                            <option value="">Selecione...</option>
+                            {% for fid, fname in funcionarios_com_batida %}
+                            <option value="{{ fid }}">{{ fname }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text text-muted small mt-1">
+                            Apenas funcionários com batidas no período são listados.
+                        </div>
+                    </div>
+                    <div class="alert alert-info py-2 small mb-3">
+                        <i class="fas fa-info-circle me-1"></i>
+                        O PDF do espelho de ponto será gerado e enviado ao celular cadastrado do funcionário.
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success flex-grow-1">
+                            <i class="fab fa-whatsapp me-2"></i>Enviar PDF
+                        </button>
+                        {% if funcionarios_com_batida %}
+                        <a id="btnDownloadPDF" href="#" class="btn btn-outline-light" target="_blank">
+                            <i class="fas fa-download me-1"></i>Baixar
+                        </a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% block extra_js %}
 <script>
     function exportToExcel() {
-        // Mock export for now or redirect to export route
-        window.location.href = window.location.pathname + '?' + $('form').serialize() + '&export=true';
+        window.location.href = window.location.pathname + '?' + new URLSearchParams(new FormData(document.getElementById('formEspelho'))).toString() + '&export=true';
+    }
+
+    // Atualizar link de download do PDF quando funcionário é selecionado
+    const funcSel = document.querySelector('#modalEnviarEspelho select[name="funcionario_id"]');
+    const btnDown = document.getElementById('btnDownloadPDF');
+    if (funcSel && btnDown) {
+        funcSel.addEventListener('change', function() {
+            const ini = document.querySelector('input[name="data_inicio"]').value;
+            const fim = document.querySelector('input[name="data_fim"]').value;
+            if (this.value) {
+                btnDown.href = `/espelho/pdf?funcionario_id=${this.value}&data_inicio=${ini}&data_fim=${fim}`;
+            }
+        });
     }
 </script>
 {% endblock %}

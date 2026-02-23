@@ -1,5 +1,4 @@
 import requests
-from datetime import datetime
 
 class SecullumAPI:
     def __init__(self, email, senha, banco):
@@ -57,6 +56,20 @@ class SecullumAPI:
         else:
             print(f"Erro ao listar funcionários: {response.status_code} - {response.text}")
             return []
+
+    def listar_horarios(self):
+        """Retorna todos os horários cadastrados em /Horarios (com Dias, Entradas, Saidas)."""
+        if not self.token:
+            if not self.autenticar():
+                return []
+        try:
+            r = requests.get(f"{self.base_url}/Horarios", headers=self._get_headers(), timeout=30)
+            if r.status_code == 200:
+                return r.json()
+            print(f"Erro ao listar horários: {r.status_code} - {r.text[:200]}")
+        except Exception as e:
+            print(f"Erro listar_horarios: {e}")
+        return []
 
     def buscar_batidas(self, data_inicio, data_fim):
         """

@@ -24,6 +24,7 @@
                     <th>Departamento</th>
                     <th>Função</th>
                     <th>Admissão</th>
+                    <th title="Score de Pontualidade (30 dias)">Pontualidade</th>
                     <th>Ações</th>
                 </tr>
             </thead>
@@ -47,15 +48,30 @@
                     <td>{{ f.funcao or '---' }}</td>
                     <td class="text-muted small">{{ f.admissao.strftime('%d/%m/%Y') if f.admissao else '---' }}</td>
                     <td>
-                        <button class="btn btn-sm btn-outline-info" onclick="showDetails('{{ f.id }}')">
+                        {% set sc = scores.get(f.id) %}
+                        {% if sc is none %}
+                        <span class="text-muted small">—</span>
+                        {% elif sc >= 90 %}
+                        <span class="badge bg-success">{{ sc|int }}%</span>
+                        {% elif sc >= 70 %}
+                        <span class="badge bg-warning text-dark">{{ sc|int }}%</span>
+                        {% else %}
+                        <span class="badge bg-danger">{{ sc|int }}%</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-info me-1" onclick="showDetails('{{ f.id }}')">
                             <i class="fas fa-eye"></i>
                         </button>
+                        <a href="/prontuario/{{ f.id }}" class="btn btn-sm btn-outline-secondary" title="Prontuário">
+                            <i class="fas fa-folder-open"></i>
+                        </a>
                     </td>
                 </tr>
                 {% endfor %}
                 {% else %}
                 <tr>
-                    <td colspan="7" class="text-center text-muted py-4">Nenhum funcionário sincronizado. Clique em
+                    <td colspan="8" class="text-center text-muted py-4">Nenhum funcionário sincronizado. Clique em
                         "Sincronizar Lista".</td>
                 </tr>
                 {% endif %}

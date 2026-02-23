@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% block title %}Alocar Funcionário{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">Alocar Funcionário a Turno</h1>
+    <a href="{{ url_for('escalas.divergencias') }}" class="btn btn-outline-warning">
+        <i class="fas fa-exclamation-triangle me-2"></i>Ver Divergências
+    </a>
+</div>
+
+<div class="card p-4" style="max-width:600px;">
+    <div id="alerta-clt" class="alert alert-danger d-none"></div>
+
+    <form id="formAlocar" method="POST">
+        <div class="mb-3">
+            <label class="form-label text-muted small fw-bold">DATA</label>
+            <input type="date" name="data" id="dataInput" class="form-control bg-dark text-white border-secondary"
+                   value="{{ data_sel }}" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label text-muted small fw-bold">FUNCIONÁRIO</label>
+            <select name="funcionario_id" class="form-select bg-dark text-white border-secondary" required>
+                <option value="">Selecione...</option>
+                {% for f in funcionarios %}
+                <option value="{{ f.id }}">{{ f.nome }} – {{ f.departamento or 'S/D' }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="mb-4">
+            <label class="form-label text-muted small fw-bold">TURNO</label>
+            <select name="turno_id" id="turnoSelect" class="form-select bg-dark text-white border-secondary" required>
+                <option value="">Selecione...</option>
+                {% for t in turnos %}
+                <option value="{{ t.id }}" data-horas="{{ '%.2f'|format(t.duracao_horas) }}">
+                    {{ t.nome }} ({{ t.hora_inicio.strftime('%H:%M') }} – {{ t.hora_fim.strftime('%H:%M') }} | {{ '%.1f'|format(t.duracao_horas) }}h)
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- RF3.6 – Simulador de impacto financeiro -->
+        <div id="simuladorCusto" class="alert alert-info d-none mb-4 py-2">
+            <div class="d-flex align-items-center gap-3">
+                <i class="fas fa-calculator"></i>
+                <div class="small">
+                    <span class="fw-bold">Impacto estimado (22 dias úteis):</span>
+                    <span id="simDelta" class="ms-2"></span>
+                    <span id="simCusto" class="ms-3 text-warning fw-bold"></span>
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100">
+            <i class="fas fa-calendar-check me-2"></i>Salvar Alocação
+        </button>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// RF3.6 – Simulador de custo ao selecionar turno
+document.getElementById('turnoSelect').addEventListener('change', async function() {
+    const opt = this.options[this.selectedIndex];
+    const horasNovo = parseFloat(opt.dataset.horas || 0);
+    const simDiv = document.getElementById('simuladorCusto');
+    if (!horasNovo) { simDiv.classList.add('d-none'); return; }
+
+    try {
+        const resp = await fetch(`/api/simular-escala?horas_novo=${horasNovo}&horas_atual=0`);
+        const data = await resp.json();
+        document.getElementById('simDelta').textContent = `+${data.delta_horas}h/mês`;
+        if (data.delta_custo > 0) {
+            document.getElementById('simCusto').textContent = `≈ R$ ${data.delta_custo.toFixed(2)}/mês`;
+        } else {
+            document.getElementById('simCusto').textContent = '';
+        }
+        simDiv.classList.remove('d-none');
+    } catch(e) { simDiv.classList.add('d-none'); }
+});
+
+document.getElementById('formAlocar').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const alertEl = document.getElementById('alerta-clt');
+    alertEl.classList.add('d-none');
+    alertEl.innerHTML = '';
+
+    const resp = await fetch(this.action || window.location.pathname, {
+        method: 'POST',
+        body: new FormData(this),
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+    });
+
+    if (resp.ok) {
+        const data = await resp.json();
+        if (data.ok) {
+            alertEl.className = 'alert alert-success';
+            alertEl.classList.remove('d-none');
+            alertEl.textContent = data.message;
+        }
+    } else if (resp.status === 422) {
+        const data = await resp.json();
+        alertEl.className = 'alert alert-danger';
+        alertEl.classList.remove('d-none');
+        alertEl.innerHTML = '<strong>Infração CLT detectada:</strong><br>' +
+            (data.infracoes || []).map(i => `• ${i.message}`).join('<br>');
+    }
+});
+</script>
+{% endblock %}

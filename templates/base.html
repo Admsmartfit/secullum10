@@ -20,6 +20,9 @@
             --text-muted: #94a3b8;
             --card-bg: #1e293b;
             --navbar-height: 70px;
+            --sidebar-width: 250px;
+            --sidebar-collapsed-width: 60px;
+            --sidebar-transition: 0.25s ease;
         }
 
         body {
@@ -30,11 +33,17 @@
             padding: 0;
         }
 
+        /* ── Navbar ── */
         .navbar {
             height: var(--navbar-height);
             background-color: var(--secondary-bg);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1100;
         }
 
         .navbar-brand {
@@ -43,38 +52,84 @@
             letter-spacing: -1px;
         }
 
+        /* ── Sidebar ── */
         .sidebar {
             position: fixed;
             top: var(--navbar-height);
             left: 0;
             bottom: 0;
-            width: 250px;
+            width: var(--sidebar-width);
             background-color: var(--secondary-bg);
-            padding: 2rem 1rem;
             border-right: 1px solid rgba(255, 255, 255, 0.1);
             z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            transition: width var(--sidebar-transition);
+            overflow: hidden;
         }
 
-        .main-content {
-            margin-left: 250px;
-            padding: 2rem;
-            min-height: calc(100vh - var(--navbar-height));
+        /* Recolhido */
+        .sidebar.collapsed {
+            width: var(--sidebar-collapsed-width);
         }
 
-        .nav-link {
-            color: var(--text-muted);
-            padding: 0.8rem 1rem;
-            border-radius: 0.5rem;
-            margin-bottom: 0.5rem;
-            transition: all 0.3s ease;
+        /* Área rolável das opções */
+        .sidebar-inner {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 1rem 0.5rem;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.15) transparent;
+        }
+
+        .sidebar-inner::-webkit-scrollbar {
+            width: 4px;
+        }
+        .sidebar-inner::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .sidebar-inner::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.15);
+            border-radius: 4px;
+        }
+
+        /* Botão de recolher no rodapé da sidebar */
+        .sidebar-toggle-btn {
             display: flex;
             align-items: center;
+            justify-content: center;
+            padding: 0.8rem;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: color 0.2s;
+            flex-shrink: 0;
+        }
+
+        .sidebar-toggle-btn:hover {
+            color: var(--accent-color);
+        }
+
+        /* Links do menu */
+        .nav-link {
+            color: var(--text-muted);
+            padding: 0.75rem 0.75rem;
+            border-radius: 0.5rem;
+            margin-bottom: 0.25rem;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
+            overflow: hidden;
         }
 
         .nav-link i {
-            margin-right: 10px;
-            width: 20px;
+            min-width: 20px;
             text-align: center;
+            margin-right: 10px;
+            flex-shrink: 0;
+            transition: margin var(--sidebar-transition);
         }
 
         .nav-link:hover, .nav-link.active {
@@ -82,6 +137,76 @@
             color: var(--accent-color);
         }
 
+        /* Textos e labels que somem quando recolhido */
+        .sidebar .nav-label,
+        .sidebar .nav-link-text,
+        .sidebar .section-label {
+            opacity: 1;
+            transition: opacity var(--sidebar-transition);
+            overflow: hidden;
+        }
+
+        .sidebar.collapsed .nav-label,
+        .sidebar.collapsed .nav-link-text,
+        .sidebar.collapsed .section-label {
+            opacity: 0;
+            width: 0;
+        }
+
+        .sidebar.collapsed .nav-link i {
+            margin-right: 0;
+        }
+
+        .sidebar.collapsed .nav-link {
+            justify-content: center;
+            padding: 0.75rem 0;
+        }
+
+        /* Tooltip quando recolhido */
+        .sidebar.collapsed .nav-link {
+            position: relative;
+        }
+
+        .sidebar.collapsed .nav-link:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: calc(var(--sidebar-collapsed-width) - 2px);
+            background: var(--secondary-bg);
+            color: var(--text-main);
+            padding: 0.4rem 0.75rem;
+            border-radius: 0.4rem;
+            font-size: 0.82rem;
+            white-space: nowrap;
+            border: 1px solid rgba(255,255,255,0.1);
+            z-index: 2000;
+            pointer-events: none;
+        }
+
+        /* Badges somem quando recolhido */
+        .sidebar.collapsed .badge {
+            display: none;
+        }
+
+        /* Separador */
+        .sidebar-separator {
+            border-color: rgba(255,255,255,0.08);
+            margin: 0.5rem 0;
+        }
+
+        /* Conteúdo principal */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 2rem;
+            margin-top: var(--navbar-height);
+            min-height: calc(100vh - var(--navbar-height));
+            transition: margin-left var(--sidebar-transition);
+        }
+
+        .main-content.expanded {
+            margin-left: var(--sidebar-collapsed-width);
+        }
+
+        /* ── Cards ── */
         .card {
             background-color: var(--card-bg);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -123,9 +248,7 @@
         .bg-purple-soft { background-color: rgba(168, 85, 247, 0.1); color: #a855f7; }
         .bg-orange-soft { background-color: rgba(249, 115, 22, 0.1); color: #f97316; }
 
-        .table {
-            color: var(--text-main);
-        }
+        .table { color: var(--text-main); }
 
         .table thead th {
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -140,11 +263,18 @@
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
 
+        /* ── Mobile ── */
         @media (max-width: 768px) {
             .sidebar {
-                display: none;
+                width: 0;
+            }
+            .sidebar.mobile-open {
+                width: var(--sidebar-width);
             }
             .main-content {
+                margin-left: 0;
+            }
+            .main-content.expanded {
                 margin-left: 0;
             }
         }
@@ -152,15 +282,22 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg sticky-top">
+    <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
+            <!-- Botão hambúrguer (mobile) / seta (desktop) na navbar -->
+            <button id="sidebarToggleNav" class="btn btn-sm btn-outline-secondary me-2 d-lg-none" type="button">
+                <i class="fas fa-bars"></i>
+            </button>
             <a class="navbar-brand" href="/">
                 <i class="fas fa-clock-rotate-left me-2"></i>SECULLUM HUB
             </a>
-            <div class="d-flex align-items-center">
-                <span class="text-muted small me-3"><i class="fas fa-database me-1"></i> Banco: {{ session.get('banco', '73365') }}</span>
+            <div class="d-flex align-items-center ms-auto">
+                <span class="text-muted small me-3 d-none d-md-inline">
+                    <i class="fas fa-database me-1"></i> Banco: {{ session.get('banco', '73365') }}
+                </span>
                 <div class="dropdown">
-                    <button class="btn btn-outline-light btn-sm dropdown-toggle rounded-circle p-0" style="width: 32px; height: 32px;" type="button" data-bs-toggle="dropdown">
+                    <button class="btn btn-outline-light btn-sm dropdown-toggle rounded-circle p-0"
+                            style="width: 32px; height: 32px;" type="button" data-bs-toggle="dropdown">
                         <i class="fas fa-user-circle"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
@@ -173,31 +310,86 @@
         </div>
     </nav>
 
-    <div class="sidebar">
-        <nav class="nav flex-column">
-            <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">
-                <i class="fas fa-chart-line"></i> Dashboard
-            </a>
-            <a class="nav-link {% if request.path == '/espelho' %}active{% endif %}" href="/espelho">
-                <i class="fas fa-calendar-alt"></i> Espelho de Ponto
-            </a>
-            <a class="nav-link {% if request.path == '/funcionarios' %}active{% endif %}" href="/funcionarios">
-                <i class="fas fa-users"></i> Funcionários
-            </a>
-            <a class="nav-link {% if request.path == '/relatorios' %}active{% endif %}" href="/relatorios">
-                <i class="fas fa-file-export"></i> Relatórios
-            </a>
-            <hr class="my-4 border-secondary opacity-25">
-            <a class="nav-link" href="/sync">
-                <i class="fas fa-sync"></i> Sincronizar Funcionários
-            </a>
-            <a class="nav-link" href="/sync-batidas">
-                <i class="fas fa-clock-rotate-left"></i> Sincronizar Batidas
-            </a>
-        </nav>
+    <div class="sidebar" id="sidebar">
+        <!-- Área rolável -->
+        <div class="sidebar-inner">
+            <nav class="nav flex-column">
+                <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/" data-tooltip="Dashboard">
+                    <i class="fas fa-chart-line"></i>
+                    <span class="nav-link-text">Dashboard</span>
+                </a>
+                <a class="nav-link {% if request.path == '/espelho' %}active{% endif %}" href="/espelho" data-tooltip="Espelho de Ponto">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span class="nav-link-text">Espelho de Ponto</span>
+                </a>
+                <a class="nav-link {% if request.path == '/funcionarios' %}active{% endif %}" href="/funcionarios" data-tooltip="Funcionários">
+                    <i class="fas fa-users"></i>
+                    <span class="nav-link-text">Funcionários</span>
+                </a>
+                <a class="nav-link {% if request.path == '/relatorios' %}active{% endif %}" href="/relatorios" data-tooltip="Relatórios">
+                    <i class="fas fa-file-export"></i>
+                    <span class="nav-link-text">Relatórios</span>
+                </a>
+
+                <hr class="sidebar-separator">
+                <div class="section-label text-muted small fw-bold text-uppercase px-1 mb-1" style="font-size:0.65rem;letter-spacing:0.08em;">Gestão</div>
+
+                <a class="nav-link {% if request.path.startswith('/escalas') %}active{% endif %}" href="/escalas/" data-tooltip="Escalas">
+                    <i class="fas fa-calendar-week"></i>
+                    <span class="nav-link-text">Escalas</span>
+                </a>
+                <a class="nav-link {% if request.path == '/banco-horas' or request.path == '/banco-horas/alertas' %}active{% endif %}" href="/banco-horas" data-tooltip="Banco de Horas">
+                    <i class="fas fa-hourglass-half"></i>
+                    <span class="nav-link-text">Banco de Horas</span>
+                    {% if alertas_banco_horas > 0 %}
+                    <span class="badge bg-warning text-dark ms-auto" style="font-size:0.65rem;">{{ alertas_banco_horas }}</span>
+                    {% endif %}
+                </a>
+                <a class="nav-link {% if request.path == '/financeiro' %}active{% endif %}" href="/financeiro" data-tooltip="Financeiro">
+                    <i class="fas fa-chart-pie"></i>
+                    <span class="nav-link-text">Financeiro</span>
+                </a>
+                <a class="nav-link {% if request.path.startswith('/whatsapp') %}active{% endif %}" href="/whatsapp/logs" data-tooltip="WhatsApp">
+                    <i class="fab fa-whatsapp"></i>
+                    <span class="nav-link-text">WhatsApp</span>
+                </a>
+                <a class="nav-link {% if request.path.startswith('/marketplace') %}active{% endif %}" href="/marketplace/" data-tooltip="Marketplace">
+                    <i class="fas fa-store"></i>
+                    <span class="nav-link-text">Marketplace</span>
+                </a>
+                <a class="nav-link {% if request.path.startswith('/prontuario') %}active{% endif %}" href="/prontuario/alertas" data-tooltip="Prontuário">
+                    <i class="fas fa-folder-open"></i>
+                    <span class="nav-link-text">Prontuário</span>
+                    {% if alertas_docs > 0 %}
+                    <span class="badge bg-danger ms-auto" style="font-size:0.65rem;">{{ alertas_docs }}</span>
+                    {% endif %}
+                </a>
+
+                <hr class="sidebar-separator">
+                <div class="section-label text-muted small fw-bold text-uppercase px-1 mb-1" style="font-size:0.65rem;letter-spacing:0.08em;">Sistema</div>
+
+                <a class="nav-link {% if request.path.startswith('/config') %}active{% endif %}" href="/config/" data-tooltip="Configurações">
+                    <i class="fas fa-cog"></i>
+                    <span class="nav-link-text">Configurações</span>
+                </a>
+                <a class="nav-link" href="/sync" data-tooltip="Sincronizar Funcionários">
+                    <i class="fas fa-sync"></i>
+                    <span class="nav-link-text">Sincronizar Funcionários</span>
+                </a>
+                <a class="nav-link" href="/sync-batidas" data-tooltip="Sincronizar Batidas">
+                    <i class="fas fa-clock-rotate-left"></i>
+                    <span class="nav-link-text">Sincronizar Batidas</span>
+                </a>
+            </nav>
+        </div>
+
+        <!-- Botão recolher (rodapé da sidebar) -->
+        <div class="sidebar-toggle-btn" id="sidebarToggle" title="Recolher menu">
+            <i class="fas fa-chevron-left" id="toggleIcon"></i>
+        </div>
     </div>
 
-    <main class="main-content">
+    <main class="main-content" id="mainContent">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -215,6 +407,48 @@
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        (function () {
+            const sidebar = document.getElementById('sidebar');
+            const mainContent = document.getElementById('mainContent');
+            const toggleBtn = document.getElementById('sidebarToggle');
+            const toggleIcon = document.getElementById('toggleIcon');
+            const navToggle = document.getElementById('sidebarToggleNav');
+
+            // Restaura estado salvo
+            const collapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+            if (collapsed) {
+                sidebar.classList.add('collapsed');
+                mainContent.classList.add('expanded');
+                toggleIcon.classList.replace('fa-chevron-left', 'fa-chevron-right');
+            }
+
+            // Toggle desktop (botão no rodapé da sidebar)
+            toggleBtn.addEventListener('click', function () {
+                const isCollapsed = sidebar.classList.toggle('collapsed');
+                mainContent.classList.toggle('expanded', isCollapsed);
+                toggleIcon.classList.toggle('fa-chevron-left', !isCollapsed);
+                toggleIcon.classList.toggle('fa-chevron-right', isCollapsed);
+                localStorage.setItem('sidebarCollapsed', isCollapsed);
+            });
+
+            // Toggle mobile (hambúrguer na navbar)
+            if (navToggle) {
+                navToggle.addEventListener('click', function () {
+                    sidebar.classList.toggle('mobile-open');
+                });
+            }
+
+            // Fecha sidebar mobile ao clicar em link
+            document.querySelectorAll('.sidebar .nav-link').forEach(function (link) {
+                link.addEventListener('click', function () {
+                    if (window.innerWidth <= 768) {
+                        sidebar.classList.remove('mobile-open');
+                    }
+                });
+            });
+        })();
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

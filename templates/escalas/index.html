@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block title %}Escalas – Secullum10{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">Gestão de Escalas</h1>
+    <a href="{{ url_for('escalas.turno_novo') }}" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>Novo Turno
+    </a>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <a href="{{ url_for('escalas.alocar') }}" class="card p-3 text-decoration-none d-block">
+            <div class="d-flex align-items-center">
+                <div class="icon-box bg-green-soft me-3"><i class="fas fa-calendar-plus fa-lg"></i></div>
+                <div>
+                    <div class="fw-bold">Alocar Funcionário</div>
+                    <div class="text-muted small">Atribuir turno a uma data</div>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="{{ url_for('escalas.divergencias') }}" class="card p-3 text-decoration-none d-block">
+            <div class="d-flex align-items-center">
+                <div class="icon-box bg-orange-soft me-3"><i class="fas fa-exclamation-triangle fa-lg"></i></div>
+                <div>
+                    <div class="fw-bold">Divergências do Dia</div>
+                    <div class="text-muted small">Previstos sem batida</div>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="{{ url_for('financeiro.config_banco_horas') }}" class="card p-3 text-decoration-none d-block">
+            <div class="d-flex align-items-center">
+                <div class="icon-box bg-purple-soft me-3"><i class="fas fa-sliders fa-lg"></i></div>
+                <div>
+                    <div class="fw-bold">Config Banco de Horas</div>
+                    <div class="text-muted small">Regras e fechamento</div>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<div class="card p-4">
+    <h5 class="mb-3">Turnos Cadastrados</h5>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Início</th>
+                    <th>Fim</th>
+                    <th>Duração</th>
+                    <th>Dias</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if turnos %}
+                {% for t in turnos %}
+                <tr>
+                    <td class="fw-bold">{{ t.nome }}</td>
+                    <td>{{ t.hora_inicio.strftime('%H:%M') }}</td>
+                    <td>{{ t.hora_fim.strftime('%H:%M') }}</td>
+                    <td><span class="badge bg-blue-soft">{{ '%.1f'|format(t.duracao_horas) }}h</span></td>
+                    <td>
+                        {% for d in t.dias_semana_list %}
+                        <span class="badge bg-secondary me-1">{{ dias[d] }}</span>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('escalas.turno_editar', turno_id=t.id) }}" class="btn btn-sm btn-outline-info me-1">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <form method="POST" action="{{ url_for('escalas.turno_excluir', turno_id=t.id) }}" class="d-inline"
+                              onsubmit="return confirm('Excluir turno?')">
+                            <button class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% else %}
+                <tr><td colspan="6" class="text-center text-muted py-4">Nenhum turno cadastrado.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
