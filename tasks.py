@@ -2,9 +2,34 @@
 Celery tasks – jobs assincronos e agendados (Etapas 1-4).
 """
 from celery.utils.log import get_task_logger
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 logger = get_task_logger(__name__)
+
+
+def _get_cfg(chave, default):
+    """Lê valor de Configuracao pelo chave, retornando default se não existir."""
+    try:
+        from models import Configuracao
+        row = Configuracao.query.filter_by(chave=chave).first()
+        return row.valor if row and row.valor is not None else default
+    except Exception:
+        return default
+
+
+def _set_cfg(chave, valor):
+    """Salva ou atualiza Configuracao."""
+    try:
+        from models import Configuracao
+        from extensions import db
+        row = Configuracao.query.filter_by(chave=chave).first()
+        if row:
+            row.valor = str(valor)
+        else:
+            db.session.add(Configuracao(chave=chave, valor=str(valor)))
+        db.session.commit()
+    except Exception as e:
+        logger.error(f'[_set_cfg] Erro ao salvar {chave}: {e}')
 
 
 def register_tasks(celery):
@@ -152,5 +177,58 @@ def register_tasks(celery):
         except Exception as e:
             logger.error(f'[alerta_docs] Falha ao enviar e-mail: {e}')
         return {'docs': len(docs)}
+
+    # ── Sync automático de batidas (configurável) ─────────────────────────────
+
+    @celery.task(name='tasks.sync_batidas_rapida')
+    def sync_batidas_rapida():
+        """Sync incremental. Roda a cada minuto mas self-limita pelo intervalo configurado."""
+        if _get_cfg('sync_rapida_ativo', '1') != '1':
+            return {'skipped': True, 'reason': 'desativado'}
+
+        intervalo = int(_get_cfg('sync_rapida_intervalo_min', '10'))
+        ultimo_str = _get_cfg('sync_rapida_ultimo_run', '')
+        if ultimo_str:
+            try:
+                ultimo = datetime.fromisoformat(ultimo_str)
+                if (datetime.now() - ultimo).total_seconds() < intervalo * 60:
+                    return {'skipped': True, 'reason': 'interval'}
+            except ValueError:
+                pass
+
+        _set_cfg('sync_rapida_ultimo_run', datetime.now().isoformat())
+        from services.sync_service import sync_batidas_incremental
+        ok, msg = sync_batidas_incremental()
+        logger.info(f'[sync_rapida] {msg}')
+        return {'ok': ok, 'msg': msg}
+
+    @celery.task(name='tasks.sync_batidas_completa')
+    def sync_batidas_completa():
+        """Sync completo com janela configurável. Roda a cada 5 min, self-limita pelo intervalo."""
+        if _get_cfg('sync_completa_ativo', '1') != '1':
+            return {'skipped': True, 'reason': 'desativado'}
+
+        intervalo = int(_get_cfg('sync_completa_intervalo_min', '60'))
+        ultimo_str = _get_cfg('sync_completa_ultimo_run', '')
+        if ultimo_str:
+            try:
+                ultimo = datetime.fromisoformat(ultimo_str)
+                if (datetime.now() - ultimo).total_seconds() < intervalo * 60:
+                    return {'skipped': True, 'reason': 'interval'}
+            except ValueError:
+                pass
+
+        janela_horas = int(_get_cfg('sync_completa_janela_horas', '12'))
+        _set_cfg('sync_completa_ultimo_run', datetime.now().isoformat())
+
+        from services.sync_service import sync_batidas
+        agora = datetime.now()
+        data_inicio = (agora - timedelta(hours=janela_horas)).strftime('%Y-%m-%d')
+        hora_inicio = (agora - timedelta(hours=janela_horas)).strftime('%H:%M')
+        data_fim = agora.strftime('%Y-%m-%d')
+        hora_fim = agora.strftime('%H:%M')
+        ok, msg = sync_batidas(data_inicio, data_fim, hora_inicio, hora_fim)
+        logger.info(f'[sync_completa] {msg}')
+        return {'ok': ok, 'msg': msg}
 
     return sync_secullum

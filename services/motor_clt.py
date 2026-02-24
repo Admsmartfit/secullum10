@@ -3,7 +3,7 @@ Motor de validação CLT – Etapa 2.
 Valida regras da CLT ao salvar alocações/escalas.
 """
 from datetime import datetime, timedelta
-from models import AlocacaoDiaria, Batida, Turno
+from models import AlocacaoDiaria, Turno, Funcionario
 
 
 def _combine(data, hora_time):
@@ -126,6 +126,34 @@ def validar_dsr(func_id: str, data_nova: 'date') -> dict | None:
     return None
 
 
+def validar_domingos_consecutivos(func_id: str, data_nova: 'date') -> dict | None:
+    """Art. 386 CLT – mulheres não podem trabalhar domingos consecutivos sem revezamento.
+    Aplica-se apenas a funcionárias com sexo='F'.
+    Retorna aviso (severity='warning') se o dia anterior de domingo estiver alocado.
+    """
+    if data_nova.weekday() != 6:   # não é domingo
+        return None
+    func = Funcionario.query.get(func_id)
+    if not func or func.sexo != 'F':
+        return None
+    # Domingo anterior (7 dias atrás)
+    domingo_anterior = data_nova - timedelta(days=7)
+    trabalhou = AlocacaoDiaria.query.filter_by(
+        funcionario_id=func_id, data=domingo_anterior
+    ).first()
+    if trabalhou:
+        return {
+            'error': 'DOMINGO_CONSECUTIVO',
+            'message': (
+                f'Art. 386 CLT: {func.nome} trabalhou no domingo anterior '
+                f'({domingo_anterior.strftime("%d/%m")}). '
+                'O revezamento quinzenal é obrigatório para mulheres.'
+            ),
+            'severity': 'warning',
+        }
+    return None
+
+
 def validar_alocacao(func_id: str, data: 'date', turno: Turno) -> list[dict]:
     """
     Executa todas as validações CLT para uma nova alocação.
@@ -146,6 +174,10 @@ def validar_alocacao(func_id: str, data: 'date', turno: Turno) -> list[dict]:
         infracoes.append(erro)
 
     erro = validar_dsr(func_id, data)
+    if erro:
+        infracoes.append(erro)
+
+    erro = validar_domingos_consecutivos(func_id, data)
     if erro:
         infracoes.append(erro)
 

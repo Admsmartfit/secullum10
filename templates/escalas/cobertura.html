@@ -1,0 +1,324 @@
+{% extends 'base.html' %}
+{% block title %}Matriz de Cobertura{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── Heatmap ───────────────────────────────────────────────────────────────── */
+.cob-wrapper { overflow-x: auto; }
+.cob-table   { min-width: 900px; border-collapse: collapse; font-size: .78rem; }
+.cob-table th, .cob-table td {
+    padding: 5px 6px;
+    border: 1px solid var(--border-color);
+    white-space: nowrap;
+    text-align: center;
+    vertical-align: middle;
+}
+.cob-table thead th { background: var(--card-bg); font-weight: 700; text-transform: uppercase; font-size: .68rem; color: var(--text-muted); }
+.col-nome   { min-width: 160px; text-align: left !important; font-weight: 600; }
+.col-funcao { min-width: 120px; text-align: left !important; color: var(--text-muted); }
+.col-dom    { background: #f8f9ff !important; }        /* domingo: fundo azul-claro */
+.cel-turno  { background: #dcfce7; color: #166534; font-size: .72rem; border-radius: 3px; }
+.cel-folga  { color: #ccc; }
+.cel-warn   { background: #fef9c3 !important; }
+.row-cobertura td { font-weight: 700; }
+.cob-ok     { background: #dcfce7; color: #166534; }  /* ≥1 */
+.cob-zero   { background: #fee2e2; color: #991b1b; }  /* 0  */
+
+/* ── Alertas ───────────────────────────────────────────────────────────────── */
+.alerta-card { border-left: 4px solid; margin-bottom: .5rem; padding: .6rem 1rem; border-radius: 4px; }
+.alerta-descoberto { border-color: #ef4444; background: #fff5f5; }
+.alerta-art386     { border-color: #f97316; background: #fff7ed; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0 fw-bold">
+        <i class="fas fa-table me-2 text-primary"></i>Matriz de Cobertura
+    </h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('escalas.gantt') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-chart-gantt me-1"></i>Gantt
+        </a>
+        <a href="{{ url_for('escalas.calendario') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-calendar me-1"></i>Calendário
+        </a>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card p-3 mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-2">
+            <label class="form-label small fw-bold mb-1">MÊS/ANO</label>
+            <input type="month" id="filtMes" class="form-control form-control-sm"
+                   value="{{ mes_ano }}">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-bold mb-1">DEPARTAMENTO</label>
+            <select id="filtDept" class="form-select form-select-sm">
+                <option value="">Todos</option>
+                {% for d in departamentos %}
+                <option value="{{ d }}" {{ 'selected' if d == dept_sel }}>{{ d }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-bold mb-1">FUNÇÃO</label>
+            <select id="filtFuncao" class="form-select form-select-sm">
+                <option value="">Todas</option>
+                {% for f in funcoes %}
+                <option value="{{ f }}" {{ 'selected' if f == func_sel }}>{{ f }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button id="btnCarregar" class="btn btn-primary btn-sm w-100">
+                <i class="fas fa-search me-1"></i>Visualizar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Painel de Alertas -->
+<div id="painelAlertas" class="mb-3 d-none">
+    <div class="card p-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="fw-bold mb-0">
+                <i class="fas fa-exclamation-triangle text-warning me-2"></i>Alertas do Mês
+            </h6>
+            <span id="resumoAlertas" class="badge bg-danger"></span>
+        </div>
+        <div id="listaAlertas"></div>
+    </div>
+</div>
+
+<!-- Heatmap -->
+<div class="card p-4">
+    <div id="heatmapContainer">
+        <div class="text-center text-muted py-5">Carregando...</div>
+    </div>
+</div>
+
+<!-- Legenda -->
+<div class="d-flex gap-4 mt-3 small text-muted flex-wrap">
+    <div><span style="display:inline-block;width:20px;height:12px;background:#dcfce7;border:1px solid #86efac;border-radius:2px;vertical-align:middle;"></span> Escalado</div>
+    <div><span style="display:inline-block;width:20px;height:12px;background:#fee2e2;border:1px solid #fca5a5;border-radius:2px;vertical-align:middle;"></span> Dia descoberto</div>
+    <div><span style="display:inline-block;width:20px;height:12px;background:#f8f9ff;border:1px solid #c7d2fe;border-radius:2px;vertical-align:middle;"></span> Domingo</div>
+    <div><span style="display:inline-block;width:20px;height:12px;background:#fef9c3;border:1px solid #fde047;border-radius:2px;vertical-align:middle;"></span> Aviso CLT</div>
+</div>
+
+<!-- Modal Resolver Automaticamente -->
+<div class="modal fade" id="modalResolver" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h6 class="modal-title fw-bold">
+                    <i class="fas fa-magic me-2 text-primary"></i>Sugestão de Cobertura
+                </h6>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalResolverBody">
+                <div class="text-center py-3"><div class="spinner-border text-primary spinner-border-sm"></div></div>
+            </div>
+            <div class="modal-footer border-0">
+                <button id="btnAplicarSugestao" class="btn btn-primary btn-sm d-none">
+                    <i class="fas fa-check me-1"></i>Aplicar
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const DIAS_PT = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+let sugestaoAtual = null;
+
+// ── Renderiza heatmap ────────────────────────────────────────────────────────
+function renderHeatmap(data) {
+    if (!data.funcionarios.length) {
+        document.getElementById('heatmapContainer').innerHTML =
+            '<div class="text-muted text-center py-5">Nenhum funcionário encontrado para os filtros selecionados.</div>';
+        return;
+    }
+    const domSet = new Set(data.domingos || []);
+    const N = data.dias_no_mes;
+    const ano = data.ano, mes = String(data.mes).padStart(2, '0');
+
+    // Header de dias
+    let thDias = '<th class="col-nome">Funcionário</th><th class="col-funcao">Função</th>';
+    for (let d = 1; d <= N; d++) {
+        const dt = new Date(ano, mes - 1, d);
+        const isDom = domSet.has(d);
+        thDias += `<th class="${isDom ? 'col-dom' : ''}" title="${DIAS_PT[dt.getDay()===0?6:dt.getDay()-1]}">${d}<br><span style="font-size:.6rem">${DIAS_PT[dt.getDay()===0?6:dt.getDay()-1]}</span></th>`;
+    }
+
+    // Linhas de funcionários
+    let rowsHtml = data.funcionarios.map(f => {
+        let cells = `<td class="col-nome">${f.nome}</td><td class="col-funcao">${f.funcao || '—'}</td>`;
+        for (let d = 1; d <= N; d++) {
+            const aloc = f.dias[d];
+            const isDom = domSet.has(d);
+            if (aloc) {
+                const warnClass = aloc.warning ? 'cel-warn' : '';
+                cells += `<td class="${isDom ? 'col-dom' : ''} ${warnClass}" title="${aloc.turno}${aloc.warning ? ' ⚠ Aviso CLT' : ''}">
+                    <span class="cel-turno" style="background:${aloc.color}22;color:${aloc.color};">${aloc.turno.substring(0,6)}</span>
+                </td>`;
+            } else {
+                cells += `<td class="${isDom ? 'col-dom' : ''} cel-folga">—</td>`;
+            }
+        }
+        return `<tr>${cells}</tr>`;
+    }).join('');
+
+    // Linha de cobertura
+    let cobCells = `<td class="col-nome fw-bold">COBERTURA</td><td class="col-funcao"></td>`;
+    for (let d = 1; d <= N; d++) {
+        const n = data.cobertura[d] || 0;
+        const cls = n >= 1 ? 'cob-ok' : 'cob-zero';
+        cobCells += `<td class="${cls}">${n}</td>`;
+    }
+
+    document.getElementById('heatmapContainer').innerHTML = `
+        <div class="cob-wrapper">
+        <table class="cob-table">
+            <thead><tr>${thDias}</tr></thead>
+            <tbody>${rowsHtml}</tbody>
+            <tfoot class="row-cobertura"><tr>${cobCells}</tr></tfoot>
+        </table>
+        </div>`;
+}
+
+// ── Renderiza alertas ────────────────────────────────────────────────────────
+function renderAlertas(alertas) {
+    const painel = document.getElementById('painelAlertas');
+    const lista  = document.getElementById('listaAlertas');
+    const resumo = document.getElementById('resumoAlertas');
+    const total  = alertas.descobertos.length + alertas.art386.length;
+
+    if (!total) { painel.classList.add('d-none'); return; }
+
+    painel.classList.remove('d-none');
+    resumo.textContent = `${total} alerta(s)`;
+
+    let html = '';
+    alertas.descobertos.forEach(a => {
+        const dt = new Date(a.data + 'T12:00:00');
+        const fmt = dt.toLocaleDateString('pt-BR', {weekday:'long', day:'2-digit', month:'2-digit'});
+        html += `<div class="alerta-card alerta-descoberto d-flex justify-content-between align-items-center">
+            <div>
+                <i class="fas fa-user-slash me-2 text-danger"></i>
+                <strong>${fmt}</strong> — Dia descoberto${a.funcao ? ` (${a.funcao})` : ''}
+            </div>
+            <button class="btn btn-sm btn-outline-danger"
+                    onclick="abrirResolver('${a.data}','${a.funcao}','${a.dept}')">
+                <i class="fas fa-magic me-1"></i>Resolver
+            </button>
+        </div>`;
+    });
+    alertas.art386.forEach(a => {
+        html += `<div class="alerta-card alerta-art386">
+            <i class="fas fa-venus me-2 text-warning"></i>
+            <strong>${a.func_nome}</strong> — Art. 386 CLT: domingo consecutivo em
+            ${new Date(a.data + 'T12:00:00').toLocaleDateString('pt-BR')}
+        </div>`;
+    });
+
+    lista.innerHTML = html;
+}
+
+// ── Carregar dados ────────────────────────────────────────────────────────────
+async function carregar() {
+    const mes    = document.getElementById('filtMes').value;
+    const dept   = document.getElementById('filtDept').value;
+    const funcao = document.getElementById('filtFuncao').value;
+
+    document.getElementById('heatmapContainer').innerHTML =
+        '<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>';
+
+    // Heatmap + alertas em paralelo
+    const [respH, respA] = await Promise.all([
+        fetch(`/escalas/cobertura/dados?mes_ano=${mes}&dept=${encodeURIComponent(dept)}&funcao=${encodeURIComponent(funcao)}`),
+        fetch(`/escalas/alertas?mes_ano=${mes}&dept=${encodeURIComponent(dept)}&funcao=${encodeURIComponent(funcao)}`),
+    ]);
+    renderHeatmap(await respH.json());
+    renderAlertas(await respA.json());
+}
+
+// ── Auto-resolver ─────────────────────────────────────────────────────────────
+async function abrirResolver(data, funcao, dept) {
+    sugestaoAtual = null;
+    document.getElementById('btnAplicarSugestao').classList.add('d-none');
+    document.getElementById('modalResolverBody').innerHTML =
+        '<div class="text-center py-3"><div class="spinner-border text-primary spinner-border-sm"></div></div>';
+    new bootstrap.Modal(document.getElementById('modalResolver')).show();
+
+    const resp = await fetch(
+        `/escalas/sugerir-cobertura?data=${data}&funcao=${encodeURIComponent(funcao)}&dept=${encodeURIComponent(dept)}`
+    );
+    const s = await resp.json();
+    if (s.error) {
+        document.getElementById('modalResolverBody').innerHTML =
+            `<div class="alert alert-warning">${s.error}</div>`;
+        return;
+    }
+    sugestaoAtual = { ...s, data };
+    const dt = new Date(data + 'T12:00:00').toLocaleDateString('pt-BR', {weekday:'long', day:'2-digit', month:'long'});
+    const folgaFmt = s.folga_sugerida
+        ? new Date(s.folga_sugerida + 'T12:00:00').toLocaleDateString('pt-BR', {weekday:'long', day:'2-digit', month:'2-digit'})
+        : '—';
+    document.getElementById('modalResolverBody').innerHTML = `
+        <p class="mb-3">Para cobrir <strong>${dt}</strong>:</p>
+        <div class="card p-3 mb-3">
+            <div class="fw-bold fs-6">${s.func_nome}</div>
+            <div class="text-muted small">${s.funcao}</div>
+            <div class="mt-2 small">
+                <span class="badge bg-primary me-2">${s.turno_nome} (${s.turno_inicio}–${s.turno_fim})</span>
+                <span class="text-muted">Banco: <strong>${s.saldo_banco > 0 ? '+' : ''}${s.saldo_banco}h</strong></span>
+            </div>
+        </div>
+        ${s.folga_sugerida ? `<div class="alert alert-info py-2 small">
+            <i class="fas fa-calendar-minus me-1"></i>
+            Folga compensatória sugerida: <strong>${folgaFmt}</strong>
+        </div>` : ''}`;
+    document.getElementById('btnAplicarSugestao').classList.remove('d-none');
+}
+
+document.getElementById('btnAplicarSugestao').addEventListener('click', async function() {
+    if (!sugestaoAtual) return;
+    this.disabled = true;
+    const resp = await fetch('/escalas/aplicar-sugestao', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            func_id:  sugestaoAtual.func_id,
+            turno_id: sugestaoAtual.turno_id,
+            data:     sugestaoAtual.data,
+        }),
+    });
+    const result = await resp.json();
+    if (result.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('modalResolver')).hide();
+        carregar();
+    } else {
+        alert('Erro ao aplicar: ' + (result.error || JSON.stringify(result.infracoes)));
+    }
+    this.disabled = false;
+});
+
+// Carregar funções ao mudar departamento
+document.getElementById('filtDept').addEventListener('change', async function() {
+    const resp = await fetch(`/escalas/cargo-mensal/funcoes?dept=${encodeURIComponent(this.value)}`);
+    const funcoes = await resp.json();
+    const sel = document.getElementById('filtFuncao');
+    sel.innerHTML = '<option value="">Todas</option>';
+    funcoes.forEach(f => sel.appendChild(new Option(f, f)));
+});
+
+document.getElementById('btnCarregar').addEventListener('click', carregar);
+carregar();
+</script>
+{% endblock %}

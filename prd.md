@@ -1,103 +1,159 @@
-Com certeza. Como um dev que já passou por muitas integrações de sistemas legados e APIs de terceiros, entendo que o segredo aqui é unir a robustez da API da Secullum com a agilidade e simplicidade do Flask (baseado no `hrsystem-flask`).
+Com base na análise do código-fonte fornecido (Secullum10) e no seu problema específico de gestão de escala (cobertura de 7 dias com restrições da CLT para mulheres aos domingos), elaborei uma estratégia de melhoria.
 
-Abaixo, apresento o **PRD (Product Requirements Document)** detalhado para o desenvolvimento dessa ferramenta.
+O seu sistema atual já possui a estrutura base (`models.py` com `Turno` e `EscalaTrabalho`, e um serviço `motor_clt.py`), mas falta uma camada de **inteligência de agendamento** para resolver automaticamente conflitos como o do "Domingo da Mulher".
 
----
-
-# PRD: Painel de Monitoramento e Conciliação – Ponto Secullum Web
-
-## 1. Visão Geral do Produto
-
-O objetivo é criar uma interface web (Dashboard) que consuma dados em tempo real (ou via cache sincronizado) da API do **Ponto Secullum Web**. O sistema servirá como um braço direito para o RH, permitindo visualizar batidas de ponto, identificar inconsistências e facilitar o fechamento da folha sem precisar navegar nos menus complexos do sistema nativo.
-
-## 2. Referências Técnicas e Arquitetura
-
-Para este projeto, utilizaremos uma arquitetura **BFF (Backend For Frontend)** em Python.
-
-* **Referência de API (Secullum):** Utilizaremos a lógica de autenticação e endpoints mapeados no repositório [PontoWebIntegracaoExternaExemplo](https://github.com/Secullum/PontoWebIntegracaoExternaExemplo.git).
-* **Referência de UI/UX (RH System):** O esqueleto de rotas, gestão de usuários e templates HTML/Bootstrap virá do [hrsystem-flask](https://github.com/nivedrn/hrsystem-flask.git).
-
-### Stack Tecnológica
-
-* **Backend:** Python 3.10+ / Flask.
-* **Frontend:** HTML5, Jinja2, Bootstrap 5 (padrão do `hrsystem-flask`).
-* **Banco de Dados:** SQLite (para cache local de funcionários e configurações).
-* **Integração:** Biblioteca `requests` para consumo da API REST da Secullum.
+Abaixo apresento a análise e o PRD (Documento de Requisitos de Produto) detalhado.
 
 ---
 
-## 3. Requisitos Funcionais (RF)
+### Análise do Cenário e do Código
 
-| ID | Requisito | Descrição |
-| --- | --- | --- |
-| **RF01** | **Autenticação Secullum** | O sistema deve permitir configurar as credenciais da API (Email/Senha/Token) e realizar o login via endpoint `/Acesso/Login`. |
-| **RF02** | **Sincronização de Funcionários** | Importar a lista de funcionários ativos para o banco local para evitar chamadas excessivas à API. |
-| **RF03** | **Visualização de Batidas** | Uma tela onde o usuário seleciona um período e o sistema lista todas as batidas formatadas. |
-| **RF04** | **Filtros de Dashboard** | Filtrar batidas por departamento, funcionário ou data. |
-| **RF05** | **Exportação Simples** | Botão para gerar um relatório em PDF ou Excel das batidas visualizadas na tela. |
+**O Problema:**
+Você tem uma operação ininterrupta (7 dias). A "Recepcionista D" (fixa de domingo) precisa folgar pelo menos 1 domingo a cada 15 dias (conforme Art. 386 da CLT para mulheres, embora muitas convenções usem 1 por mês). Quando ela folga, uma das outras 3 (A, B ou C) precisa cobrir, o que desorganiza a folga delas durante a semana.
 
----
+**O Estado Atual do Sistema (Code Review):**
 
-## 4. Requisitos Não Funcionais (RNF)
-
-* **Segurança:** As credenciais da API da Secullum não devem ficar expostas no código (uso de `.env`).
-* **Performance:** Implementar um sistema de *cache* de 15 minutos para as batidas de ponto, evitando atingir o rate-limit da API.
-* **Responsividade:** O painel deve ser acessível via tablet e desktop (herança do Bootstrap do `hrsystem-flask`).
+1. **`models.py`**: Já suporta a criação de escalas, mas parece armazenar dias individuais. Faltam conceitos de "Ciclos" ou "Padrões de Revezamento".
+2. **`services/motor_clt.py`**: Existe um esboço de validação, mas precisa ser expandido para verificar especificamente a regra de "Domingos consecutivos para mulheres".
+3. **Interface (`templates/escalas/`)**: Parece focada em visualização ou inserção manual (um a um ou em lote simples). Isso torna a administração "complicada" como você citou.
 
 ---
 
-## 5. Mapeamento de Fluxo de Dados
+### PRD: Módulo de Escala Inteligente e Revezamento Automático
 
-A integração seguirá o fluxo abaixo:
+**Visão Geral:**
+Implementar um gerador de escalas baseado em regras que automatize o preenchimento do calendário, garantindo a cobertura da recepção e respeitando automaticamente a regra do domingo para mulheres, sugerindo trocas inteligentes.
 
-1. **Handshake:** O Flask envia `POST /api/v1/Acesso/Login`. Recebe o `Token`.
-2. **Identificação:** O Flask busca `GET /api/v1/Funcionarios`.
-3. **Coleta:** O Flask busca `GET /api/v1/Batidas?dataInicio=X&dataFim=Y`.
-4. **Processamento:** O Python agrupa as batidas por `PIS` ou `CPF` para exibir no HTML de forma legível (Entrada 1, Saída 1, Entrada 2, Saída 2).
+#### 1. Funcionalidades Chave (Solução Proposta)
+
+##### 1.1. Cadastro de "Padrões de Revezamento" (Shift Patterns)
+
+Em vez de lançar dias soltos, o sistema deve permitir criar padrões.
+
+* **Padrão A (Semanal):** Seg-Sex (Sáb alternado).
+* **Padrão B (Fim de Semana):** Apenas Domingos e Feriados.
+* **Regra de Exceção:** "A cada X domingos trabalhados, 1 folga obrigatória".
+
+##### 1.2. Gerador Automático de Cobertura (The Solver)
+
+Um algoritmo que preenche a escala do mês seguinte com um clique.
+
+* **Lógica:** O sistema aloca a "Recepcionista D" em todos os domingos.
+* **Validação CLT:** O `motor_clt.py` detecta que no 2º (ou 3º) domingo ela *precisa* folgar.
+* **Resolução de Conflito:** O sistema busca entre as Recepcionistas A, B e C qual tem o menor saldo no **Banco de Horas** (já existente no seu sistema) e sugere a escala dela para esse domingo específico, gerando uma folga compensatória para ela na semana.
+
+##### 1.3. Interface de Matriz de Cobertura (Heatmap)
+
+Uma visualização onde as linhas são os funcionários e as colunas os dias, mas com uma linha extra no rodapé: "Cobertura".
+
+* Se o dia tiver 0 recepcionistas, fica vermelho.
+* Se tiver 1, fica verde.
+* Isso permite ao operador ver "buracos" na escala instantaneamente.
 
 ---
 
-## 6. Caminhos de Implementação (Roadmap)
+#### 2. Requisitos Técnicos (Baseado no seu código)
 
-### Fase 1: Setup e Conexão (O "Coração" do PontoWeb)
+##### 2.1. Atualização do `models.py`
 
-Baseado no exemplo da Secullum, você deve criar um módulo `secullum_api.py`:
-
-* Implementar a classe `SecullumClient`.
-* Método para renovar o Token automaticamente quando expirar.
-
-### Fase 2: Adaptação do `hrsystem-flask`
-
-* Remover as tabelas de funcionários originais do `hrsystem-flask` e substituí-las pela estrutura da Secullum.
-* Criar uma rota `/dashboard/ponto` que renderize o template de batidas.
-
-### Fase 3: Frontend (HTML)
-
-* Utilizar os cards do Bootstrap para mostrar métricas rápidas: "Batidas hoje", "Funcionários Ausentes", "Horas Extras Estimadas".
-
----
-
-## 7. Exemplo de Estrutura de Código Sugerida
+Adicionar suporte a padrões e regras de restrição.
 
 ```python
-# No seu app.py (Baseado no hrsystem-flask)
-from flask import Flask, render_template
-import requests
+# Sugestão de alteração/adição no models.py
 
-app = Flask(__name__)
+class RegraEscala(db.Model):
+    __tablename__ = 'regra_escala'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100)) # Ex: "Regra Mulher Domingo"
+    tipo_restricao = db.Column(db.String(50)) # Ex: "DOMINGO_QUINZENAL"
+    genero_aplicavel = db.Column(db.String(1)) # 'F', 'M' ou 'A' (Ambos)
+    ativo = db.Column(db.Boolean, default=True)
 
-@app.route('/espelho-ponto/<funcionario_id>')
-def espelho_ponto(funcionario_id):
-    # Lógica baseada no PontoWebIntegracaoExternaExemplo
-    api_token = "OBTER_VIA_LOGIN"
-    headers = {'Authorization': f'Bearer {api_token}'}
-    
-    # Busca batidas reais na API Secullum
-    response = requests.get(f"https://pontowebintegracaoexterna.secullum.com.br/api/v1/Batidas?FuncionarioId={funcionario_id}", headers=headers)
-    batidas = response.json()
-    
-    return render_template('ponto_detalhe.html', batidas=batidas)
+class PadraoTurno(db.Model):
+    """Define templates como 6x1, 5x2, ou Fixo Domingo"""
+    __tablename__ = 'padrao_turno'
+    id = db.Column(db.Integer, primary_key=True)
+    descricao = db.Column(db.String(100))
+    dias_trabalho = db.Column(db.Integer) # Ex: 6
+    dias_folga = db.Column(db.Integer) # Ex: 1
 
 ```
 
-> **Nota de Atenção:**  usuario:ricardo.landeiro@smartfit.com Senha : Spetra@100  Banco: 73365 
+##### 2.2. Melhoria no `services/motor_clt.py`
+
+Implementar a verificação específica que está lhe causando dor de cabeça.
+
+```python
+# services/motor_clt.py
+
+def validar_escala_domingo_mulher(funcionario_id, data_escala, session):
+    funcionario = session.query(Funcionario).get(funcionario_id)
+    
+    # Se não for mulher, ignora a regra específica (ou aplica regra geral)
+    if funcionario.sexo != 'F':
+        return True, "OK"
+
+    # Busca os últimos domingos trabalhados
+    # Lógica: Se trabalhou no domingo passado, este deve ser folga?
+    # Depende da configuração (1x1 ou quinzenal)
+    
+    ultimos_domingos = buscar_turnos_em_domingos_anteriores(funcionario_id, data_escala, limit=1)
+    
+    if len(ultimos_domingos) >= 1: 
+        # Já trabalhou no último domingo.
+        # Pela regra estrita (quinzenal), hoje deve ser folga.
+        return False, "Violação Art. 386 CLT: Revezamento quinzenal obrigatório p/ mulheres."
+    
+    return True, "OK"
+
+```
+
+##### 2.3. Endpoint de "Auto-Completar" (`blueprints/escalas.py`)
+
+Criar uma rota `/api/escalas/gerar_automatico` que recebe o mês/ano.
+
+1. Limpa a escala futura (rascunho).
+2. Aplica os turnos fixos.
+3. Roda o `validar_escala_domingo_mulher`.
+4. Onde falhar (o domingo de folga obrigatória), o sistema procura um "Curinga" (outra recepcionista) e aloca o turno, marcando como "Sugestão do Sistema".
+
+---
+
+#### 3. UX/UI - Referências de Mercado
+
+Para facilitar para o operador, sugiro implementar uma interface semelhante a sistemas como **Planday** ou **Deputy**:
+
+1. **View de Conflitos (Alertas):**
+* Ao abrir a tela de escalas, não mostre apenas a tabela. Mostre um painel superior: *"Atenção: Dia 15/10 (Domingo) está descoberto pois Recepcionista D precisa folgar."*
+* Ao lado do alerta, um botão: **"Resolver Automaticamente"**.
+
+
+2. **Botão "Resolver Automaticamente":**
+* Ao clicar, o sistema abre um modal: *"Sugiro escalar a Recepcionista A para este domingo (ela tem -10h no banco). Em troca, sugiro dar folga para ela na Terça-feira dia 17/10."*
+* O operador só clica em "Aplicar".
+
+
+3. **Visualização em Linha do Tempo (Gantt):**
+* Utilize a biblioteca **FullCalendar Scheduler** (versão Resource Timeline) ou **Vis.js Timeline**.
+* Mostre as 4 recepcionistas uma abaixo da outra.
+* Os Domingos devem ter uma cor de fundo destacada visualmente para facilitar a conferência da regra.
+
+
+
+#### 4. Plano de Ação (Roadmap)
+
+1. **Imediato (Correção Rápida):**
+* No arquivo `templates/escalas/calendario.html`, adicione uma lógica visual (Javascript) que pinte de **vermelho** a célula se uma funcionária mulher for alocada em dois domingos consecutivos. Isso já ajuda o operador visualmente.
+
+
+2. **Curto Prazo (Back-end):**
+* Atualizar `motor_clt.py` com a regra do Art. 386.
+* Criar o script Python `sugerir_cobertura.py` que recebe uma data vazia e retorna qual funcionário é o melhor candidato para cobrir (baseado em saldo de Banco de Horas).
+
+
+3. **Médio Prazo (Front-end):**
+* Criar a tela de "Geração de Escala Mensal" onde o operador define as regras bases e o sistema preenche os 30 dias de uma vez.
+
+
+
+Esta abordagem transforma o problema de "administrar escala manualmente" em "gerenciar exceções", onde o sistema faz o trabalho pesado de alocação e o operador apenas aprova as trocas necessárias para cobrir as folgas obrigatórias.

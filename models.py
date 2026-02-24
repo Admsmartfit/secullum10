@@ -62,6 +62,9 @@ class Funcionario(db.Model):
     horario_secullum_numero = db.Column(db.Integer, nullable=True)
     horario_secullum_nome = db.Column(db.String(100), nullable=True)
 
+    # Sexo: 'M' = masculino, 'F' = feminino (usado p/ regra Art. 386 CLT)
+    sexo = db.Column(db.String(1), nullable=True)
+
     # Status e controles
     ativo = db.Column(db.Boolean, default=True)
     data_ultima_sincronizacao = db.Column(db.DateTime, default=datetime.utcnow)
@@ -425,3 +428,54 @@ class SolicitacaoTroca(db.Model):
 
     def __repr__(self):
         return f'<SolicitacaoTroca {self.id} [{self.status}]>'
+
+
+# ── PRD: Padrões de Revezamento ───────────────────────────────────────────────
+
+class PadraoTurno(db.Model):
+    """Template de ciclo de trabalho: ex. 6x1 (6 dias on, 1 folga), 5x2, etc."""
+    __tablename__ = 'padroes_turno'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False)        # "6x1", "5x2 Fixo Dom"
+    descricao = db.Column(db.Text, nullable=True)
+    dias_trabalho = db.Column(db.Integer, default=5)        # dias consecutivos ON
+    dias_folga    = db.Column(db.Integer, default=2)        # dias consecutivos OFF no ciclo
+    turno_id      = db.Column(db.Integer, db.ForeignKey('turnos.id'), nullable=True)
+    departamento  = db.Column(db.String(200), nullable=True)  # null = global
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    turno = db.relationship('Turno', backref='padroes')
+
+    def __repr__(self):
+        return f'<PadraoTurno {self.nome} {self.dias_trabalho}x{self.dias_folga}>'
+
+
+# ── Grupos de Departamentos ────────────────────────────────────────────────────
+
+class GrupoDepartamento(db.Model):
+    """Agrupa unidades do mesmo endereço/franquia para filtros e turnos compartilhados.
+    Exemplo: "Praia do Canto" → ["PRAIA FITNESS", "FUNCIONAL DA PRAIA"]
+    """
+    __tablename__ = 'grupos_departamento'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(200), nullable=False, unique=True)
+    # JSON list de nomes de departamento que fazem parte do grupo
+    departamentos_json = db.Column(db.Text, nullable=False, default='[]')
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @property
+    def departamentos(self) -> list:
+        import json
+        try:
+            return json.loads(self.departamentos_json)
+        except Exception:
+            return []
+
+    @departamentos.setter
+    def departamentos(self, value: list):
+        import json
+        self.departamentos_json = json.dumps(value, ensure_ascii=False)
+
+    def __repr__(self):
+        return f'<GrupoDepartamento {self.nome}>'

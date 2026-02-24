@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+{% block title %}Grupos de Unidades{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0 fw-bold">
+        <i class="fas fa-layer-group me-2 text-primary"></i>Grupos de Unidades
+    </h1>
+    <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left me-1"></i>Voltar
+    </a>
+</div>
+
+<div class="alert alert-info alert-sm py-2 small mb-4">
+    <i class="fas fa-info-circle me-2"></i>
+    Grupos permitem selecionar múltiplas unidades de uma só vez nos filtros de calendário,
+    heatmap e alocação. Ex: <strong>Praia do Canto</strong> exibe funcionários de
+    <em>PRAIA FITNESS</em> e <em>FUNCIONAL DA PRAIA</em> juntos.
+</div>
+
+<div class="row g-4">
+    <!-- Lista de grupos -->
+    <div class="col-lg-7">
+        {% for g in grupos %}
+        <div class="card p-4 mb-3">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                    <h6 class="fw-bold mb-1">
+                        <i class="fas fa-layer-group me-2 text-primary"></i>{{ g.nome }}
+                    </h6>
+                    <div class="d-flex gap-1 flex-wrap">
+                        {% for d in g.departamentos %}
+                        <span class="badge bg-secondary">{{ d }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-primary"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#editGrupo{{ g.id }}">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <form method="POST" action="{{ url_for('escalas.grupo_excluir', grupo_id=g.id) }}"
+                          onsubmit="return confirm('Excluir grupo {{ g.nome }}?')">
+                        <button class="btn btn-sm btn-outline-danger">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Form de edição (colapsável) -->
+            <div class="collapse" id="editGrupo{{ g.id }}">
+                <hr>
+                <form method="POST" action="{{ url_for('escalas.grupo_editar', grupo_id=g.id) }}">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">NOME DO GRUPO</label>
+                        <input type="text" name="nome" class="form-control form-control-sm"
+                               value="{{ g.nome }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">UNIDADES INCLUÍDAS</label>
+                        <div class="border rounded p-2">
+                            {% for d in depts %}
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox"
+                                       name="departamentos" value="{{ d }}"
+                                       id="edit{{ g.id }}_{{ loop.index }}"
+                                       {{ 'checked' if d in g.departamentos }}>
+                                <label class="form-check-label small" for="edit{{ g.id }}_{{ loop.index }}">
+                                    {{ d }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-save me-1"></i>Salvar
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        <div class="card p-4 text-muted text-center">
+            Nenhum grupo cadastrado. Crie um grupo ao lado.
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Formulário novo grupo -->
+    <div class="col-lg-5">
+        <div class="card p-4">
+            <h6 class="fw-bold text-muted mb-3 text-uppercase">Novo Grupo</h6>
+            <form method="POST" action="{{ url_for('escalas.grupo_novo') }}">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">NOME DO GRUPO</label>
+                    <input type="text" name="nome" class="form-control form-control-sm"
+                           placeholder="Ex: Praia do Canto, Smart Fit ES" required>
+                    <div class="form-text">Este nome aparecerá nos filtros de calendário e heatmap.</div>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label small fw-bold">UNIDADES INCLUÍDAS</label>
+                    <div class="border rounded p-3">
+                        {% for d in depts %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox"
+                                   name="departamentos" value="{{ d }}"
+                                   id="novo_{{ loop.index }}">
+                            <label class="form-check-label small" for="novo_{{ loop.index }}">
+                                {{ d }}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm w-100">
+                    <i class="fas fa-plus me-1"></i>Criar Grupo
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

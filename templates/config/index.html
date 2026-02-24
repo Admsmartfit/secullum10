@@ -46,6 +46,12 @@
             <i class="fas fa-cloud-download-alt me-1"></i> Importar Escalas Secullum
         </button>
     </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-sync"
+                id="btnTabSync">
+            <i class="fas fa-sync-alt me-1"></i> Sync Automático
+        </button>
+    </li>
 </ul>
 
 <div class="tab-content" id="configTabContent">
@@ -364,6 +370,135 @@
         </div>
     </div>
 
+    <!-- ══ TAB SYNC AUTOMÁTICO ═══════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-sync">
+        <h5 class="mb-1"><i class="fas fa-sync-alt me-2 text-accent"></i>Sync Automático de Batidas</h5>
+        <p class="text-muted small mb-4">
+            Configure a frequência com que o sistema busca novas batidas na API Secullum.
+            As tarefas rodam em background via Celery Beat.
+        </p>
+
+        <form method="POST" action="{{ url_for('config_hub.sync_batidas_salvar') }}">
+        <div class="row g-4">
+
+            <!-- Sync Rápida -->
+            <div class="col-lg-6">
+                <div class="card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold mb-0">
+                            <i class="fas fa-bolt text-warning me-2"></i>Sync Incremental (Rápida)
+                        </h6>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" name="rapida_ativo"
+                                   id="rapida_ativo" value="1"
+                                   {{ 'checked' if sync_cfg.rapida_ativo }}>
+                            <label class="form-check-label small" for="rapida_ativo">Ativo</label>
+                        </div>
+                    </div>
+                    <p class="text-muted small mb-3">
+                        Busca batidas desde a última sincronização até agora.
+                        Ideal para manter os registros atualizados em tempo quase real.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">INTERVALO (minutos)</label>
+                        <input type="number" name="rapida_intervalo_min"
+                               class="form-control form-control-sm"
+                               value="{{ sync_cfg.rapida_intervalo_min }}"
+                               min="1" max="1440" required>
+                        <div class="form-text">Padrão: 10 min. Mínimo: 1 min.</div>
+                    </div>
+                    {% if sync_cfg.rapida_ultimo_run %}
+                    <div class="small text-muted">
+                        <i class="fas fa-clock me-1"></i>
+                        Última execução: <strong>{{ sync_cfg.rapida_ultimo_run[:19].replace('T',' ') }}</strong>
+                    </div>
+                    {% else %}
+                    <div class="small text-muted"><i class="fas fa-clock me-1"></i>Ainda não executado.</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Sync Completa -->
+            <div class="col-lg-6">
+                <div class="card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold mb-0">
+                            <i class="fas fa-history text-primary me-2"></i>Sync Completo (Janela)
+                        </h6>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" name="completa_ativo"
+                                   id="completa_ativo" value="1"
+                                   {{ 'checked' if sync_cfg.completa_ativo }}>
+                            <label class="form-check-label small" for="completa_ativo">Ativo</label>
+                        </div>
+                    </div>
+                    <p class="text-muted small mb-3">
+                        Re-busca todas as batidas de uma janela de horas para garantir
+                        que nada ficou pendente (ideal para pegar atrasos da API).
+                    </p>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">INTERVALO (minutos)</label>
+                            <input type="number" name="completa_intervalo_min"
+                                   class="form-control form-control-sm"
+                                   value="{{ sync_cfg.completa_intervalo_min }}"
+                                   min="1" max="1440" required>
+                            <div class="form-text">Padrão: 60 min.</div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">JANELA (horas atrás)</label>
+                            <input type="number" name="completa_janela_horas"
+                                   class="form-control form-control-sm"
+                                   value="{{ sync_cfg.completa_janela_horas }}"
+                                   min="1" max="168" required>
+                            <div class="form-text">Padrão: 12 h.</div>
+                        </div>
+                    </div>
+                    {% if sync_cfg.completa_ultimo_run %}
+                    <div class="small text-muted">
+                        <i class="fas fa-clock me-1"></i>
+                        Última execução: <strong>{{ sync_cfg.completa_ultimo_run[:19].replace('T',' ') }}</strong>
+                    </div>
+                    {% else %}
+                    <div class="small text-muted"><i class="fas fa-clock me-1"></i>Ainda não executado.</div>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary me-2">
+                <i class="fas fa-save me-1"></i>Salvar Configurações
+            </button>
+        </div>
+        </form>
+
+        <!-- Execução Manual -->
+        <hr class="my-4">
+        <h6 class="fw-bold mb-3"><i class="fas fa-play-circle me-2 text-success"></i>Executar Manualmente</h6>
+        <div class="d-flex gap-3 flex-wrap">
+            <form method="POST" action="{{ url_for('config_hub.sync_batidas_executar') }}">
+                <input type="hidden" name="tipo" value="rapida">
+                <button class="btn btn-outline-warning btn-sm">
+                    <i class="fas fa-bolt me-1"></i>Executar Sync Incremental agora
+                </button>
+            </form>
+            <form method="POST" action="{{ url_for('config_hub.sync_batidas_executar') }}">
+                <input type="hidden" name="tipo" value="completa">
+                <button class="btn btn-outline-primary btn-sm">
+                    <i class="fas fa-history me-1"></i>Executar Sync Completo agora
+                </button>
+            </form>
+        </div>
+
+        <div class="alert alert-success small mt-4 py-2">
+            <i class="fas fa-check-circle me-2"></i>
+            O sync roda <strong>automaticamente junto com o servidor Flask</strong> — não precisa de Celery.
+            O scheduler verifica a cada 1 min (rápida) e a cada 5 min (completa) se o intervalo configurado foi atingido.
+        </div>
+    </div>
+
 </div><!-- /tab-content -->
 
 <!-- Modal Edição de Usuário -->
@@ -409,6 +544,7 @@
             </div>
         </div>
     </div>
+
 </div>
 {% endblock %}
 
@@ -430,7 +566,7 @@ function abrirEdicao(id, nome, email, nivel, ativo) {
 (function() {
     const hash = window.location.hash;
     if (hash) {
-        const tabMap = {'#usuarios':'tab-usuarios','#unidades':'tab-unidades','#whatsapp':'tab-whatsapp','#escalas':'tab-escalas'};
+        const tabMap = {'#usuarios':'tab-usuarios','#unidades':'tab-unidades','#whatsapp':'tab-whatsapp','#escalas':'tab-escalas','#tab-sync':'tab-sync','#sync':'tab-sync'};
         const target = tabMap[hash];
         if (target) {
             document.querySelector(`[data-bs-target="#${target}"]`).click();

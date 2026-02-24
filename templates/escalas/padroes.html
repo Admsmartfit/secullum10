@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+{% block title %}Padrões de Revezamento{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0 fw-bold">
+        <i class="fas fa-rotate me-2 text-primary"></i>Padrões de Revezamento
+    </h1>
+    <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-list me-1"></i>Turnos
+    </a>
+</div>
+
+<div class="row g-4">
+    <!-- Lista de padrões -->
+    <div class="col-lg-7">
+        <div class="card p-4">
+            <h6 class="fw-bold text-muted mb-3 text-uppercase">Padrões Cadastrados</h6>
+
+            {% if padroes %}
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nome</th>
+                            <th>Ciclo</th>
+                            <th>Turno Padrão</th>
+                            <th>Unidade</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for p in padroes %}
+                    <tr>
+                        <td class="fw-semibold">{{ p.nome }}</td>
+                        <td>
+                            <span class="badge bg-primary">{{ p.dias_trabalho }}×ON</span>
+                            <span class="badge bg-secondary">{{ p.dias_folga }}×OFF</span>
+                        </td>
+                        <td class="text-muted small">
+                            {% if p.turno %}
+                                {{ p.turno.nome }}
+                                <span class="ms-1" style="color:{{ p.turno.color or '#4f46e5' }}">●</span>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="text-muted small">{{ p.departamento or 'Global' }}</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-primary"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#modalAplicar"
+                                    data-padrao-id="{{ p.id }}"
+                                    data-padrao-nome="{{ p.nome }}"
+                                    data-turno-id="{{ p.turno_id or '' }}">
+                                <i class="fas fa-play me-1"></i>Aplicar
+                            </button>
+                            <form method="POST" action="{{ url_for('escalas.padrao_excluir', padrao_id=p.id) }}"
+                                  class="d-inline"
+                                  onsubmit="return confirm('Excluir padrão {{ p.nome }}?')">
+                                <button class="btn btn-sm btn-outline-danger">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-muted text-center py-4">
+                Nenhum padrão cadastrado. Crie um ao lado.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Form criação -->
+    <div class="col-lg-5">
+        <div class="card p-4">
+            <h6 class="fw-bold text-muted mb-3 text-uppercase">Novo Padrão</h6>
+            <form method="POST" action="{{ url_for('escalas.padrao_novo') }}">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">NOME</label>
+                    <input type="text" name="nome" class="form-control form-control-sm"
+                           placeholder="Ex: 6x1, 5x2 Fixo Dom" required>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">DIAS TRABALHADOS</label>
+                        <input type="number" name="dias_trabalho" class="form-control form-control-sm"
+                               value="5" min="1" max="30" required>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">DIAS DE FOLGA</label>
+                        <input type="number" name="dias_folga" class="form-control form-control-sm"
+                               value="2" min="1" max="30" required>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">TURNO PADRÃO (opcional)</label>
+                    <select name="turno_id" class="form-select form-select-sm">
+                        <option value="">Selecione...</option>
+                        {% for t in turnos %}
+                        <option value="{{ t.id }}">{{ t.nome }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Pode ser sobrescrito na hora de aplicar.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">UNIDADE / DEPARTAMENTO</label>
+                    <input list="depts-list" name="departamento" class="form-control form-control-sm"
+                           placeholder="Deixar vazio = global">
+                    <datalist id="depts-list">
+                        {% for d in departamentos %}<option value="{{ d }}">{% endfor %}
+                    </datalist>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">DESCRIÇÃO</label>
+                    <textarea name="descricao" class="form-control form-control-sm" rows="2"
+                              placeholder="Ex: Segunda a sábado com folga rotativa no domingo"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm w-100">
+                    <i class="fas fa-plus me-1"></i>Criar Padrão
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Aplicar -->
+<div class="modal fade" id="modalAplicar" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h6 class="modal-title fw-bold">Aplicar Padrão</h6>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formAplicar" method="POST">
+                <div class="modal-body">
+                    <p class="text-muted small mb-3">
+                        Padrão: <strong id="apNome"></strong>
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">FUNCIONÁRIO</label>
+                        <select name="funcionario_id" id="apFunc" class="form-select" required>
+                            <option value="">Selecione...</option>
+                            {% for f in funcionarios %}
+                            <option value="{{ f.id }}">{{ f.nome }} – {{ f.departamento or 'S/D' }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">DATA INÍCIO</label>
+                            <input type="date" name="data_inicio" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">DATA FIM</label>
+                            <input type="date" name="data_fim" class="form-control form-control-sm" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">TURNO A APLICAR</label>
+                        <select name="turno_id" id="apTurno" class="form-select form-select-sm" required>
+                            <option value="">Selecione...</option>
+                            {% for t in turnos %}
+                            <option value="{{ t.id }}">{{ t.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-check me-1"></i>Aplicar
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Select2 no select de funcionário do modal
+$(function() {
+    $('#apFunc').select2({ placeholder: 'Buscar funcionário...', allowClear: true, width: '100%', dropdownParent: $('#modalAplicar') });
+});
+
+document.getElementById('modalAplicar').addEventListener('show.bs.modal', function(e) {
+    const btn = e.relatedTarget;
+    document.getElementById('apNome').textContent  = btn.dataset.padraoNome;
+    document.getElementById('formAplicar').action =
+        `/escalas/padroes/${btn.dataset.padraoId}/aplicar`;
+    // Pré-selecionar turno padrão se existir
+    const turnoId = btn.dataset.turnoId;
+    if (turnoId) document.getElementById('apTurno').value = turnoId;
+});
+</script>
+{% endblock %}

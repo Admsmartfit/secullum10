@@ -7,22 +7,40 @@
     <h1 class="h3 mb-0 font-weight-bold">Relatórios de Ponto</h1>
 </div>
 
-<!-- Filtros de Data -->
+<!-- Filtros -->
 <div class="card p-4 mb-4">
-    <form method="GET" action="/relatorios" class="row g-3">
-        <div class="col-md-4">
-            <label for="data_inicio" class="form-label text-muted small fw-bold">Data Início</label>
-            <input type="date" class="form-control bg-dark text-white border-secondary"
+    <form method="GET" action="/relatorios" class="row g-3" id="formFiltros">
+        <div class="col-md-2">
+            <label class="form-label text-muted small fw-bold">DATA INÍCIO</label>
+            <input type="date" class="form-control form-control-sm"
                    id="data_inicio" name="data_inicio" value="{{ data_inicio }}">
         </div>
-        <div class="col-md-4">
-            <label for="data_fim" class="form-label text-muted small fw-bold">Data Fim</label>
-            <input type="date" class="form-control bg-dark text-white border-secondary"
+        <div class="col-md-2">
+            <label class="form-label text-muted small fw-bold">DATA FIM</label>
+            <input type="date" class="form-control form-control-sm"
                    id="data_fim" name="data_fim" value="{{ data_fim }}">
         </div>
-        <div class="col-md-4 d-flex align-items-end">
-            <button type="submit" class="btn btn-primary w-100">
-                <i class="fas fa-filter me-2"></i> Filtrar
+        <div class="col-md-3">
+            <label class="form-label text-muted small fw-bold">DEPARTAMENTO</label>
+            <select name="dept" class="form-select form-select-sm">
+                <option value="">Todos</option>
+                {% for d in departamentos %}
+                <option value="{{ d }}" {{ 'selected' if d == dept_sel }}>{{ d }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label text-muted small fw-bold">FUNCIONÁRIO</label>
+            <select name="func_id" id="selFunc" class="form-select form-select-sm">
+                <option value="">Todos</option>
+                {% for f in funcionarios %}
+                <option value="{{ f.id }}" {{ 'selected' if f.id == func_sel }}>{{ f.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary btn-sm w-100">
+                <i class="fas fa-filter me-1"></i>Filtrar
             </button>
         </div>
     </form>
@@ -141,24 +159,54 @@
     </div>
 </div>
 
-<!-- Ações de Exportação -->
+<!-- Exportação -->
 <div class="card p-4 mt-4">
-    <h5 class="mb-3"><i class="fas fa-download me-2"></i> Exportar Relatórios</h5>
+    <h5 class="mb-3"><i class="fas fa-download me-2"></i>Exportar</h5>
     <div class="row g-3">
-        <div class="col-md-6">
+        <div class="col-md-4">
+            <a id="btnExportarPontos" href="#"
+               class="btn btn-success w-100">
+                <i class="fas fa-file-excel me-2"></i>Baixar Todos os Pontos (.xlsx)
+            </a>
+            <div class="form-text mt-1">Exporta todas as batidas do período e filtros acima.</div>
+        </div>
+        <div class="col-md-4">
             <a href="/espelho?data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&export=true"
-               class="btn btn-outline-light w-100">
-                <i class="fas fa-file-excel me-2"></i> Exportar Espelho de Ponto (Excel)
+               class="btn btn-outline-secondary w-100">
+                <i class="fas fa-file-excel me-2"></i>Espelho de Ponto (Excel)
             </a>
         </div>
-        <div class="col-md-6">
-            <button class="btn btn-outline-light w-100" onclick="window.print()">
-                <i class="fas fa-print me-2"></i> Imprimir Relatório
+        <div class="col-md-4">
+            <button class="btn btn-outline-secondary w-100" onclick="window.print()">
+                <i class="fas fa-print me-2"></i>Imprimir Relatório
             </button>
         </div>
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Select2 no filtro de funcionário
+$(function() {
+    $('#selFunc').select2({ placeholder: 'Todos os funcionários', allowClear: true, width: '100%' });
+});
+
+// Mantém o href do botão exportar sincronizado com os filtros da página atual
+function atualizarLinkExport() {
+    const ini  = document.getElementById('data_inicio').value;
+    const fim  = document.getElementById('data_fim').value;
+    const dept = document.querySelector('[name="dept"]').value;
+    const func = document.getElementById('selFunc').value || '';
+    const url = `/relatorios/exportar-pontos?data_inicio=${ini}&data_fim=${fim}&dept=${encodeURIComponent(dept)}&func_id=${func}`;
+    document.getElementById('btnExportarPontos').href = url;
+}
+
+// Atualiza ao carregar e a cada mudança de filtro
+document.addEventListener('DOMContentLoaded', atualizarLinkExport);
+document.getElementById('formFiltros').addEventListener('change', atualizarLinkExport);
+</script>
 {% endblock %}
 
 {% block extra_css %}

@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
 from extensions import db
-from models import Usuario, Funcionario, UnidadeLider, AlocacaoDiaria, Turno
+from models import Usuario, Funcionario, UnidadeLider, AlocacaoDiaria, Turno, Configuracao
 
 config_hub_bp = Blueprint('config_hub', __name__, url_prefix='/config')
 
@@ -57,6 +57,21 @@ def index():
     )
     todos_func = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
     import os
+
+    def _cfg(chave, default=''):
+        row = Configuracao.query.filter_by(chave=chave).first()
+        return row.valor if row and row.valor is not None else default
+
+    sync_cfg = {
+        'rapida_ativo':           _cfg('sync_rapida_ativo', '1') == '1',
+        'rapida_intervalo_min':   _cfg('sync_rapida_intervalo_min', '10'),
+        'completa_ativo':         _cfg('sync_completa_ativo', '1') == '1',
+        'completa_intervalo_min': _cfg('sync_completa_intervalo_min', '60'),
+        'completa_janela_horas':  _cfg('sync_completa_janela_horas', '12'),
+        'rapida_ultimo_run':      _cfg('sync_rapida_ultimo_run', ''),
+        'completa_ultimo_run':    _cfg('sync_completa_ultimo_run', ''),
+    }
+
     return render_template(
         'config/index.html',
         usuarios=usuarios,
@@ -68,6 +83,7 @@ def index():
         fim30=(hoje + timedelta(days=30)).strftime('%Y-%m-%d'),
         megaapi_token=bool(os.getenv('MEGAAPI_TOKEN')),
         megaapi_instance=bool(os.getenv('MEGAAPI_INSTANCE')),
+        sync_cfg=sync_cfg,
     )
 
 
@@ -366,3 +382,74 @@ def escalas_importar():
         'alocacoes_criadas': alocacoes_criadas,
         'erros': erros,
     })
+
+
+# ── Sync Automático de Batidas ────────────────────────────────────────────────
+
+def _salvar_cfg(chave, valor):
+    row = Configuracao.query.filter_by(chave=chave).first()
+    if row:
+        row.valor = str(valor)
+    else:
+        db.session.add(Configuracao(chave=chave, valor=str(valor)))
+
+
+@config_hub_bp.route('/sync-batidas/salvar', methods=['POST'])
+@login_required
+@_somente_gestor
+def sync_batidas_salvar():
+    """Salva parâmetros do sync automático de batidas."""
+    rapida_ativo           = '1' if request.form.get('rapida_ativo') else '0'
+    rapida_intervalo_min   = request.form.get('rapida_intervalo_min', '10').strip()
+    completa_ativo         = '1' if request.form.get('completa_ativo') else '0'
+    completa_intervalo_min = request.form.get('completa_intervalo_min', '60').strip()
+    completa_janela_horas  = request.form.get('completa_janela_horas', '12').strip()
+
+    try:
+        assert 1 <= int(rapida_intervalo_min) <= 1440
+        assert 1 <= int(completa_intervalo_min) <= 1440
+        assert 1 <= int(completa_janela_horas) <= 168
+    except (ValueError, AssertionError):
+        flash('Valores inválidos. Verifique os intervalos informados.', 'danger')
+        return redirect(url_for('config_hub.index') + '#tab-sync')
+
+    _salvar_cfg('sync_rapida_ativo',           rapida_ativo)
+    _salvar_cfg('sync_rapida_intervalo_min',   rapida_intervalo_min)
+    _salvar_cfg('sync_completa_ativo',         completa_ativo)
+    _salvar_cfg('sync_completa_intervalo_min', completa_intervalo_min)
+    _salvar_cfg('sync_completa_janela_horas',  completa_janela_horas)
+    db.session.commit()
+
+    flash('Configurações de sync automático salvas com sucesso.', 'success')
+    return redirect(url_for('config_hub.index') + '#tab-sync')
+
+
+@config_hub_bp.route('/sync-batidas/executar', methods=['POST'])
+@login_required
+@_somente_gestor
+def sync_batidas_executar():
+    """Executa manualmente o sync de batidas (incremental ou completo)."""
+    tipo = request.form.get('tipo', 'rapida')
+    if tipo == 'completa':
+        from tasks import _get_cfg
+        from datetime import datetime, timedelta
+        from services.sync_service import sync_batidas
+        janela = int(_get_cfg('sync_completa_janela_horas', '12'))
+        agora = datetime.now()
+        ok, msg = sync_batidas(
+            (agora - timedelta(hours=janela)).strftime('%Y-%m-%d'),
+            agora.strftime('%Y-%m-%d'),
+            (agora - timedelta(hours=janela)).strftime('%H:%M'),
+            agora.strftime('%H:%M'),
+        )
+        _salvar_cfg('sync_completa_ultimo_run', agora.isoformat())
+        db.session.commit()
+    else:
+        from services.sync_service import sync_batidas_incremental
+        from datetime import datetime
+        ok, msg = sync_batidas_incremental()
+        _salvar_cfg('sync_rapida_ultimo_run', datetime.now().isoformat())
+        db.session.commit()
+
+    flash(f'Sync {"concluído" if ok else "com erro"}: {msg}', 'success' if ok else 'danger')
+    return redirect(url_for('config_hub.index') + '#tab-sync')

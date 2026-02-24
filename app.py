@@ -90,6 +90,14 @@ def create_app():
             'task': 'tasks.sync_horarios_e_alocacoes',
             'schedule': crontab(hour=2, minute=0),  # 02:00 – gera alocações dos próximos 60 dias
         },
+        'sync-batidas-rapida': {
+            'task': 'tasks.sync_batidas_rapida',
+            'schedule': crontab(minute='*'),  # verifica a cada minuto, self-limita por config
+        },
+        'sync-batidas-completa': {
+            'task': 'tasks.sync_batidas_completa',
+            'schedule': crontab(minute='*/5'),  # verifica a cada 5 min, self-limita por config
+        },
     }
     celery.conf.timezone = 'America/Sao_Paulo'
     app.extensions['celery'] = celery
@@ -134,6 +142,10 @@ def create_app():
     with app.app_context():
         import models  # noqa: garante que os models estão registrados
         db.create_all()
+
+    # ── Auto-sync de batidas (APScheduler – roda no mesmo processo) ───────────
+    from services.auto_sync import init_scheduler
+    init_scheduler(app)
 
     return app
 

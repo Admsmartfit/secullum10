@@ -3,7 +3,7 @@ import json
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from extensions import db
-from models import Turno, AlocacaoDiaria, Funcionario, Batida
+from models import Turno, AlocacaoDiaria, Funcionario, Batida, PadraoTurno, GrupoDepartamento
 from services.motor_clt import validar_alocacao
 
 escalas_bp = Blueprint('escalas', __name__, url_prefix='/escalas')
@@ -266,8 +266,7 @@ def eventos():
         .join(Funcionario)
         .filter(Funcionario.ativo == True)
     )
-    if dept:
-        q = q.filter(Funcionario.departamento == dept)
+    q = _filtrar_dept(q, dept)
     if funcao:
         q = q.filter(Funcionario.funcao == funcao)
     if func_id:
@@ -351,7 +350,7 @@ def resources():
     dept    = request.args.get('dept', '').strip()
     func_id = request.args.get('func_id', '').strip()
     q = Funcionario.query.filter_by(ativo=True)
-    if dept:    q = q.filter(Funcionario.departamento == dept)
+    q = _filtrar_dept(q, dept)
     if func_id: q = q.filter(Funcionario.id == func_id)
     funcs = q.order_by(Funcionario.departamento, Funcionario.nome).all()
     return jsonify([{
@@ -483,7 +482,7 @@ def gantt_dados():
         .join(Funcionario)
         .filter(Funcionario.ativo == True)
     )
-    if dept:    q = q.filter(Funcionario.departamento == dept)
+    q = _filtrar_dept(q, dept)
     if func_id: q = q.filter(AlocacaoDiaria.funcionario_id == func_id)
     alocacoes = q.order_by(Funcionario.nome).all()
 
@@ -517,7 +516,7 @@ _DIAS_PT = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Doming
 
 
 def _departamentos():
-    """Lista de departamentos distintos dos funcionários ativos."""
+    """Lista de departamentos individuais + grupos (para dropdowns em todo o sistema)."""
     rows = (
         db.session.query(Funcionario.departamento)
         .filter(Funcionario.ativo == True, Funcionario.departamento.isnot(None))
@@ -525,7 +524,34 @@ def _departamentos():
         .order_by(Funcionario.departamento)
         .all()
     )
-    return [r[0] for r in rows]
+    depts = [r[0] for r in rows]
+    grupos = [g.nome for g in GrupoDepartamento.query.order_by(GrupoDepartamento.nome).all()]
+    # Grupos primeiro, depois departamentos individuais
+    return grupos + depts
+
+
+def _resolver_depts(dept_str: str) -> list:
+    """Converte um nome de departamento OU grupo em lista de departamentos reais.
+    Ex: 'Praia do Canto' → ['PRAIA FITNESS', 'FUNCIONAL DA PRAIA']
+        'PRAIA FITNESS'  → ['PRAIA FITNESS']
+        ''               → []   (sem filtro)
+    """
+    if not dept_str:
+        return []
+    grupo = GrupoDepartamento.query.filter_by(nome=dept_str).first()
+    if grupo:
+        return grupo.departamentos
+    return [dept_str]
+
+
+def _filtrar_dept(q, dept_str: str):
+    """Aplica filtro de departamento a uma query de Funcionario, suportando grupos."""
+    depts = _resolver_depts(dept_str)
+    if not depts:
+        return q
+    if len(depts) == 1:
+        return q.filter(Funcionario.departamento == depts[0])
+    return q.filter(Funcionario.departamento.in_(depts))
 
 
 def _funcoes(departamento=None):
@@ -535,7 +561,11 @@ def _funcoes(departamento=None):
         .filter(Funcionario.ativo == True, Funcionario.funcao.isnot(None))
     )
     if departamento:
-        q = q.filter(Funcionario.departamento == departamento)
+        depts = _resolver_depts(departamento)
+        if len(depts) == 1:
+            q = q.filter(Funcionario.departamento == depts[0])
+        elif depts:
+            q = q.filter(Funcionario.departamento.in_(depts))
     return [r[0] for r in q.distinct().order_by(Funcionario.funcao).all()]
 
 
@@ -572,8 +602,7 @@ def cargo_mensal():
 
         # Funcionários que batem nos critérios
         q = Funcionario.query.filter_by(ativo=True)
-        if departamento:
-            q = q.filter(Funcionario.departamento == departamento)
+        q = _filtrar_dept(q, departamento)
         if funcao:
             q = q.filter(Funcionario.funcao == funcao)
         funcionarios = q.all()
@@ -630,7 +659,7 @@ def cargo_mensal_preview():
     dept   = request.args.get('dept', '').strip()
     funcao = request.args.get('funcao', '').strip()
     q = Funcionario.query.filter_by(ativo=True)
-    if dept:   q = q.filter(Funcionario.departamento == dept)
+    q = _filtrar_dept(q, dept)
     if funcao: q = q.filter(Funcionario.funcao == funcao)
     funcionarios = q.order_by(Funcionario.nome).all()
     return jsonify([{
@@ -683,3 +712,324 @@ def proximos_turnos(func_id):
             'fim':    a.turno.hora_fim.strftime('%H:%M'),
         } for a in alocacoes],
     })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Etapa 2 – Heatmap de Cobertura
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@escalas_bp.route('/cobertura')
+@login_required
+def cobertura():
+    """Matriz de cobertura mensal: funcionários × dias, rodapé = contagem/função."""
+    mes_ano  = request.args.get('mes_ano', date.today().strftime('%Y-%m'))
+    dept_sel = request.args.get('dept', '')
+    func_sel = request.args.get('funcao', '')
+    return render_template(
+        'escalas/cobertura.html',
+        mes_ano=mes_ano,
+        dept_sel=dept_sel,
+        func_sel=func_sel,
+        departamentos=_departamentos(),
+        funcoes=_funcoes(dept_sel or None),
+    )
+
+
+@escalas_bp.route('/cobertura/dados')
+@login_required
+def cobertura_dados():
+    """AJAX: retorna matriz de cobertura para o mês/filtros solicitados."""
+    import calendar as cal_mod
+    mes_ano = request.args.get('mes_ano', date.today().strftime('%Y-%m'))
+    dept    = request.args.get('dept', '').strip()
+    funcao  = request.args.get('funcao', '').strip()
+
+    try:
+        ano, mes = int(mes_ano[:4]), int(mes_ano[5:7])
+    except (ValueError, IndexError):
+        return jsonify({'error': 'mes_ano inválido'}), 400
+
+    _, dias_no_mes = cal_mod.monthrange(ano, mes)
+    data_ini = date(ano, mes, 1)
+    data_fim = date(ano, mes, dias_no_mes)
+
+    # Funcionários filtrados
+    q_func = Funcionario.query.filter_by(ativo=True)
+    q_func = _filtrar_dept(q_func, dept)
+    if funcao: q_func = q_func.filter(Funcionario.funcao == funcao)
+    funcionarios = q_func.order_by(Funcionario.nome).all()
+    func_ids = [f.id for f in funcionarios]
+
+    if not func_ids:
+        return jsonify({'funcionarios': [], 'cobertura': {}, 'dias_no_mes': dias_no_mes, 'ano': ano, 'mes': mes})
+
+    # Alocações do mês
+    alocacoes = (
+        AlocacaoDiaria.query
+        .filter(
+            AlocacaoDiaria.funcionario_id.in_(func_ids),
+            AlocacaoDiaria.data >= data_ini,
+            AlocacaoDiaria.data <= data_fim,
+        )
+        .join(Turno)
+        .all()
+    )
+
+    # Indexar por func_id → dia → turno
+    aloc_map: dict[str, dict[int, dict]] = {}
+    for aloc in alocacoes:
+        d = aloc.data.day
+        aloc_map.setdefault(aloc.funcionario_id, {})[d] = {
+            'turno': aloc.turno.nome,
+            'color': aloc.turno.color or '#4f46e5',
+            'warning': bool(aloc.compliance_warning),
+        }
+
+    # Cobertura por dia (contagem de funcionários escalados)
+    cobertura = {}
+    for d in range(1, dias_no_mes + 1):
+        cobertura[d] = sum(1 for fid in func_ids if d in aloc_map.get(fid, {}))
+
+    # Mapear dias de domingo para highlight
+    domingos = {d for d in range(1, dias_no_mes + 1)
+                if date(ano, mes, d).weekday() == 6}
+
+    resultado_funcs = []
+    for f in funcionarios:
+        dias = {}
+        for d in range(1, dias_no_mes + 1):
+            dias[d] = aloc_map.get(f.id, {}).get(d)  # None se folga
+        resultado_funcs.append({
+            'id':    f.id,
+            'nome':  f.nome,
+            'funcao': f.funcao or '',
+            'dias':  dias,
+        })
+
+    return jsonify({
+        'funcionarios': resultado_funcs,
+        'cobertura':    cobertura,
+        'dias_no_mes':  dias_no_mes,
+        'domingos':     list(domingos),
+        'ano':  ano,
+        'mes':  mes,
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Etapa 3 – Padrões de Revezamento
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@escalas_bp.route('/padroes')
+@login_required
+def padroes():
+    lista = PadraoTurno.query.order_by(PadraoTurno.nome).all()
+    turnos = Turno.query.order_by(Turno.nome).all()
+    return render_template('escalas/padroes.html',
+                           padroes=lista, turnos=turnos,
+                           departamentos=_departamentos(),
+                           funcionarios=Funcionario.query.filter_by(ativo=True)
+                                         .order_by(Funcionario.nome).all())
+
+
+@escalas_bp.route('/padroes/novo', methods=['POST'])
+@login_required
+def padrao_novo():
+    nome     = request.form['nome'].strip()
+    dias_on  = int(request.form.get('dias_trabalho', 5))
+    dias_off = int(request.form.get('dias_folga', 2))
+    turno_id = request.form.get('turno_id') or None
+    dept     = request.form.get('departamento', '').strip() or None
+    descricao = request.form.get('descricao', '').strip() or None
+
+    p = PadraoTurno(nome=nome, dias_trabalho=dias_on, dias_folga=dias_off,
+                    turno_id=turno_id, departamento=dept, descricao=descricao)
+    db.session.add(p)
+    db.session.commit()
+    flash(f'Padrão "{nome}" criado.', 'success')
+    return redirect(url_for('escalas.padroes'))
+
+
+@escalas_bp.route('/padroes/<int:padrao_id>/excluir', methods=['POST'])
+@login_required
+def padrao_excluir(padrao_id):
+    p = PadraoTurno.query.get_or_404(padrao_id)
+    db.session.delete(p)
+    db.session.commit()
+    flash('Padrão excluído.', 'success')
+    return redirect(url_for('escalas.padroes'))
+
+
+@escalas_bp.route('/padroes/<int:padrao_id>/aplicar', methods=['POST'])
+@login_required
+def padrao_aplicar(padrao_id):
+    """Aplica o ciclo do padrão a um funcionário em um intervalo de datas."""
+    p = PadraoTurno.query.get_or_404(padrao_id)
+
+    func_id    = request.form['funcionario_id']
+    data_ini   = date.fromisoformat(request.form['data_inicio'])
+    data_fim   = date.fromisoformat(request.form['data_fim'])
+    turno_id   = int(request.form.get('turno_id') or p.turno_id or 0)
+
+    if not turno_id:
+        flash('Selecione um turno para aplicar o padrão.', 'danger')
+        return redirect(url_for('escalas.padroes'))
+
+    turno = Turno.query.get_or_404(turno_id)
+    ciclo = p.dias_trabalho + p.dias_folga
+    gerados = 0
+    d = data_ini
+    pos = 0  # posição no ciclo
+    while d <= data_fim:
+        if pos < p.dias_trabalho:   # dia de trabalho no ciclo
+            if d.weekday() in turno.dias_semana_list:
+                aloc = AlocacaoDiaria.query.filter_by(
+                    funcionario_id=func_id, data=d).first()
+                if aloc:
+                    aloc.turno_id = turno_id
+                else:
+                    db.session.add(AlocacaoDiaria(
+                        funcionario_id=func_id, turno_id=turno_id, data=d))
+                gerados += 1
+        pos = (pos + 1) % ciclo
+        d += timedelta(days=1)
+
+    db.session.commit()
+    flash(f'Padrão aplicado: {gerados} alocações geradas/atualizadas.', 'success')
+    return redirect(url_for('escalas.padroes'))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Etapa 4 – Auto-Solver & Alertas de Conflito
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@escalas_bp.route('/alertas')
+@login_required
+def alertas():
+    """AJAX: dias descobertos + violações Art. 386 no mês."""
+    from services.solver_escala import alertas_cobertura, violacoes_art386
+    mes_ano = request.args.get('mes_ano', date.today().strftime('%Y-%m'))
+    dept    = request.args.get('dept', '').strip() or None
+    funcao  = request.args.get('funcao', '').strip() or None
+
+    descobertos = alertas_cobertura(mes_ano, dept=dept, funcao=funcao)
+    art386      = violacoes_art386(mes_ano, dept=dept, funcao=funcao)
+    return jsonify({'descobertos': descobertos, 'art386': art386})
+
+
+@escalas_bp.route('/sugerir-cobertura')
+@login_required
+def sugerir_cobertura_view():
+    """AJAX: sugere o melhor substituto para cobrir um dia/função."""
+    from services.solver_escala import sugerir_substituto
+    data_str = request.args.get('data', '')
+    funcao   = request.args.get('funcao', '').strip()
+    dept     = request.args.get('dept', '').strip() or None
+    try:
+        data_ref = date.fromisoformat(data_str)
+    except ValueError:
+        return jsonify({'error': 'data inválida'}), 400
+    sugestao = sugerir_substituto(data_ref, funcao=funcao, dept=dept)
+    return jsonify(sugestao or {'error': 'Nenhum candidato disponível'})
+
+
+@escalas_bp.route('/aplicar-sugestao', methods=['POST'])
+@login_required
+def aplicar_sugestao():
+    """Aplica a sugestão do solver: cria a alocação do substituto."""
+    data = request.get_json(force=True) or {}
+    func_id  = data.get('func_id')
+    turno_id = data.get('turno_id')
+    data_str = data.get('data')
+    try:
+        data_aloc = date.fromisoformat(data_str)
+    except (ValueError, TypeError):
+        return jsonify({'ok': False, 'error': 'data inválida'}), 400
+
+    turno = Turno.query.get_or_404(turno_id)
+    from services.motor_clt import validar_alocacao
+    infracoes = validar_alocacao(func_id, data_aloc, turno)
+    bloqueantes = [i for i in infracoes if i.get('severity', 'error') == 'error']
+    if bloqueantes and not data.get('force'):
+        return jsonify({'ok': False, 'infracoes': bloqueantes}), 422
+
+    aloc = AlocacaoDiaria.query.filter_by(funcionario_id=func_id, data=data_aloc).first()
+    if aloc:
+        aloc.turno_id = turno_id
+    else:
+        db.session.add(AlocacaoDiaria(funcionario_id=func_id, turno_id=turno_id, data=data_aloc))
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Grupos de Departamentos – CRUD
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@escalas_bp.route('/grupos')
+@login_required
+def grupos():
+    """Gerenciar grupos de unidades (ex: Praia do Canto → PRAIA FITNESS + FUNCIONAL)."""
+    lista = GrupoDepartamento.query.order_by(GrupoDepartamento.nome).all()
+    # Departamentos individuais disponíveis
+    rows = (
+        db.session.query(Funcionario.departamento)
+        .filter(Funcionario.ativo == True, Funcionario.departamento.isnot(None))
+        .distinct()
+        .order_by(Funcionario.departamento)
+        .all()
+    )
+    depts_individuais = [r[0] for r in rows]
+    return render_template('escalas/grupos.html',
+                           grupos=lista, depts=depts_individuais)
+
+
+@escalas_bp.route('/grupos/novo', methods=['POST'])
+@login_required
+def grupo_novo():
+    nome  = request.form.get('nome', '').strip()
+    depts = request.form.getlist('departamentos')
+    if not nome or not depts:
+        flash('Informe nome e ao menos um departamento.', 'danger')
+        return redirect(url_for('escalas.grupos'))
+    if GrupoDepartamento.query.filter_by(nome=nome).first():
+        flash(f'Grupo "{nome}" já existe.', 'warning')
+        return redirect(url_for('escalas.grupos'))
+    g = GrupoDepartamento(nome=nome)
+    g.departamentos = depts
+    db.session.add(g)
+    db.session.commit()
+    flash(f'Grupo "{nome}" criado com {len(depts)} unidade(s).', 'success')
+    return redirect(url_for('escalas.grupos'))
+
+
+@escalas_bp.route('/grupos/<int:grupo_id>/editar', methods=['POST'])
+@login_required
+def grupo_editar(grupo_id):
+    g = GrupoDepartamento.query.get_or_404(grupo_id)
+    g.nome = request.form.get('nome', g.nome).strip()
+    g.departamentos = request.form.getlist('departamentos')
+    db.session.commit()
+    flash(f'Grupo "{g.nome}" atualizado.', 'success')
+    return redirect(url_for('escalas.grupos'))
+
+
+@escalas_bp.route('/grupos/<int:grupo_id>/excluir', methods=['POST'])
+@login_required
+def grupo_excluir(grupo_id):
+    g = GrupoDepartamento.query.get_or_404(grupo_id)
+    db.session.delete(g)
+    db.session.commit()
+    flash('Grupo excluído.', 'success')
+    return redirect(url_for('escalas.grupos'))
+
+
+@escalas_bp.route('/grupos/api')
+@login_required
+def grupos_api():
+    """AJAX: retorna todos os grupos com seus departamentos (para uso em outros formulários)."""
+    grupos = GrupoDepartamento.query.order_by(GrupoDepartamento.nome).all()
+    return jsonify([{
+        'nome': g.nome,
+        'departamentos': g.departamentos,
+    } for g in grupos])
