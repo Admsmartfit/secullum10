@@ -1,0 +1,575 @@
+{% extends 'base.html' %}
+{% block title %}Inconsistências de Batidas{% endblock %}
+
+{% block extra_css %}
+<style>
+.filtros-card   { background: var(--card-bg); border: 1px solid rgba(255,255,255,0.08); border-radius: 1rem; padding: 1.25rem; margin-bottom: 1.5rem; }
+.inc-card       { background: var(--card-bg); border: 1px solid rgba(255,255,255,0.08); border-radius: 0.75rem; margin-bottom: 1rem; overflow: hidden; }
+.inc-header     { padding: 0.75rem 1rem; display: flex; gap: 1rem; align-items: center; cursor: pointer; user-select: none; }
+.inc-header:hover { background: rgba(255,255,255,0.03); }
+.inc-body       { padding: 0.75rem 1rem 1rem; border-top: 1px solid rgba(255,255,255,0.06); }
+.batida-row     { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; border-radius: 0.4rem; margin-bottom: 0.25rem; background: rgba(255,255,255,0.03); }
+.batida-hora    { font-family: monospace; font-size: 1rem; font-weight: 600; min-width: 52px; }
+.badge-entrada  { background: rgba(34,197,94,0.15); color: #4ade80; }
+.badge-saida    { background: rgba(239,68,68,0.15);  color: #f87171; }
+.badge-orig     { background: rgba(148,163,184,0.1); color: var(--text-muted); font-size: 0.7rem; }
+.prob-badge     { font-size: 0.75rem; padding: 0.2rem 0.55rem; border-radius: 2rem; }
+.prob-danger    { background: rgba(239,68,68,0.15);   color: #f87171; }
+.prob-warning   { background: rgba(251,191,36,0.15);  color: #fbbf24; }
+.prob-info      { background: rgba(96,165,250,0.15);  color: #60a5fa; }
+.resumo-bar     { display: flex; gap: 1.5rem; padding: 0.75rem 1rem; background: rgba(255,255,255,0.02); border-radius: 0.75rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+.resumo-item    { display: flex; flex-direction: column; }
+.resumo-val     { font-size: 1.5rem; font-weight: 700; color: var(--accent-color); }
+.resumo-label   { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+.spinner-wrap   { text-align: center; padding: 2rem; color: var(--text-muted); }
+#listaResultados { max-height: 72vh; overflow-y: auto; padding-right: 2px; }
+.form-control, .form-select { background: #0f172a; border-color: rgba(255,255,255,0.15); color: var(--text-main); }
+.form-control:focus, .form-select:focus { background: #0f172a; border-color: var(--accent-color); box-shadow: none; color: var(--text-main); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0"><i class="fas fa-exclamation-triangle me-2 text-warning"></i>Inconsistências de Batidas</h1>
+</div>
+
+<!-- Filtros -->
+<div class="filtros-card">
+    <div class="row g-3 align-items-end">
+        <div class="col-sm-6 col-md-2">
+            <label class="form-label small fw-bold">DATA INÍCIO</label>
+            <input type="date" id="fDataInicio" class="form-control form-control-sm" value="{{ ontem }}">
+        </div>
+        <div class="col-sm-6 col-md-2">
+            <label class="form-label small fw-bold">DATA FIM</label>
+            <input type="date" id="fDataFim" class="form-control form-control-sm" value="{{ hoje }}">
+        </div>
+        <div class="col-sm-6 col-md-3">
+            <label class="form-label small fw-bold">DEPARTAMENTO</label>
+            <select id="fDept" class="form-select form-select-sm">
+                <option value="">Todos</option>
+                {% for d in departamentos %}
+                <option value="{{ d }}">{{ d }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-sm-6 col-md-3">
+            <label class="form-label small fw-bold">FUNCIONÁRIO</label>
+            <select id="fFunc" class="form-select form-select-sm">
+                <option value="">Todos</option>
+                {% for f in todos_func %}
+                <option value="{{ f.id }}" data-dept="{{ f.departamento }}">{{ f.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+            <button class="btn btn-primary btn-sm flex-fill" onclick="analisar()">
+                <i class="fas fa-search me-1"></i>Analisar
+            </button>
+            <button class="btn btn-outline-warning btn-sm flex-fill" onclick="comparar()"
+                    title="Comparar com dados reais do Secullum">
+                <i class="fas fa-cloud-download-alt me-1"></i>vs Secullum
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Resumo (oculto até análise) -->
+<div id="resumoBar" class="resumo-bar d-none">
+    <div class="resumo-item">
+        <span class="resumo-val" id="rDias">0</span>
+        <span class="resumo-label">Dias analisados</span>
+    </div>
+    <div class="resumo-item">
+        <span class="resumo-val text-danger" id="rErros">0</span>
+        <span class="resumo-label">Dias com problema</span>
+    </div>
+    <div class="resumo-item" id="rOkWrap">
+        <span class="resumo-val text-success" id="rOk">0</span>
+        <span class="resumo-label">Dias OK</span>
+    </div>
+</div>
+
+<!-- Resultados -->
+<div id="spinnerArea" class="spinner-wrap d-none">
+    <i class="fas fa-spinner fa-spin fa-2x mb-2"></i><br>Analisando…
+</div>
+
+<div id="semResultados" class="d-none text-center py-5 text-muted">
+    <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+    <p class="mb-0">Nenhuma inconsistência encontrada no período.</p>
+</div>
+
+<div id="listaResultados"></div>
+
+<!-- Painel Comparação Secullum (oculto até usar "vs Secullum") -->
+<div id="painelComparacao" class="d-none">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="mb-0"><i class="fas fa-cloud-download-alt me-2 text-warning"></i>Comparação com o Secullum</h5>
+        <button class="btn btn-sm btn-outline-secondary" onclick="fecharComparacao()">
+            <i class="fas fa-times me-1"></i>Fechar
+        </button>
+    </div>
+    <div id="resumoComparacao" class="resumo-bar mb-3"></div>
+    <div id="spinnerComparacao" class="spinner-wrap d-none">
+        <i class="fas fa-spinner fa-spin fa-2x mb-2"></i><br>Consultando API Secullum…
+    </div>
+    <div id="semDivergencias" class="d-none text-center py-4 text-muted">
+        <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+        <p class="mb-0">Banco local está em dia com o Secullum para o período selecionado.</p>
+    </div>
+    <div id="listaDivergencias"></div>
+</div>
+
+<!-- Modal Editar Batida -->
+<div class="modal fade" id="modalEditar" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background: var(--card-bg); border: 1px solid rgba(255,255,255,0.12);">
+            <div class="modal-header border-0">
+                <h5 class="modal-title"><i class="fas fa-edit me-2 text-accent"></i>Editar Batida</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editBatidaId">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">HORA</label>
+                    <input type="time" id="editHora" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">TIPO</label>
+                    <select id="editTipo" class="form-select">
+                        <option value="Entrada">Entrada</option>
+                        <option value="Saida">Saída</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">JUSTIFICATIVA</label>
+                    <input type="text" id="editJustif" class="form-control" placeholder="Ex: Correção de registro duplicado">
+                </div>
+                <div id="editErro" class="alert alert-danger d-none py-2 small"></div>
+            </div>
+            <div class="modal-footer border-0">
+                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-sm btn-primary" onclick="salvarEdicao()">
+                    <i class="fas fa-save me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nova Batida -->
+<div class="modal fade" id="modalNova" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background: var(--card-bg); border: 1px solid rgba(255,255,255,0.12);">
+            <div class="modal-header border-0">
+                <h5 class="modal-title"><i class="fas fa-plus me-2 text-success"></i>Adicionar Batida</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="novaFuncId">
+                <input type="hidden" id="novaData">
+                <div class="mb-2 small text-muted" id="novaInfo"></div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">HORA</label>
+                    <input type="time" id="novaHora" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">TIPO</label>
+                    <select id="novaTipo" class="form-select">
+                        <option value="Entrada">Entrada</option>
+                        <option value="Saida">Saída</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">JUSTIFICATIVA</label>
+                    <input type="text" id="novaJustif" class="form-control" placeholder="Motivo da adição manual">
+                </div>
+                <div id="novaErro" class="alert alert-danger d-none py-2 small"></div>
+            </div>
+            <div class="modal-footer border-0">
+                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-sm btn-success" onclick="salvarNova()">
+                    <i class="fas fa-plus me-1"></i>Adicionar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Cache dos resultados para re-renderizar após edições
+let _resultados = [];
+
+// ── Análise ───────────────────────────────────────────────────────────────────
+function analisar() {
+    const p = {
+        data_inicio: document.getElementById('fDataInicio').value,
+        data_fim:    document.getElementById('fDataFim').value,
+        dept:        document.getElementById('fDept').value,
+        func_id:     document.getElementById('fFunc').value,
+    };
+    if (!p.data_inicio || !p.data_fim) { alert('Informe o período.'); return; }
+
+    document.getElementById('spinnerArea').classList.remove('d-none');
+    document.getElementById('listaResultados').innerHTML = '';
+    document.getElementById('resumoBar').classList.add('d-none');
+    document.getElementById('semResultados').classList.add('d-none');
+
+    const qs = new URLSearchParams(p).toString();
+    fetch(`/inconsistencias/analisar?${qs}`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('spinnerArea').classList.add('d-none');
+            if (data.error) { alert(data.error); return; }
+
+            _resultados = data.resultados;
+            document.getElementById('rDias').textContent  = data.total_dias;
+            document.getElementById('rErros').textContent = data.total_erros;
+            document.getElementById('rOk').textContent    = data.total_dias - data.total_erros;
+            document.getElementById('resumoBar').classList.remove('d-none');
+
+            if (!data.resultados.length) {
+                document.getElementById('semResultados').classList.remove('d-none');
+                return;
+            }
+            renderResultados(data.resultados);
+        })
+        .catch(e => {
+            document.getElementById('spinnerArea').classList.add('d-none');
+            alert('Erro de comunicação: ' + e);
+        });
+}
+
+// ── Renderização ──────────────────────────────────────────────────────────────
+function renderResultados(resultados) {
+    const cont = document.getElementById('listaResultados');
+    cont.innerHTML = resultados.map((r, idx) => `
+        <div class="inc-card" id="card-${idx}">
+            <div class="inc-header" onclick="toggleCard(${idx})">
+                <div style="flex:1">
+                    <span class="fw-bold">${r.nome}</span>
+                    <span class="text-muted small ms-2">${r.departamento}</span>
+                </div>
+                <div class="text-muted small">${r.dia_semana}, ${r.data_fmt}</div>
+                <div class="d-flex gap-1 flex-wrap">
+                    ${r.problemas.map(p =>
+                        `<span class="prob-badge prob-${p.cor}"><i class="fas ${p.icone} me-1"></i>${_tipoLabel(p.tipo)}</span>`
+                    ).join('')}
+                </div>
+                <i class="fas fa-chevron-down text-muted" id="chev-${idx}"></i>
+            </div>
+            <div class="inc-body d-none" id="body-${idx}">
+                <!-- Problemas detectados -->
+                <div class="mb-3">
+                    ${r.problemas.map(p =>
+                        `<div class="small mb-1 text-${p.cor === 'info' ? 'info' : (p.cor === 'danger' ? 'danger' : 'warning')}">
+                            <i class="fas ${p.icone} me-1"></i>${p.descricao}
+                         </div>`
+                    ).join('')}
+                </div>
+
+                <!-- Batidas do dia -->
+                <div class="mb-3" id="batidas-${idx}">
+                    ${renderBatidas(r.batidas, r.funcionario_id, r.data, idx)}
+                </div>
+
+                <!-- Ações -->
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-success btn-sm"
+                            onclick="abrirNova('${r.funcionario_id}','${r.data}','${r.nome}',${idx})">
+                        <i class="fas fa-plus me-1"></i>Adicionar batida
+                    </button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderBatidas(batidas, funcId, data, idx) {
+    return batidas.map(b => `
+        <div class="batida-row" id="brow-${b.id}">
+            <span class="batida-hora">${b.hora}</span>
+            <span class="badge ${b.tipo === 'Entrada' ? 'badge-entrada' : 'badge-saida'}">${b.tipo || '?'}</span>
+            <span class="badge badge-orig">${b.origem}</span>
+            <div class="ms-auto d-flex gap-1">
+                <button class="btn btn-outline-primary btn-sm py-0 px-2"
+                        onclick="abrirEditar(${b.id},'${b.hora}','${b.tipo}')">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-outline-danger btn-sm py-0 px-2"
+                        onclick="excluirBatida(${b.id},${idx})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function _tipoLabel(tipo) {
+    return {'impares':'Ímpar','duplicata':'Duplicata','invertida':'Invertida','longa':'Turno longo','curta':'Turno curto'}[tipo] || tipo;
+}
+
+function toggleCard(idx) {
+    const body = document.getElementById(`body-${idx}`);
+    const chev = document.getElementById(`chev-${idx}`);
+    body.classList.toggle('d-none');
+    chev.classList.toggle('fa-chevron-down');
+    chev.classList.toggle('fa-chevron-up');
+}
+
+// ── Editar Batida ─────────────────────────────────────────────────────────────
+function abrirEditar(id, hora, tipo) {
+    document.getElementById('editBatidaId').value = id;
+    document.getElementById('editHora').value     = hora;
+    document.getElementById('editTipo').value     = tipo;
+    document.getElementById('editJustif').value   = '';
+    document.getElementById('editErro').classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('modalEditar')).show();
+}
+
+function salvarEdicao() {
+    const id    = document.getElementById('editBatidaId').value;
+    const hora  = document.getElementById('editHora').value;
+    const tipo  = document.getElementById('editTipo').value;
+    const justif= document.getElementById('editJustif').value;
+
+    const fd = new FormData();
+    fd.append('hora', hora);
+    fd.append('tipo', tipo);
+    fd.append('justificativa', justif);
+
+    fetch(`/inconsistencias/batida/${id}/editar`, {method:'POST', body: fd})
+        .then(r => r.json())
+        .then(d => {
+            if (!d.ok) { mostrarErro('editErro', d.error); return; }
+            bootstrap.Modal.getInstance(document.getElementById('modalEditar')).hide();
+            // Atualiza a linha na UI
+            const row = document.getElementById(`brow-${id}`);
+            if (row) {
+                row.querySelector('.batida-hora').textContent = d.hora;
+                const badge = row.querySelector('.badge');
+                badge.textContent = d.tipo;
+                badge.className = `badge ${d.tipo === 'Entrada' ? 'badge-entrada' : 'badge-saida'}`;
+            }
+            // Re-analisa para atualizar alertas
+            analisar();
+        })
+        .catch(e => mostrarErro('editErro', 'Erro: ' + e));
+}
+
+// ── Excluir Batida ────────────────────────────────────────────────────────────
+function excluirBatida(id, idx) {
+    if (!confirm('Excluir esta batida?')) return;
+    fetch(`/inconsistencias/batida/${id}/excluir`, {method:'POST'})
+        .then(r => r.json())
+        .then(d => {
+            if (!d.ok) { alert(d.error || 'Erro ao excluir.'); return; }
+            const row = document.getElementById(`brow-${id}`);
+            if (row) row.remove();
+            // Re-analisa para atualizar alertas
+            analisar();
+        });
+}
+
+// ── Adicionar Batida ──────────────────────────────────────────────────────────
+function abrirNova(funcId, data, nome, idx) {
+    document.getElementById('novaFuncId').value = funcId;
+    document.getElementById('novaData').value   = data;
+    document.getElementById('novaInfo').textContent = `${nome} — ${data}`;
+    document.getElementById('novaHora').value   = '';
+    document.getElementById('novaTipo').value   = 'Entrada';
+    document.getElementById('novaJustif').value = '';
+    document.getElementById('novaErro').classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('modalNova')).show();
+}
+
+function salvarNova() {
+    const fd = new FormData();
+    fd.append('funcionario_id', document.getElementById('novaFuncId').value);
+    fd.append('data',           document.getElementById('novaData').value);
+    fd.append('hora',           document.getElementById('novaHora').value);
+    fd.append('tipo',           document.getElementById('novaTipo').value);
+    fd.append('justificativa',  document.getElementById('novaJustif').value);
+
+    fetch('/inconsistencias/batida/nova', {method:'POST', body: fd})
+        .then(r => r.json())
+        .then(d => {
+            if (!d.ok) { mostrarErro('novaErro', d.error); return; }
+            bootstrap.Modal.getInstance(document.getElementById('modalNova')).hide();
+            analisar(); // Re-analisa para mostrar o estado atualizado
+        })
+        .catch(e => mostrarErro('novaErro', 'Erro: ' + e));
+}
+
+// ── Utilitários ───────────────────────────────────────────────────────────────
+function mostrarErro(elId, msg) {
+    const el = document.getElementById(elId);
+    el.textContent = msg;
+    el.classList.remove('d-none');
+}
+
+// Filtra funcionários pelo departamento selecionado
+document.getElementById('fDept').addEventListener('change', function() {
+    const dept = this.value;
+    const sel  = document.getElementById('fFunc');
+    sel.value  = '';
+    Array.from(sel.options).forEach(opt => {
+        if (!opt.value) return;
+        opt.hidden = dept ? opt.dataset.dept !== dept : false;
+    });
+});
+
+// ── Comparação com Secullum ───────────────────────────────────────────────────
+function comparar() {
+    const p = {
+        data_inicio: document.getElementById('fDataInicio').value,
+        data_fim:    document.getElementById('fDataFim').value,
+        dept:        document.getElementById('fDept').value,
+        func_id:     document.getElementById('fFunc').value,
+    };
+    if (!p.data_inicio || !p.data_fim) { alert('Informe o período.'); return; }
+
+    // Mostrar painel e esconder resultados de inconsistência local
+    document.getElementById('listaResultados').innerHTML = '';
+    document.getElementById('resumoBar').classList.add('d-none');
+    document.getElementById('semResultados').classList.add('d-none');
+    document.getElementById('painelComparacao').classList.remove('d-none');
+    document.getElementById('spinnerComparacao').classList.remove('d-none');
+    document.getElementById('listaDivergencias').innerHTML = '';
+    document.getElementById('semDivergencias').classList.add('d-none');
+    document.getElementById('resumoComparacao').innerHTML = '';
+
+    const qs = new URLSearchParams(p).toString();
+    fetch(`/inconsistencias/comparar?${qs}`)
+        .then(r => r.json())
+        .then(d => {
+            document.getElementById('spinnerComparacao').classList.add('d-none');
+            if (d.error) { alert(d.error); return; }
+
+            // Resumo
+            document.getElementById('resumoComparacao').innerHTML = `
+                <div class="resumo-item">
+                    <span class="resumo-val">${d.total_dias_sec}</span>
+                    <span class="resumo-label">Dias no Secullum</span>
+                </div>
+                <div class="resumo-item">
+                    <span class="resumo-val">${d.total_dias_loc}</span>
+                    <span class="resumo-label">Dias no banco local</span>
+                </div>
+                <div class="resumo-item">
+                    <span class="resumo-val ${d.divergencias.length ? 'text-danger' : 'text-success'}">${d.divergencias.length}</span>
+                    <span class="resumo-label">Divergências</span>
+                </div>
+            `;
+
+            if (!d.divergencias.length) {
+                document.getElementById('semDivergencias').classList.remove('d-none');
+                return;
+            }
+            renderDivergencias(d.divergencias);
+        })
+        .catch(e => {
+            document.getElementById('spinnerComparacao').classList.add('d-none');
+            alert('Erro: ' + e);
+        });
+}
+
+function renderDivergencias(divs) {
+    const cont = document.getElementById('listaDivergencias');
+    cont.innerHTML = divs.map(d => {
+        const faltando = d.faltando;
+        const corBadge = faltando > 0 ? 'danger' : 'warning';
+        const labelDif = faltando > 0
+            ? `<span class="badge bg-danger">${faltando} batida(s) faltando no local</span>`
+            : `<span class="badge bg-warning text-dark">${Math.abs(faltando)} batida(s) a mais no local</span>`;
+
+        const lisSec = d.secullum_horas.map(h => `<li class="text-success">${h}</li>`).join('');
+        const lisLoc = d.local_horas.map(h => `<li class="text-info">${h}</li>`).join('');
+
+        return `
+        <div class="inc-card mb-2">
+            <div class="inc-header d-flex align-items-center gap-3 flex-wrap">
+                <div style="flex:1">
+                    <span class="fw-bold">${d.nome}</span>
+                    <span class="text-muted small ms-2">${d.departamento}</span>
+                </div>
+                <span class="text-muted small">${d.dia_semana}, ${d.data_fmt}</span>
+                ${labelDif}
+                <button class="btn btn-sm btn-outline-warning ms-auto"
+                        onclick="ressincronizar('${d.data}', this)">
+                    <i class="fas fa-sync-alt me-1"></i>Ressincronizar este dia
+                </button>
+            </div>
+            <div class="inc-body">
+                <div class="row g-3">
+                    <div class="col-6">
+                        <div class="small fw-bold text-success mb-1">
+                            <i class="fas fa-cloud me-1"></i>Secullum (${d.n_secullum} batidas)
+                        </div>
+                        <ul class="list-unstyled mb-0 small font-monospace">${lisSec || '<li class="text-muted">—</li>'}</ul>
+                    </div>
+                    <div class="col-6">
+                        <div class="small fw-bold text-info mb-1">
+                            <i class="fas fa-database me-1"></i>Banco local (${d.n_local} batidas)
+                        </div>
+                        <ul class="list-unstyled mb-0 small font-monospace">${lisLoc || '<li class="text-muted">—</li>'}</ul>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    // Botão "Ressincronizar todos"
+    const datasUnicas = [...new Set(divs.filter(d => d.faltando > 0).map(d => d.data))];
+    if (datasUnicas.length) {
+        cont.insertAdjacentHTML('beforeend', `
+            <div class="mt-3">
+                <button class="btn btn-warning btn-sm" onclick="ressincronizarTodos(${JSON.stringify(datasUnicas)}, this)">
+                    <i class="fas fa-sync-alt me-1"></i>Ressincronizar todos os dias com falta (${datasUnicas.length} data(s))
+                </button>
+            </div>
+        `);
+    }
+}
+
+function ressincronizar(data, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sincronizando…';
+    const fd = new FormData();
+    fd.append('data', data);
+    fetch('/inconsistencias/ressincronizar', {method:'POST', body: fd})
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) {
+                btn.className = 'btn btn-sm btn-success ms-auto';
+                btn.innerHTML = '<i class="fas fa-check me-1"></i>Concluído';
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sync-alt me-1"></i>Ressincronizar este dia';
+                alert('Erro: ' + d.msg);
+            }
+        });
+}
+
+async function ressincronizarTodos(datas, btn) {
+    btn.disabled = true;
+    for (const data of datas) {
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin me-1"></i>Sincronizando ${data}…`;
+        const fd = new FormData();
+        fd.append('data', data);
+        await fetch('/inconsistencias/ressincronizar', {method:'POST', body: fd});
+    }
+    btn.className = 'btn btn-success btn-sm';
+    btn.innerHTML = '<i class="fas fa-check me-1"></i>Todos concluídos — recarregue a comparação';
+    btn.disabled = false;
+    btn.onclick = () => comparar();
+}
+
+function fecharComparacao() {
+    document.getElementById('painelComparacao').classList.add('d-none');
+}
+</script>
+{% endblock %}

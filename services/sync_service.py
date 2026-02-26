@@ -191,8 +191,12 @@ def sync_batidas(data_inicio, data_fim, hora_inicio=None, hora_fim=None):
                     hora = registro.get(campo_hora)
                     if not hora or hora.upper() in MARCACOES_ESPECIAIS:
                         continue
-                    if ':' not in hora or len(hora.split(':')) != 2:
+                    partes_hora = hora.split(':')
+                    if len(partes_hora) < 2:
                         continue
+                    hora = f'{partes_hora[0]}:{partes_hora[1]}'  # normaliza HH:MM:SS → HH:MM
+                    if hora in ('00:00',):
+                        continue  # campo vazio/zerado
 
                     fonte = registro.get(campo_fonte)
                     if isinstance(fonte, dict):

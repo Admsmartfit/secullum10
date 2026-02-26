@@ -38,6 +38,7 @@ def create_app():
     from blueprints.config_hub import config_hub_bp
     from blueprints.notificacoes import notificacoes_bp
     from blueprints.trocas import trocas_bp
+    from blueprints.inconsistencias import inconsistencias_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -53,6 +54,7 @@ def create_app():
     app.register_blueprint(config_hub_bp)
     app.register_blueprint(notificacoes_bp)
     app.register_blueprint(trocas_bp)
+    app.register_blueprint(inconsistencias_bp)
 
     # ── Celery beat schedule ───────────────────────────────────────────────────
     from extensions import make_celery

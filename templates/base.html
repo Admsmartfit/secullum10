@@ -496,6 +496,11 @@
                     <i class="fas fa-file-export"></i>
                     <span class="nav-link-text">Relatórios</span>
                 </a>
+                <a class="nav-link {% if request.path.startswith('/inconsistencias') %}active{% endif %}"
+                   href="/inconsistencias/" data-tooltip="Inconsistências">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span class="nav-link-text">Inconsistências</span>
+                </a>
 
                 <hr class="sidebar-separator">
                 <div class="section-label">Gestão</div>
