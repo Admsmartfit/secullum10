@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: secullum10_web
+    ports:
+      - "5020:5020"
+    env_file:
+      - .env
+    environment:
+      - FLASK_ENV=production
+      - REDIS_URL=redis://redis:6379/0
+      # Descomente a linha abaixo para usar o banco de dados interno
+      # - DATABASE_URL=postgresql://secullum_user:secullum_pass@db:5432/secullum10
+    depends_on:
+      - redis
+      # - db
+    restart: unless-stopped
+    volumes:
+      - ./uploads:/app/uploads
+      - ./instance:/app/instance
+
+  celery_worker:
+    build: .
+    container_name: secullum10_worker
+    command: [ "celery", "-A", "app.celery_app", "worker", "--loglevel=info" ]
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      # - DATABASE_URL=postgresql://secullum_user:secullum_pass@db:5432/secullum10
+    depends_on:
+      - redis
+      # - db
+    restart: unless-stopped
+    volumes:
+      - ./uploads:/app/uploads
+
+  celery_beat:
+    build: .
+    container_name: secullum10_beat
+    command: [ "celery", "-A", "app.celery_app", "beat", "--loglevel=info" ]
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      # - DATABASE_URL=postgresql://secullum_user:secullum_pass@db:5432/secullum10
+    depends_on:
+      - redis
+      # - db
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: secullum10_redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+  # --- Opcional: Banco de Dados PostgreSQL ---
+  # db:
+  #   image: postgres:15-alpine
+  #   container_name: secullum10_db
+  #   environment:
+  #     POSTGRES_USER: secullum_user
+  #     POSTGRES_PASSWORD: secullum_pass
+  #     POSTGRES_DB: secullum10
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   restart: unless-stopped
+
+  # --- Opcional: Tunelamento Cloudflared ---
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: secullum10_cloudflared
+  #   command: tunnel run
+  #   environment:
+  #     - TUNNEL_TOKEN=seu_token_aqui_para_destinos_web
+  #   restart: unless-stopped
+
+volumes:
+  redis_data: # postgres_data:
