@@ -133,4 +133,9 @@ def init_scheduler(app):
 
     # Garante shutdown limpo
     import atexit
-    atexit.register(lambda: _scheduler.shutdown(wait=False))
+    def _shutdown():
+        try:
+            _scheduler.shutdown(wait=False)
+        except Exception:
+            pass
+    atexit.register(_shutdown)
