@@ -1,7 +1,16 @@
 
 flask
 flask-sqlalchemy
+flask-login
+flask-migrate
+flask-mail
 python-dotenv
 requests
 pandas
 openpyxl
+celery
+redis
+psycopg2-binary
+APScheduler
+gunicorn
+sqlalchemy

@@ -19,8 +19,6 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
-# Additional dependencies for production (wsgi, celery, redis, pg)
-RUN pip install --no-cache-dir gunicorn celery psycopg2-binary redis APScheduler
 
 # Copy application code
 COPY . /app/
