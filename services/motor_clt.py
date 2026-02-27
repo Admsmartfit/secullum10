@@ -41,19 +41,17 @@ def validar_interjornada(func_id: str, data_nova: 'date', turno_novo: Turno) -> 
     if aloc_anterior:
         h_ini_ant, h_fim_ant, _ = aloc_anterior.turno.get_horario_dia(dia_anterior.weekday())
         fim_anterior = _combine(dia_anterior, h_fim_ant)
+        if h_fim_ant < h_ini_ant: # Turno atravessa meia-noite
+            fim_anterior += timedelta(days=1)
         
         h_ini_novo, _, _ = turno_novo.get_horario_dia(data_nova.weekday())
         inicio_novo = _combine(data_nova, h_ini_novo)
-        
-        # turno noturno: fim pode ser dia seguinte
-        if h_fim_ant < h_ini_ant:
-            fim_anterior += timedelta(days=1)
             
         intervalo = (inicio_novo - fim_anterior).total_seconds() / 3600
         if intervalo < 11:
             return {
                 'error': 'INTERJORNADA',
-                'message': f'Intervalo entre turnos de {intervalo:.1f}h é inferior ao mínimo de 11h (CLT art. 66).',
+                'message': f'Intervalo de {intervalo:.1f}h com ontem é inferior a 11h.',
                 'horas_encontradas': round(intervalo, 1),
             }
 
@@ -62,24 +60,23 @@ def validar_interjornada(func_id: str, data_nova: 'date', turno_novo: Turno) -> 
     aloc_seguinte = (
         AlocacaoDiaria.query
         .filter_by(funcionario_id=func_id, data=dia_seguinte)
-        .join(Turno)
         .first()
     )
     if aloc_seguinte:
         _, h_fim_novo, _ = turno_novo.get_horario_dia(data_nova.weekday())
+        h_ini_novo, _, _ = turno_novo.get_horario_dia(data_nova.weekday())
         fim_novo = _combine(data_nova, h_fim_novo)
+        if h_fim_novo < h_ini_novo:
+            fim_novo += timedelta(days=1)
         
         h_ini_seg, _, _ = aloc_seguinte.turno.get_horario_dia(dia_seguinte.weekday())
         inicio_seguinte = _combine(dia_seguinte, h_ini_seg)
-        
-        if h_fim_novo < h_ini_novo: # h_ini_novo precisa ser pego acima
-            fim_novo += timedelta(days=1)
             
         intervalo = (inicio_seguinte - fim_novo).total_seconds() / 3600
         if intervalo < 11:
             return {
                 'error': 'INTERJORNADA',
-                'message': f'Intervalo entre turnos de {intervalo:.1f}h é inferior ao mínimo de 11h (CLT art. 66).',
+                'message': f'Intervalo de {intervalo:.1f}h com amanhã é inferior a 11h.',
                 'horas_encontradas': round(intervalo, 1),
             }
 

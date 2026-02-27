@@ -1,0 +1,439 @@
+{% extends 'base.html' %}
+{% block title %}Quadro Multi-Painéis – Escalas{% endblock %}
+
+{% block extra_css %}
+<style>
+.painel .card-body { padding: 8px !important; }
+
+/* ── Calendar ──────────────────────────────────────────────────────────────── */
+.cal-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.cal-table th {
+    text-align: center; padding: 4px 2px;
+    font-size: .68rem; font-weight: 700; text-transform: uppercase;
+    color: #6c757d; border-bottom: 2px solid #e2e8f0;
+}
+.cal-cell, .cal-empty {
+    vertical-align: top; border: 1px solid #e2e8f0;
+    width: 14.28%; height: 68px; padding: 3px !important;
+}
+.cal-empty  { background: #f8fafc; }
+.cal-cell.sabado  { background: #fffbeb; }
+.cal-cell.domingo { background: #fff1f2; }
+.cal-cell.drag-over { background: #d1fae5 !important; outline: 2px dashed #10b981; }
+.cal-day-num { font-size: .7rem; font-weight: 700; color: #374151; margin-bottom: 2px; }
+.cal-cell.domingo .cal-day-num { color: #dc2626; }
+.cal-cell.sabado  .cal-day-num { color: #d97706; }
+
+/* ── Badges ────────────────────────────────────────────────────────────────── */
+.turno-badge {
+    display: block; padding: 3px 4px; border-radius: 5px;
+    font-size: .65rem; cursor: grab; user-select: none;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 100%; color: #fff; line-height: 1.3;
+}
+.turno-badge:active { cursor: grabbing; opacity: .8; }
+.turno-badge.pendente { outline: 2px dashed #f59e0b; }
+.turno-badge.clt-warn { outline: 2px solid #dc2626; }
+
+/* ── Palette ───────────────────────────────────────────────────────────────── */
+#paleta {
+    position: fixed; right: 14px; top: 68px; z-index: 1050;
+    width: 140px; max-height: calc(100vh - 82px); overflow-y: auto;
+    box-shadow: 0 4px 16px rgba(0,0,0,.18);
+}
+.palette-badge {
+    display: block; padding: 5px 7px; border-radius: 5px;
+    font-size: .68rem; cursor: grab; user-select: none;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: #fff; margin-bottom: 4px; text-align: center;
+}
+.palette-badge:active { cursor: grabbing; }
+
+#mesLabel { min-width: 150px; text-align: center; font-weight: 700; font-size: 1rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Serialize employee data for JS filtering -->
+<script>
+const TODOS_FUNCIONARIOS = [
+    {% for f in funcionarios %}{ id: "{{ f.id }}", nome: {{ f.nome | tojson }}, dept: {{ (f.departamento or '') | tojson }}, funcao: {{ (f.funcao or '') | tojson }} }{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+</script>
+
+<!-- ── Top bar ─────────────────────────────────────────────────────────────── -->
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="h3 mb-0 fw-bold">
+        <i class="fas fa-th me-2 text-primary"></i>Quadro de Escalas
+    </h1>
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        <button class="btn btn-sm btn-outline-secondary" onclick="mudarMes(-1)">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+        <span id="mesLabel">—</span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="mudarMes(1)">
+            <i class="fas fa-chevron-right"></i>
+        </button>
+        <button class="btn btn-sm btn-success ms-2" id="btnSalvar" onclick="salvarTudo()" disabled>
+            <i class="fas fa-save me-1"></i>Salvar
+            <span id="cntAlteracoes" class="badge bg-white text-success ms-1">0</span>
+        </button>
+    </div>
+</div>
+
+<!-- ── Global filter bar ──────────────────────────────────────────────────── -->
+<div class="card p-3 mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label small fw-bold mb-1">DEPARTAMENTO</label>
+            <select id="gDept" class="form-select form-select-sm" onchange="onGlobalDeptChange()">
+                <option value="">— Todos —</option>
+                {% for d in departamentos %}
+                <option value="{{ d }}">{{ d }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label small fw-bold mb-1">FUNÇÃO</label>
+            <select id="gFuncao" class="form-select form-select-sm" onchange="onGlobalFuncaoChange()">
+                <option value="">— Todas —</option>
+            </select>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <span class="small text-muted" id="gContador">—</span>
+        </div>
+    </div>
+</div>
+
+<!-- ── 2×2 panel grid ─────────────────────────────────────────────────────── -->
+<div class="row g-3">
+    {% for i in range(4) %}
+    <div class="col-12 col-xl-6">
+        <div class="card painel" id="painel{{ i }}">
+            <div class="card-header py-2 d-flex gap-2 align-items-center">
+                <span class="badge bg-secondary flex-shrink-0">P{{ i + 1 }}</span>
+                <select class="form-select form-select-sm func-select"
+                        onchange="carregarPainel({{ i }})">
+                    <option value="">— Selecione um funcionário —</option>
+                </select>
+            </div>
+            <div class="card-body">
+                <div class="text-center py-4 text-muted" id="msgPainel{{ i }}">
+                    <i class="fas fa-user me-1"></i>Selecione um funcionário acima.
+                </div>
+                <div id="calPainel{{ i }}"></div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- ── Floating palette ───────────────────────────────────────────────────── -->
+<div id="paleta" class="card">
+    <div class="card-header py-2 px-2 d-flex justify-content-between align-items-center">
+        <span class="small fw-bold">Turnos</span>
+        <button class="btn btn-link btn-sm p-0" onclick="togglePaleta()" id="btnTogglePaleta">
+            <i class="fas fa-chevron-right small text-muted"></i>
+        </button>
+    </div>
+    <div class="card-body p-2" id="paletaBody">
+        {% for t in turnos %}
+        <div class="palette-badge" draggable="true"
+             data-turno-id="{{ t.id }}" data-turno-nome="{{ t.nome }}"
+             data-color="{{ t.color or '#4f46e5' }}"
+             style="background:{{ t.color or '#4f46e5' }};"
+             title="{{ t.nome }} — {{ t.hora_inicio.strftime('%H:%M') }}–{{ t.hora_fim.strftime('%H:%M') }}">
+            {{ t.nome }}
+        </div>
+        {% endfor %}
+        {% if not turnos %}<span class="small text-muted">Nenhum turno.</span>{% endif %}
+    </div>
+</div>
+
+<div id="toastBox" class="position-fixed bottom-0 end-0 p-3" style="z-index:9999"></div>
+
+<script>
+const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                  'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const DIAS_PT  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+let mesAtual = new Date();
+mesAtual.setDate(1);
+{ const p = '{{ mes_atual }}'.split('-'); mesAtual = new Date(+p[0], +p[1]-1, 1); }
+
+let dragData       = null;
+let pendingChanges = [];
+
+// ── Global filters ────────────────────────────────────────────────────────────
+
+function onGlobalDeptChange() {
+    const dept = document.getElementById('gDept').value;
+    const funcaoSel = document.getElementById('gFuncao');
+
+    // Rebuild funcao list
+    const funcoes = [...new Set(
+        TODOS_FUNCIONARIOS
+            .filter(f => !dept || f.dept === dept)
+            .map(f => f.funcao).filter(Boolean).sort()
+    )];
+    funcaoSel.innerHTML = '<option value="">— Todas —</option>';
+    funcoes.forEach(fn => {
+        const o = document.createElement('option');
+        o.value = fn; o.textContent = fn;
+        funcaoSel.appendChild(o);
+    });
+
+    _populateTodos();
+}
+
+function onGlobalFuncaoChange() {
+    _populateTodos();
+}
+
+function _populateTodos() {
+    const dept   = document.getElementById('gDept').value;
+    const funcao = document.getElementById('gFuncao').value;
+
+    const lista = TODOS_FUNCIONARIOS.filter(f =>
+        (!dept   || f.dept   === dept) &&
+        (!funcao || f.funcao === funcao)
+    );
+
+    document.getElementById('gContador').textContent =
+        lista.length + ' funcionário(s) na seleção';
+
+    // Populate all 4 panel selects (keep current value if still valid)
+    for (let i = 0; i < 4; i++) {
+        const sel     = document.getElementById('painel' + i).querySelector('.func-select');
+        const current = sel.value;
+        sel.innerHTML = '<option value="">— Selecione um funcionário —</option>';
+        lista.forEach(f => {
+            const o = document.createElement('option');
+            o.value = f.id; o.textContent = f.nome;
+            if (f.id === current) o.selected = true;
+            sel.appendChild(o);
+        });
+        // If previously selected employee no longer in list, clear calendar
+        if (current && !lista.find(f => f.id === current)) {
+            document.getElementById('calPainel' + i).innerHTML = '';
+            const msg = document.getElementById('msgPainel' + i);
+            msg.innerHTML = '<i class="fas fa-user me-1"></i>Selecione um funcionário acima.';
+            msg.classList.remove('d-none');
+        }
+    }
+}
+
+// ── Month navigation ──────────────────────────────────────────────────────────
+
+function mudarMes(delta) {
+    mesAtual.setMonth(mesAtual.getMonth() + delta);
+    atualizarMesLabel();
+    carregarTodos();
+}
+
+function atualizarMesLabel() {
+    document.getElementById('mesLabel').textContent =
+        MESES_PT[mesAtual.getMonth()] + ' ' + mesAtual.getFullYear();
+}
+
+function mesAnoStr() {
+    return mesAtual.getFullYear() + '-' + String(mesAtual.getMonth()+1).padStart(2,'0');
+}
+
+// ── Drag & Drop ───────────────────────────────────────────────────────────────
+
+document.addEventListener('dragstart', function(e) {
+    const el = e.target.closest('[data-turno-id]');
+    if (!el) return;
+    dragData = { turno_id: +el.dataset.turnoId, turno_nome: el.dataset.turnoNome, color: el.dataset.color };
+    e.dataTransfer.effectAllowed = 'copy';
+});
+
+document.addEventListener('dragover', function(e) {
+    const c = e.target.closest('.cal-cell');
+    if (c) { e.preventDefault(); c.classList.add('drag-over'); }
+});
+
+document.addEventListener('dragleave', function(e) {
+    const c = e.target.closest('.cal-cell');
+    if (c && !c.contains(e.relatedTarget)) c.classList.remove('drag-over');
+});
+
+document.addEventListener('drop', function(e) {
+    const c = e.target.closest('.cal-cell');
+    if (!c || !dragData) return;
+    e.preventDefault();
+    c.classList.remove('drag-over');
+    aplicarMudanca(c.dataset.funcId, c.dataset.data, dragData.turno_id, dragData.turno_nome, dragData.color, c);
+    dragData = null;
+});
+
+document.addEventListener('dblclick', function(e) {
+    const c = e.target.closest('.cal-cell');
+    if (!c) return;
+    const b = c.querySelector('.turno-badge');
+    if (!b) return;
+    enqueueChange(c.dataset.funcId, c.dataset.data, null, 'delete');
+    b.remove();
+    updateCounter();
+});
+
+// ── Change queue ──────────────────────────────────────────────────────────────
+
+function aplicarMudanca(funcId, dataStr, turnoId, turnoNome, color, cell) {
+    enqueueChange(funcId, dataStr, turnoId, 'set');
+    let b = cell.querySelector('.turno-badge');
+    if (!b) { b = document.createElement('div'); cell.appendChild(b); }
+    b.className = 'turno-badge pendente';
+    b.style.background = color; b.style.color = '#fff';
+    b.textContent = turnoNome; b.title = turnoNome;
+    b.draggable = true;
+    b.dataset.turnoId = turnoId; b.dataset.turnoNome = turnoNome;
+    b.dataset.color = color; b.dataset.funcId = funcId; b.dataset.data = dataStr;
+    updateCounter();
+}
+
+function enqueueChange(funcId, dataStr, turnoId, action) {
+    pendingChanges = pendingChanges.filter(c => !(c.func_id===funcId && c.data===dataStr));
+    pendingChanges.push({ func_id: funcId, data: dataStr, turno_id: turnoId, action });
+}
+
+function updateCounter() {
+    const n = pendingChanges.length;
+    document.getElementById('cntAlteracoes').textContent = n;
+    document.getElementById('btnSalvar').disabled = n === 0;
+}
+
+// ── Panel loading ─────────────────────────────────────────────────────────────
+
+async function carregarPainel(idx) {
+    const painel = document.getElementById('painel' + idx);
+    const funcId = painel.querySelector('.func-select').value;
+    const msg    = document.getElementById('msgPainel' + idx);
+    const cal    = document.getElementById('calPainel' + idx);
+
+    if (!funcId) {
+        cal.innerHTML = '';
+        msg.innerHTML = '<i class="fas fa-user me-1"></i>Selecione um funcionário acima.';
+        msg.classList.remove('d-none');
+        return;
+    }
+
+    msg.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Carregando...';
+    msg.classList.remove('d-none');
+    cal.innerHTML = '';
+
+    try {
+        const r = await fetch('/escalas/quadro/dados?' + new URLSearchParams({ mes_ano: mesAnoStr(), func_id: funcId }));
+        const d = await r.json();
+        if (d.error || !d.funcionarios.length) { msg.textContent = d.error || 'Não encontrado.'; return; }
+        renderCalendar(idx, d.funcionarios[0], d);
+        msg.classList.add('d-none');
+    } catch (e) {
+        msg.textContent = 'Erro ao carregar.'; console.error(e);
+    }
+}
+
+function carregarTodos() {
+    for (let i = 0; i < 4; i++) {
+        if (document.getElementById('painel' + i).querySelector('.func-select').value)
+            carregarPainel(i);
+    }
+}
+
+// ── Calendar rendering ────────────────────────────────────────────────────────
+
+function renderCalendar(idx, func, data) {
+    const { dias_no_mes, ano, mes, sabados, domingos } = data;
+    const sab = new Set(sabados), dom = new Set(domingos);
+    const fw  = new Date(ano, mes-1, 1).getDay();
+
+    let h = '<table class="cal-table"><thead><tr>';
+    DIAS_PT.forEach(d => h += `<th>${d}</th>`);
+    h += '</tr></thead><tbody><tr>';
+    for (let i = 0; i < fw; i++) h += '<td class="cal-empty"></td>';
+
+    for (let d = 1; d <= dias_no_mes; d++) {
+        const wd   = new Date(ano, mes-1, d).getDay();
+        const cls  = wd===0 ? 'domingo' : (wd===6 ? 'sabado' : '');
+        const ds   = `${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        const aloc = func.dias[String(d)];
+        let inner  = `<div class="cal-day-num">${d}</div>`;
+        if (aloc) {
+            inner += `<div class="turno-badge${aloc.warning?' clt-warn':''}" draggable="true"
+                data-turno-id="${aloc.turno_id}" data-turno-nome="${esc(aloc.turno)}"
+                data-color="${aloc.color}" data-func-id="${func.id}" data-data="${ds}"
+                style="background:${aloc.color};" title="${esc(aloc.turno)}">${esc(aloc.turno)}</div>`;
+        }
+        h += `<td class="cal-cell ${cls}" data-data="${ds}" data-func-id="${func.id}">${inner}</td>`;
+        if (wd===6 && d<dias_no_mes) h += '</tr><tr>';
+    }
+    const lw = new Date(ano, mes-1, dias_no_mes).getDay();
+    if (lw !== 6) for (let i = lw+1; i <= 6; i++) h += '<td class="cal-empty"></td>';
+    h += '</tr></tbody></table>';
+    document.getElementById('calPainel' + idx).innerHTML = h;
+}
+
+// ── Save ──────────────────────────────────────────────────────────────────────
+
+async function salvarTudo() {
+    if (!pendingChanges.length) return;
+    const btn = document.getElementById('btnSalvar');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Salvando...';
+    try {
+        const r = await fetch('/escalas/quadro/bulk-update', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ changes: pendingChanges }),
+        });
+        const res = await r.json();
+        if (res.ok) {
+            document.querySelectorAll('.turno-badge.pendente').forEach(b => b.classList.remove('pendente'));
+            pendingChanges = [];
+            if (res.warnings?.length) {
+                res.warnings.forEach(w =>
+                    document.querySelectorAll(`.cal-cell[data-data="${w.data}"][data-func-id="${w.func_id}"] .turno-badge`)
+                             .forEach(b => b.classList.add('clt-warn'))
+                );
+                showToast(`${res.saved} salvo(s) — ${res.warnings.length} aviso(s) CLT.`, 'warning');
+            } else {
+                showToast(`${res.saved} alocação(ões) salva(s)!`, 'success');
+            }
+            if (res.errors?.length) showToast('Erros: ' + res.errors.slice(0,3).join('; '), 'danger');
+        } else {
+            showToast('Erro: ' + (res.error || 'Tente novamente.'), 'danger');
+        }
+    } catch(e) { showToast('Erro de comunicação: ' + e.message, 'danger'); }
+    finally {
+        btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar <span id="cntAlteracoes" class="badge bg-white text-success ms-1">0</span>';
+        updateCounter();
+    }
+}
+
+// ── Palette & helpers ─────────────────────────────────────────────────────────
+
+function togglePaleta() {
+    const b = document.getElementById('paletaBody'), btn = document.getElementById('btnTogglePaleta');
+    const h = b.classList.toggle('d-none');
+    btn.innerHTML = `<i class="fas fa-chevron-${h?'left':'right'} small text-muted"></i>`;
+}
+
+function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function showToast(msg, type) {
+    const el = document.createElement('div');
+    el.className = `alert alert-${type} alert-dismissible fade show shadow`;
+    el.innerHTML = msg + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+    document.getElementById('toastBox').appendChild(el);
+    setTimeout(() => { try { el.remove(); } catch(_){} }, 5000);
+}
+
+// Init
+atualizarMesLabel();
+_populateTodos();   // populate selects on page load with all employees
+</script>
+{% endblock %}

@@ -57,7 +57,13 @@ class Funcionario(db.Model):
     admissao = db.Column(db.Date)
     demissao = db.Column(db.Date)
     nascimento = db.Column(db.Date)
-
+ 
+    # ── PRD "War Room": Horário Base ──────────────────────────────────────────
+    # Define o turno padrão do funcionário. Se não houver AlocacaoDiaria (exceção),
+    # o sistema usará este turno para compor a Escala/Realidade.
+    horario_base_id = db.Column(db.Integer, db.ForeignKey('turnos.id'), nullable=True)
+    horario_base = db.relationship('Turno', foreign_keys=[horario_base_id])
+ 
     # Horário Secullum (schedule assigned via API)
     horario_secullum_numero = db.Column(db.Integer, nullable=True)
     horario_secullum_nome = db.Column(db.String(100), nullable=True)
@@ -137,6 +143,8 @@ class Turno(db.Model):
     dias_complexos_json = db.Column(db.Text, nullable=True)
     # Escopo: departamento (unidade/CNPJ) ao qual o turno pertence. Null = global.
     departamento = db.Column(db.String(200), nullable=True)
+    # Cargo/Função específico para este turno (ex: Recepcionista, Professor). Null = todos.
+    funcao = db.Column(db.String(100), nullable=True)
     # Cor hexadecimal para o calendário
     color = db.Column(db.String(7), nullable=True, default='#4f46e5')
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
@@ -209,6 +217,8 @@ class AlocacaoDiaria(db.Model):
     pre_checkin = db.Column(db.Boolean, default=False)
     # Aviso de compliance armazenado (não-bloqueante)
     compliance_warning = db.Column(db.Text, nullable=True)
+    # Marcador de exceção manual (Se True, ignora o Horário Base do funcionário)
+    is_excecao = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     funcionario = db.relationship('Funcionario', backref='alocacoes')

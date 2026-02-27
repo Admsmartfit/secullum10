@@ -15,27 +15,33 @@
         <div class="row g-3 mb-4">
             <div class="col-md-6">
                 <label class="form-label text-muted small fw-bold">NOME DO TURNO</label>
-                <input type="text" name="nome" class="form-control"
-                    value="{{ turno.nome if turno else '' }}"
+                <input type="text" name="nome" class="form-control" value="{{ turno.nome if turno else '' }}"
                     placeholder="Ex: Manhã 08h-17h" required>
             </div>
             <div class="col-md-2">
                 <label class="form-label text-muted small fw-bold">COR</label>
                 <input type="color" name="color" class="form-control form-control-color w-100"
-                    value="{{ turno.color if turno and turno.color else '#4f46e5' }}"
-                    title="Cor no calendário">
+                    value="{{ turno.color if turno and turno.color else '#4f46e5' }}" title="Cor no calendário">
             </div>
-            <div class="col-md-4">
-                <label class="form-label text-muted small fw-bold">UNIDADE / DEPARTAMENTO</label>
+            <div class="col-md-2">
+                <label class="form-label text-muted small fw-bold">UNIDADE</label>
                 <input type="text" name="departamento" class="form-control" list="deptList"
-                    value="{{ turno.departamento if turno else '' }}"
-                    placeholder="Todos (global)">
+                    value="{{ turno.departamento if turno else '' }}" placeholder="Global">
                 <datalist id="deptList">
                     {% for d in departamentos %}
                     <option value="{{ d }}">{{ d }}</option>
                     {% endfor %}
                 </datalist>
-                <div class="form-text">Deixe vazio para turno global (todas as unidades).</div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label text-muted small fw-bold">FUNÇÃO (CARGO)</label>
+                <input type="text" name="funcao" class="form-control" list="funcaoList"
+                    value="{{ turno.funcao if turno else '' }}" placeholder="Todos">
+                <datalist id="funcaoList">
+                    {% for f in funcoes %}
+                    <option value="{{ f }}">{{ f }}</option>
+                    {% endfor %}
+                </datalist>
             </div>
         </div>
 
@@ -56,10 +62,11 @@
                 <div class="col-md-4">
                     <label class="form-label text-muted small fw-bold">INTERVALO</label>
                     <select id="padrao_intervalo" name="intervalo_minutos" class="form-select">
-                        <option value="15"  {{ 'selected' if turno and turno.intervalo_minutos==15  }}>15 min</option>
-                        <option value="30"  {{ 'selected' if turno and turno.intervalo_minutos==30  }}>30 min</option>
-                        <option value="60"  {{ 'selected' if (not turno) or turno.intervalo_minutos==60 }}>1 hora</option>
-                        <option value="90"  {{ 'selected' if turno and turno.intervalo_minutos==90  }}>1h 30m</option>
+                        <option value="15" {{ 'selected' if turno and turno.intervalo_minutos==15 }}>15 min</option>
+                        <option value="30" {{ 'selected' if turno and turno.intervalo_minutos==30 }}>30 min</option>
+                        <option value="60" {{ 'selected' if (not turno) or turno.intervalo_minutos==60 }}>1 hora
+                        </option>
+                        <option value="90" {{ 'selected' if turno and turno.intervalo_minutos==90 }}>1h 30m</option>
                         <option value="120" {{ 'selected' if turno and turno.intervalo_minutos==120 }}>2 horas</option>
                     </select>
                 </div>
@@ -100,9 +107,9 @@
                         {% endif %}
                         <tr data-dia="{{ i }}">
                             <td>
-                                <input class="form-check-input dia-checkbox" type="checkbox"
-                                    name="dias_semana" value="{{ i }}" id="dia_{{ i }}"
-                                    {{ 'checked' if (turno and (i in turno.dias_semana_list)) or (not turno and i < 5) }}>
+                                <input class="form-check-input dia-checkbox" type="checkbox" name="dias_semana"
+                                    value="{{ i }}" id="dia_{{ i }}" {{ 'checked' if (turno and (i in
+                                    turno.dias_semana_list)) or (not turno and i < 5) }}>
                             </td>
                             <td class="text-start">
                                 <label class="form-check-label" for="dia_{{ i }}">{{ dia }}</label>
@@ -136,54 +143,54 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    // ── Habilitar/desabilitar campos por linha ──────────────────────────────
-    const checkboxes = document.querySelectorAll('.dia-checkbox');
-    function updateRow(cb) {
-        const row = cb.closest('tr');
-        row.querySelectorAll('.daily-input').forEach(inp => {
-            inp.disabled = !cb.checked;
+    document.addEventListener('DOMContentLoaded', function () {
+        // ── Habilitar/desabilitar campos por linha ──────────────────────────────
+        const checkboxes = document.querySelectorAll('.dia-checkbox');
+        function updateRow(cb) {
+            const row = cb.closest('tr');
+            row.querySelectorAll('.daily-input').forEach(inp => {
+                inp.disabled = !cb.checked;
+            });
+            row.style.opacity = cb.checked ? '1' : '0.4';
+        }
+        checkboxes.forEach(cb => {
+            cb.addEventListener('change', () => updateRow(cb));
+            updateRow(cb);
         });
-        row.style.opacity = cb.checked ? '1' : '0.4';
-    }
-    checkboxes.forEach(cb => {
-        cb.addEventListener('change', () => updateRow(cb));
-        updateRow(cb);
-    });
 
-    // ── Auto-fill Seg–Sex ao mudar padrão ──────────────────────────────────
-    function propagarPadrao() {
-        const inicio   = document.getElementById('padrao_inicio').value;
-        const fim      = document.getElementById('padrao_fim').value;
-        const intervalo = document.getElementById('padrao_intervalo').value;
-        for (let i = 0; i <= 4; i++) {
-            const row = document.querySelector(`tr[data-dia="${i}"]`);
-            if (!row) continue;
-            const cb = row.querySelector('.dia-checkbox');
-            if (!cb || !cb.checked) continue; // só altera dias marcados
-            row.querySelector(`[name="dia_${i}_inicio"]`).value    = inicio;
-            row.querySelector(`[name="dia_${i}_fim"]`).value       = fim;
-            row.querySelector(`[name="dia_${i}_intervalo"]`).value = intervalo;
+        // ── Auto-fill Seg–Sex ao mudar padrão ──────────────────────────────────
+        function propagarPadrao() {
+            const inicio = document.getElementById('padrao_inicio').value;
+            const fim = document.getElementById('padrao_fim').value;
+            const intervalo = document.getElementById('padrao_intervalo').value;
+            for (let i = 0; i <= 4; i++) {
+                const row = document.querySelector(`tr[data-dia="${i}"]`);
+                if (!row) continue;
+                const cb = row.querySelector('.dia-checkbox');
+                if (!cb || !cb.checked) continue; // só altera dias marcados
+                row.querySelector(`[name="dia_${i}_inicio"]`).value = inicio;
+                row.querySelector(`[name="dia_${i}_fim"]`).value = fim;
+                row.querySelector(`[name="dia_${i}_intervalo"]`).value = intervalo;
+            }
         }
-    }
 
-    document.getElementById('padrao_inicio').addEventListener('change', propagarPadrao);
-    document.getElementById('padrao_fim').addEventListener('change', propagarPadrao);
-    document.getElementById('padrao_intervalo').addEventListener('change', propagarPadrao);
+        document.getElementById('padrao_inicio').addEventListener('change', propagarPadrao);
+        document.getElementById('padrao_fim').addEventListener('change', propagarPadrao);
+        document.getElementById('padrao_intervalo').addEventListener('change', propagarPadrao);
 
-    document.getElementById('btnAplicarPadrao').addEventListener('click', function() {
-        // Aplica mesmo em dias desmarcados (para pré-preencher antes de marcar)
-        const inicio    = document.getElementById('padrao_inicio').value;
-        const fim       = document.getElementById('padrao_fim').value;
-        const intervalo = document.getElementById('padrao_intervalo').value;
-        for (let i = 0; i <= 4; i++) {
-            const row = document.querySelector(`tr[data-dia="${i}"]`);
-            if (!row) continue;
-            row.querySelector(`[name="dia_${i}_inicio"]`).value    = inicio;
-            row.querySelector(`[name="dia_${i}_fim"]`).value       = fim;
-            row.querySelector(`[name="dia_${i}_intervalo"]`).value = intervalo;
-        }
+        document.getElementById('btnAplicarPadrao').addEventListener('click', function () {
+            // Aplica mesmo em dias desmarcados (para pré-preencher antes de marcar)
+            const inicio = document.getElementById('padrao_inicio').value;
+            const fim = document.getElementById('padrao_fim').value;
+            const intervalo = document.getElementById('padrao_intervalo').value;
+            for (let i = 0; i <= 4; i++) {
+                const row = document.querySelector(`tr[data-dia="${i}"]`);
+                if (!row) continue;
+                row.querySelector(`[name="dia_${i}_inicio"]`).value = inicio;
+                row.querySelector(`[name="dia_${i}_fim"]`).value = fim;
+                row.querySelector(`[name="dia_${i}_intervalo"]`).value = intervalo;
+            }
+        });
     });
-});
 </script>
 {% endblock %}

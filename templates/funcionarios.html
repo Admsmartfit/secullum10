@@ -37,7 +37,7 @@
                     <td>
                         {% if f.celular %}
                         <a href="https://wa.me/55{{ f.celular|replace('-', '')|replace(' ', '')|replace('(', '')|replace(')', '') }}"
-                           target="_blank" class="text-success">
+                            target="_blank" class="text-success">
                             <i class="fab fa-whatsapp me-1"></i>{{ f.celular }}
                         </a>
                         {% else %}
@@ -100,7 +100,8 @@
 {% block extra_js %}
 <script>
     // Dados dos funcionários para o modal (usando JSON para evitar problemas de escape)
-    const funcionarios = {{ funcionarios_json|safe }};
+    const funcionarios = {{ funcionarios_json | safe }};
+    const todosTurnos = {{ turnos | tojson | safe }};
 
     function showDetails(id) {
         const func = funcionarios[id];
@@ -157,6 +158,33 @@
                     <p class="text-muted text-uppercase fw-bold small mb-2">Dados Profissionais</p>
                     <div class="mb-1 small"><span class="text-muted">Admissão:</span> ${func.admissao}</div>
                     <div class="mb-1 small"><span class="text-muted">Nascimento:</span> ${func.nascimento}</div>
+                </div>
+
+                <!-- ── PRD War Room: Horário Base (Filtrado por Função) ── -->
+                <div class="col-12 mt-2">
+                    <div class="p-3 border rounded" style="background: #f8fafc;">
+                        <label class="form-label text-muted text-uppercase fw-bold small mb-2 d-block">
+                            <i class="fas fa-calendar-star me-1"></i>Horário Base (O Contrato)
+                        </label>
+                        <div class="d-flex gap-2 align-items-center">
+                            <select class="form-select form-select-sm" id="select-horario-base-${id}" style="max-width:300px;">
+                                <option value="">Sem horário base</option>
+                                ${todosTurnos
+                .filter(t => !t.funcao || t.funcao === func.funcao)
+                .map(t => `
+                                        <option value="${t.id}" ${func.horario_base_id == t.id ? 'selected' : ''}>
+                                            ${t.nome} (${t.inicio}-${t.fim})
+                                        </option>
+                                    `).join('')}
+                            </select>
+                            <button class="btn btn-sm btn-primary" onclick="salvarHorarioBase('${id}')">
+                                <i class="fas fa-save me-1"></i>Salvar
+                            </button>
+                        </div>
+                        <div class="form-text mt-1" style="font-size:0.75rem;">
+                            Este turno será aplicado automaticamente nos dias da semana configurados quando não houver exceção manual.
+                        </div>
+                    </div>
                 </div>
 
                 <div class="col-12 mt-2">
@@ -221,6 +249,25 @@
             .catch(() => {
                 const sec = document.getElementById(`escala-section-${id}`);
                 if (sec) sec.innerHTML = '<div class="small text-muted">Não foi possível carregar a escala.</div>';
+            });
+    }
+
+    function salvarHorarioBase(funcId) {
+        const turnoId = document.getElementById(`select-horario-base-${funcId}`).value;
+        const formData = new FormData();
+        formData.append('horario_base_id', turnoId);
+
+        fetch(`/funcionarios/${funcId}/set-horario-base`, {
+            method: 'POST',
+            body: formData
+        })
+            .then(r => r.json())
+            .then(d => {
+                if (d.ok) {
+                    // Atualiza o objeto local para manter o estado no modal
+                    funcionarios[funcId].horario_base_id = turnoId ? parseInt(turnoId) : null;
+                    alert('Horário base atualizado!');
+                }
             });
     }
 
