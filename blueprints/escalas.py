@@ -1384,3 +1384,109 @@ def grade_mestra_setar_tipo():
     turno.tipo_turno = tipo
     db.session.commit()
     return jsonify({'ok': True, 'turno_id': turno_id, 'tipo_turno': tipo})
+
+
+# ── Gerar Rotação de Domingos ─────────────────────────────────────────────────
+
+@escalas_bp.route('/gerar-domingos', methods=['GET', 'POST'])
+@login_required
+def gerar_domingos():
+    import calendar as cal_mod
+
+    funcionarios = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
+    turnos_a = Turno.query.filter_by(tipo_turno='A').order_by(Turno.nome).all()
+    turnos_b = Turno.query.filter_by(tipo_turno='B').order_by(Turno.nome).all()
+
+    if request.method == 'POST':
+        mes_ano      = request.form['mes_ano']
+        func_a_id    = request.form['func_a_id']
+        turno_a_id   = int(request.form['turno_a_id'])
+        func_b_id    = request.form['func_b_id']
+        turno_b_id   = int(request.form['turno_b_id'])
+        comeca_com   = request.form.get('comeca_com', 'A')  # 'A' ou 'B'
+        func_c_id    = request.form.get('func_c_id') or None
+        turno_c_id   = request.form.get('turno_c_id') or None
+
+        try:
+            ano, mes = int(mes_ano[:4]), int(mes_ano[5:7])
+        except (ValueError, IndexError):
+            flash('Mês/Ano inválido.', 'danger')
+            return redirect(url_for('escalas.gerar_domingos'))
+
+        _, dias_no_mes = cal_mod.monthrange(ano, mes)
+        domingos = [d for d in range(1, dias_no_mes + 1) if date(ano, mes, d).weekday() == 6]
+
+        turno_a = Turno.query.get(turno_a_id)
+        turno_b = Turno.query.get(turno_b_id)
+        turno_c = Turno.query.get(int(turno_c_id)) if turno_c_id else None
+
+        saved   = 0
+        avisos  = []
+        # Alterna: par começa com quem foi escolhido
+        seq = [(func_a_id, turno_a), (func_b_id, turno_b)]
+        if comeca_com == 'B':
+            seq = seq[::-1]
+
+        for i, domingo_dia in enumerate(domingos):
+            func_id, turno = seq[i % 2]
+            data_dom = date(ano, mes, domingo_dia)
+
+            infracoes = validar_alocacao(func_id, data_dom, turno)
+            warn_msgs = '; '.join(x['message'] for x in infracoes) or None
+
+            aloc = AlocacaoDiaria.query.filter_by(
+                funcionario_id=func_id, data=data_dom
+            ).first()
+            if aloc:
+                aloc.turno_id = turno.id
+                aloc.compliance_warning = warn_msgs
+            else:
+                db.session.add(AlocacaoDiaria(
+                    funcionario_id=func_id, turno_id=turno.id,
+                    data=data_dom, compliance_warning=warn_msgs,
+                ))
+            saved += 1
+            if warn_msgs:
+                avisos.append(f'{data_dom.strftime("%d/%m")}: {warn_msgs}')
+
+            # Compensação: se turno é A e há funcionário C → folga A na sexta + C cobre
+            if func_id == func_a_id and func_c_id and turno_c:
+                sexta = data_dom - timedelta(days=2)
+                # Folga para A na sexta
+                aloc_sexta_a = AlocacaoDiaria.query.filter_by(
+                    funcionario_id=func_a_id, data=sexta
+                ).first()
+                if aloc_sexta_a:
+                    db.session.delete(aloc_sexta_a)
+
+                # C cobre a sexta com turno_a
+                aloc_sexta_c = AlocacaoDiaria.query.filter_by(
+                    funcionario_id=func_c_id, data=sexta
+                ).first()
+                if aloc_sexta_c:
+                    aloc_sexta_c.turno_id = turno_a_id
+                else:
+                    db.session.add(AlocacaoDiaria(
+                        funcionario_id=func_c_id, turno_id=turno_a_id,
+                        data=sexta,
+                    ))
+
+        try:
+            db.session.commit()
+            msg = f'{saved} domingo(s) gerado(s) com sucesso!'
+            if avisos:
+                msg += f' — {len(avisos)} aviso(s) CLT.'
+            flash(msg, 'success' if not avisos else 'warning')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao salvar: {e}', 'danger')
+
+        return redirect(url_for('escalas.gerar_domingos'))
+
+    return render_template('escalas/gerar_domingos.html',
+        funcionarios=funcionarios,
+        turnos_a=turnos_a, turnos_b=turnos_b,
+        todos_turnos=Turno.query.order_by(Turno.nome).all(),
+        mes_atual=date.today().strftime('%Y-%m'),
+        departamentos=_departamentos(),
+    )
