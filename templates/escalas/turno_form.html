@@ -43,6 +43,15 @@
                     {% endfor %}
                 </datalist>
             </div>
+            <div class="col-md-2">
+                <label class="form-label text-muted small fw-bold">TIPO (A/B/C)</label>
+                <select name="tipo_turno" class="form-select">
+                    <option value="">— sem tipo —</option>
+                    <option value="A" {{ 'selected' if turno and turno.tipo_turno == 'A' }}>A – Abridor</option>
+                    <option value="B" {{ 'selected' if turno and turno.tipo_turno == 'B' }}>B – Fechador</option>
+                    <option value="C" {{ 'selected' if turno and turno.tipo_turno == 'C' }}>C – Tático</option>
+                </select>
+            </div>
         </div>
 
         <!-- Padrões -->

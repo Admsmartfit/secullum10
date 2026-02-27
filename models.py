@@ -147,6 +147,8 @@ class Turno(db.Model):
     funcao = db.Column(db.String(100), nullable=True)
     # Cor hexadecimal para o calendário
     color = db.Column(db.String(7), nullable=True, default='#4f46e5')
+    # Tipo de turno: 'A' = Abridor, 'B' = Fechador, 'C' = Tático, None = não classificado
+    tipo_turno = db.Column(db.String(1), nullable=True)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     alocacoes = db.relationship('AlocacaoDiaria', backref='turno', lazy='dynamic', cascade="all, delete-orphan")

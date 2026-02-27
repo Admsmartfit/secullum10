@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% block title %}Grade Mestra – Tipos A/B/C{% endblock %}
+
+{% block extra_css %}
+<style>
+.tipo-pill {
+    display: inline-block;
+    width: 28px; height: 28px; border-radius: 50%;
+    font-size: 0.78rem; font-weight: 700; line-height: 28px;
+    text-align: center; cursor: pointer; border: 2px solid transparent;
+    transition: all .15s;
+    user-select: none;
+}
+.tipo-pill.A { background: #16a34a; color: #fff; }
+.tipo-pill.B { background: #2563eb; color: #fff; }
+.tipo-pill.C { background: #7c3aed; color: #fff; }
+.tipo-pill.none-sel { background: #e5e7eb; color: #6b7280; border: 2px solid #d1d5db; }
+.tipo-pill.active { box-shadow: 0 0 0 3px rgba(0,0,0,.25); transform: scale(1.15); }
+.tipo-pill:hover { opacity: .85; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0 fw-bold">
+        <i class="fas fa-sliders-h me-2 text-primary"></i>Grade Mestra — Tipos A / B / C
+    </h1>
+    <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left me-1"></i>Voltar
+    </a>
+</div>
+
+<div class="alert alert-info py-2 small mb-4">
+    <i class="fas fa-info-circle me-2"></i>
+    Classifique cada turno como <strong>A (Abridor)</strong>, <strong>B (Fechador)</strong>
+    ou <strong>C (Tático)</strong>. As letras aparecerão nos badges do Quadro Multi-Painéis
+    e habilitam a linha de cobertura e o assistente de compensação de domingo.
+    Clique na letra desejada — salva automaticamente.
+</div>
+
+<div class="card p-0">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Turno</th>
+                    <th>Unidade</th>
+                    <th>Função</th>
+                    <th>Horário</th>
+                    <th class="text-center">Tipo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in turnos %}
+                <tr id="row-{{ t.id }}">
+                    <td class="fw-semibold">
+                        <span class="me-2" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:{{ t.color or '#4f46e5' }};"></span>
+                        {{ t.nome }}
+                    </td>
+                    <td>
+                        {% if t.departamento %}
+                        <span class="badge bg-indigo-soft text-indigo">{{ t.departamento }}</span>
+                        {% else %}
+                        <span class="text-muted small">Global</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if t.funcao %}
+                        <span class="badge bg-green-soft text-green">{{ t.funcao }}</span>
+                        {% else %}
+                        <span class="text-muted small">Todos</span>
+                        {% endif %}
+                    </td>
+                    <td class="small text-muted">{{ t.hora_inicio.strftime('%H:%M') }} – {{ t.hora_fim.strftime('%H:%M') }}</td>
+                    <td class="text-center">
+                        <div class="d-flex justify-content-center gap-1" data-turno-id="{{ t.id }}">
+                            <span class="tipo-pill none-sel {{ 'active' if not t.tipo_turno }}"
+                                  data-tipo="" title="Sem tipo">–</span>
+                            <span class="tipo-pill A {{ 'active' if t.tipo_turno == 'A' }}"
+                                  data-tipo="A" title="Abridor">A</span>
+                            <span class="tipo-pill B {{ 'active' if t.tipo_turno == 'B' }}"
+                                  data-tipo="B" title="Fechador">B</span>
+                            <span class="tipo-pill C {{ 'active' if t.tipo_turno == 'C' }}"
+                                  data-tipo="C" title="Tático">C</span>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-4">Nenhum turno cadastrado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Toast de feedback -->
+<div id="saveToast" class="alert alert-success position-fixed bottom-0 end-0 m-3"
+     style="display:none;z-index:9999;min-width:220px;">
+    <i class="fas fa-check me-2"></i><span id="saveToastMsg">Salvo!</span>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+'use strict';
+document.querySelectorAll('[data-turno-id]').forEach(function (container) {
+    container.querySelectorAll('.tipo-pill').forEach(function (pill) {
+        pill.addEventListener('click', function () {
+            const turnoId = container.dataset.turnoId;
+            const tipo    = pill.dataset.tipo;
+
+            // Highlight visual imediato
+            container.querySelectorAll('.tipo-pill').forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+
+            fetch('/escalas/grade-mestra/setar-tipo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ turno_id: parseInt(turnoId), tipo_turno: tipo }),
+            })
+            .then(r => r.json())
+            .then(function (d) {
+                if (d.ok) {
+                    const msg  = tipo ? `Turno marcado como ${tipo}` : 'Tipo removido';
+                    const toast = document.getElementById('saveToast');
+                    document.getElementById('saveToastMsg').textContent = msg;
+                    toast.style.display = 'block';
+                    setTimeout(() => toast.style.display = 'none', 2500);
+                } else {
+                    alert('Erro: ' + (d.error || 'desconhecido'));
+                    // Reverter visual
+                    container.querySelectorAll('.tipo-pill').forEach(p => p.classList.remove('active'));
+                }
+            })
+            .catch(function () {
+                alert('Falha de conexão.');
+            });
+        });
+    });
+});
+</script>
+{% endblock %}

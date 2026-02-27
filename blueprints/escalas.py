@@ -51,6 +51,7 @@ def turno_novo():
             departamento=request.form.get('departamento', '').strip() or None,
             funcao=request.form.get('funcao', '').strip() or None,
             color=request.form.get('color', '#4f46e5') or '#4f46e5',
+            tipo_turno=request.form.get('tipo_turno') or None,
         )
         db.session.add(turno)
         db.session.commit()
@@ -96,6 +97,7 @@ def turno_editar(turno_id):
         turno.departamento = request.form.get('departamento', '').strip() or None
         turno.funcao = request.form.get('funcao', '').strip() or None
         turno.color = request.form.get('color', '#4f46e5') or '#4f46e5'
+        turno.tipo_turno = request.form.get('tipo_turno') or None
         db.session.commit()
         flash(f'Turno "{turno.nome}" atualizado!', 'success')
         return redirect(url_for('escalas.index'))
@@ -699,45 +701,71 @@ def cargo_mensal_preview():
 @escalas_bp.route('/funcionario/<func_id>/proximos')
 @login_required
 def proximos_turnos(func_id):
-    """Próximos 7 dias de escala de um funcionário (usada no modal de detalhes)."""
-    from datetime import timedelta
+    """Próximos dias de escala — usa AlocacaoDiaria (exceção) ou horario_base (padrão)."""
+    func = Funcionario.query.get_or_404(func_id)
     hoje = date.today()
-    fim  = hoje + timedelta(days=7)
-    alocacoes = (
-        AlocacaoDiaria.query
+
+    # Exceções explícitas dos próximos 10 dias
+    excecoes = {
+        a.data: a.turno
+        for a in AlocacaoDiaria.query
         .filter(
             AlocacaoDiaria.funcionario_id == func_id,
             AlocacaoDiaria.data >= hoje,
-            AlocacaoDiaria.data <= fim,
+            AlocacaoDiaria.data <= hoje + timedelta(days=10),
         )
         .join(Turno)
-        .order_by(AlocacaoDiaria.data)
         .all()
-    )
-    hoje_aloc = AlocacaoDiaria.query.filter_by(funcionario_id=func_id, data=hoje).first()
+    }
 
-    dias_com_aloc = {a.data for a in alocacoes}
+    def _turno_efetivo(d):
+        """Retorna (turno, is_excecao) para o dia d, ou (None, False) se folga."""
+        if d in excecoes:
+            return excecoes[d], True
+        if func.horario_base and d.weekday() in func.horario_base.dias_semana_list:
+            return func.horario_base, False
+        return None, False
+
+    # Turno de hoje
+    turno_hoje, _ = _turno_efetivo(hoje)
+    if turno_hoje:
+        h_ini, h_fim, _ = turno_hoje.get_horario_dia(hoje.weekday())
+        turno_hoje_data = {
+            'nome':   turno_hoje.nome,
+            'inicio': h_ini.strftime('%H:%M'),
+            'fim':    h_fim.strftime('%H:%M'),
+        }
+    else:
+        turno_hoje_data = None
+
+    # Próxima folga (primeiro dia sem turno nos próximos 10 dias, pulando hoje)
     proxima_folga = None
-    for i in range(9):
+    for i in range(1, 11):
         d = hoje + timedelta(days=i)
-        if d not in dias_com_aloc:
+        if _turno_efetivo(d)[0] is None:
             proxima_folga = f"{_DIAS_PT[d.weekday()]} {d.strftime('%d/%m')}"
             break
 
+    # Próximos 7 dias com turno (excluindo hoje)
+    proximos = []
+    for i in range(1, 8):
+        d = hoje + timedelta(days=i)
+        t, is_exc = _turno_efetivo(d)
+        if t:
+            h_ini, h_fim, _ = t.get_horario_dia(d.weekday())
+            proximos.append({
+                'data':      d.strftime('%d/%m'),
+                'dia':       _DIAS_PT[d.weekday()],
+                'turno':     t.nome,
+                'inicio':    h_ini.strftime('%H:%M'),
+                'fim':       h_fim.strftime('%H:%M'),
+                'excecao':   is_exc,
+            })
+
     return jsonify({
-        'turno_hoje': {
-            'nome':   hoje_aloc.turno.nome,
-            'inicio': hoje_aloc.turno.hora_inicio.strftime('%H:%M'),
-            'fim':    hoje_aloc.turno.hora_fim.strftime('%H:%M'),
-        } if hoje_aloc else None,
+        'turno_hoje':    turno_hoje_data,
         'proxima_folga': proxima_folga,
-        'proximos': [{
-            'data':   a.data.strftime('%d/%m'),
-            'dia':    _DIAS_PT[a.data.weekday()],
-            'turno':  a.turno.nome,
-            'inicio': a.turno.hora_inicio.strftime('%H:%M'),
-            'fim':    a.turno.hora_fim.strftime('%H:%M'),
-        } for a in alocacoes],
+        'proximos':      proximos,
     })
 
 
@@ -812,11 +840,6 @@ def cobertura_dados():
             'warning': bool(aloc.compliance_warning),
         }
 
-    # Cobertura por dia (contagem de funcionários escalados)
-    cobertura = {}
-    for d in range(1, dias_no_mes + 1):
-        cobertura[d] = sum(1 for fid in func_ids if d in aloc_map.get(fid, {}))
-
     # Mapear dias de domingo para highlight
     domingos = {d for d in range(1, dias_no_mes + 1)
                 if date(ano, mes, d).weekday() == 6}
@@ -825,13 +848,33 @@ def cobertura_dados():
     for f in funcionarios:
         dias = {}
         for d in range(1, dias_no_mes + 1):
-            dias[d] = aloc_map.get(f.id, {}).get(d)  # None se folga
+            aloc_data = aloc_map.get(f.id, {}).get(d)
+            if aloc_data:
+                dias[d] = aloc_data               # exceção explícita
+            elif f.horario_base:
+                data_ref = date(ano, mes, d)
+                if data_ref.weekday() in f.horario_base.dias_semana_list:
+                    dias[d] = {                   # padrão do horario_base
+                        'turno': f.horario_base.nome,
+                        'color': f.horario_base.color or '#4f46e5',
+                        'warning': False,
+                    }
+                else:
+                    dias[d] = None
+            else:
+                dias[d] = None
         resultado_funcs.append({
             'id':    f.id,
             'nome':  f.nome,
             'funcao': f.funcao or '',
             'dias':  dias,
         })
+
+    # Cobertura por dia (contagem de funcionários escalados, incluindo horario_base)
+    cobertura = {
+        d: sum(1 for f in resultado_funcs if f['dias'].get(d) is not None)
+        for d in range(1, dias_no_mes + 1)
+    }
 
     return jsonify({
         'funcionarios': resultado_funcs,
@@ -1100,26 +1143,34 @@ def quadro_dados():
 
     func_id_param = request.args.get('func_id', '').strip()
 
-    q_func = Funcionario.query.filter_by(ativo=True)
+    # Sempre busca TODOS os funcionários do dept/funcao (para cobertura_tipos global).
+    # Quando func_id_param passado, o resultado de 'funcionarios' é filtrado,
+    # mas cobertura_tipos usa todos.
+    q_todos = Funcionario.query.filter_by(ativo=True)
+    q_todos = _filtrar_dept(q_todos, dept)
+    if funcao:
+        q_todos = q_todos.filter(Funcionario.funcao == funcao)
+    todos_funcionarios = q_todos.order_by(Funcionario.nome).all()
+    todos_ids = [f.id for f in todos_funcionarios]
+
     if func_id_param:
-        q_func = q_func.filter(Funcionario.id == func_id_param)
+        funcionarios = [f for f in todos_funcionarios if f.id == func_id_param]
     else:
-        q_func = _filtrar_dept(q_func, dept)
-        if funcao:
-            q_func = q_func.filter(Funcionario.funcao == funcao)
-    funcionarios = q_func.order_by(Funcionario.nome).all()
+        funcionarios = todos_funcionarios
     func_ids = [f.id for f in funcionarios]
 
-    if not func_ids:
+    if not todos_ids:
         return jsonify({
-            'funcionarios': [], 'cobertura': {}, 'dias_no_mes': dias_no_mes,
+            'funcionarios': [], 'cobertura': {}, 'cobertura_tipos': {},
+            'domingo_counts': {}, 'dias_no_mes': dias_no_mes,
             'ano': ano, 'mes': mes, 'sabados': [], 'domingos': [],
         })
 
-    alocacoes = (
+    # Busca alocações para TODOS do dept/funcao (para cobertura_tipos)
+    alocacoes_todas = (
         AlocacaoDiaria.query
         .filter(
-            AlocacaoDiaria.funcionario_id.in_(func_ids),
+            AlocacaoDiaria.funcionario_id.in_(todos_ids),
             AlocacaoDiaria.data >= data_ini,
             AlocacaoDiaria.data <= data_fim,
         )
@@ -1127,42 +1178,113 @@ def quadro_dados():
         .all()
     )
 
-    aloc_map: dict = {}
-    for aloc in alocacoes:
+    aloc_map: dict = {}  # {func_id: {day_int: info_dict}}
+    for aloc in alocacoes_todas:
         d = aloc.data.day
         aloc_map.setdefault(aloc.funcionario_id, {})[d] = {
-            'turno_id': aloc.turno_id,
-            'turno': aloc.turno.nome,
-            'color': aloc.turno.color or '#4f46e5',
-            'warning': bool(aloc.compliance_warning),
+            'turno_id':   aloc.turno_id,
+            'turno':      aloc.turno.nome,
+            'color':      aloc.turno.color or '#4f46e5',
+            'warning':    bool(aloc.compliance_warning),
+            'tipo_turno': aloc.turno.tipo_turno,
         }
 
-    cobertura = {
-        str(d): sum(1 for fid in func_ids if d in aloc_map.get(fid, {}))
-        for d in range(1, dias_no_mes + 1)
-    }
     sabados  = [d for d in range(1, dias_no_mes + 1) if date(ano, mes, d).weekday() == 5]
     domingos = [d for d in range(1, dias_no_mes + 1) if date(ano, mes, d).weekday() == 6]
 
+    # ── resultado_funcs (apenas os funcionários solicitados) ──────────────────
     resultado_funcs = []
     for f in funcionarios:
-        dias = {str(d): aloc_map.get(f.id, {}).get(d) for d in range(1, dias_no_mes + 1)}
+        dias = {}
+        for d in range(1, dias_no_mes + 1):
+            aloc_data = aloc_map.get(f.id, {}).get(d)
+            if aloc_data:
+                dias[str(d)] = aloc_data
+            elif f.horario_base:
+                data_ref = date(ano, mes, d)
+                if data_ref.weekday() in f.horario_base.dias_semana_list:
+                    dias[str(d)] = {
+                        'turno_id':   f.horario_base.id,
+                        'turno':      f.horario_base.nome,
+                        'color':      f.horario_base.color or '#4f46e5',
+                        'warning':    False,
+                        'base':       True,
+                        'tipo_turno': f.horario_base.tipo_turno,
+                    }
+                else:
+                    dias[str(d)] = None
+            else:
+                dias[str(d)] = None
+
         resultado_funcs.append({
-            'id': f.id,
-            'nome': f.nome,
+            'id':     f.id,
+            'nome':   f.nome,
             'funcao': f.funcao or '',
-            'sexo': f.sexo or '',
-            'dias': dias,
+            'sexo':   f.sexo or '',
+            'dias':   dias,
         })
 
+    # ── cobertura (contagem por dia, todos do dept) ───────────────────────────
+    def _dia_info(f, d):
+        aloc = aloc_map.get(f.id, {}).get(d)
+        if aloc:
+            return aloc
+        if f.horario_base and date(ano, mes, d).weekday() in f.horario_base.dias_semana_list:
+            return {'tipo_turno': f.horario_base.tipo_turno}
+        return None
+
+    cobertura = {
+        str(d): sum(1 for f in todos_funcionarios if _dia_info(f, d) is not None)
+        for d in range(1, dias_no_mes + 1)
+    }
+
+    # ── cobertura_tipos: quais tipos A/B/C cobrem cada dia ───────────────────
+    cobertura_tipos = {}
+    for d in range(1, dias_no_mes + 1):
+        tipos = set()
+        for f in todos_funcionarios:
+            info = _dia_info(f, d)
+            if info and info.get('tipo_turno'):
+                tipos.add(info['tipo_turno'])
+        cobertura_tipos[str(d)] = sorted(tipos)
+
+    # ── domingo_counts: domingos consecutivos por funcionário ─────────────────
+    today = date.today()
+    days_back_to_sunday = (today.weekday() + 1) % 7  # 0 se hoje é domingo
+    last_sunday = today - timedelta(days=days_back_to_sunday)
+    sundays_12 = [last_sunday - timedelta(weeks=i) for i in range(12)]
+
+    aloc_sundays_map = {}
+    if func_ids:
+        for a in AlocacaoDiaria.query.filter(
+            AlocacaoDiaria.funcionario_id.in_(func_ids),
+            AlocacaoDiaria.data.in_(sundays_12),
+        ).all():
+            aloc_sundays_map.setdefault(a.funcionario_id, set()).add(a.data)
+
+    domingo_counts = {}
+    for f in funcionarios:
+        count = 0
+        for sun in sundays_12:
+            worked = sun in aloc_sundays_map.get(f.id, set())
+            if not worked and f.horario_base:
+                worked = 6 in f.horario_base.dias_semana_list
+            if worked:
+                count += 1
+            else:
+                break
+        domingo_counts[f.id] = count
+
     return jsonify({
-        'funcionarios': resultado_funcs,
-        'cobertura': cobertura,
-        'dias_no_mes': dias_no_mes,
-        'sabados': sabados,
-        'domingos': domingos,
-        'ano': ano,
-        'mes': mes,
+        'funcionarios':   resultado_funcs,
+        'cobertura':      cobertura,
+        'cobertura_tipos': cobertura_tipos,
+        'domingo_counts': domingo_counts,
+        'dias_no_mes':    dias_no_mes,
+        'sabados':        sabados,
+        'domingos':       domingos,
+        'ano':            ano,
+        'mes':            mes,
     })
 
 
@@ -1237,3 +1359,28 @@ def quadro_bulk_update():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
     return jsonify({'ok': True, 'saved': saved, 'errors': errors, 'warnings': warnings_out})
+
+
+# ── Grade Mestra (configuração de tipos A/B/C por turno) ─────────────────────
+
+@escalas_bp.route('/grade-mestra')
+@login_required
+def grade_mestra():
+    turnos = Turno.query.order_by(Turno.departamento.nullslast(), Turno.nome).all()
+    return render_template('escalas/grade_mestra.html', turnos=turnos)
+
+
+@escalas_bp.route('/grade-mestra/setar-tipo', methods=['POST'])
+@login_required
+def grade_mestra_setar_tipo():
+    data = request.get_json(force=True) or {}
+    turno_id  = data.get('turno_id')
+    tipo      = data.get('tipo_turno') or None
+    if tipo and tipo not in ('A', 'B', 'C'):
+        return jsonify({'ok': False, 'error': 'Tipo inválido'}), 400
+    turno = Turno.query.get(turno_id)
+    if not turno:
+        return jsonify({'ok': False, 'error': 'Turno não encontrado'}), 404
+    turno.tipo_turno = tipo
+    db.session.commit()
+    return jsonify({'ok': True, 'turno_id': turno_id, 'tipo_turno': tipo})

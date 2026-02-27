@@ -50,6 +50,36 @@
 .palette-badge:active { cursor: grabbing; }
 
 #mesLabel { min-width: 150px; text-align: center; font-weight: 700; font-size: 1rem; }
+
+/* ── Tipo A/B/C inside badge ────────────────────────────────────────────────── */
+.tipo-badge {
+    display: inline-block; width: 13px; height: 13px; border-radius: 50%;
+    font-size: 8px; font-weight: 700; line-height: 13px; text-align: center;
+    background: rgba(255,255,255,.35); margin-right: 2px; vertical-align: middle;
+}
+/* ── Domingos consecutivos (absolute badge on last Sunday) ─────────────────── */
+.dom-count-badge {
+    position: absolute; top: -4px; right: -4px;
+    background: #ef4444; color: #fff; border-radius: 50%;
+    font-size: 8px; font-weight: 700; width: 13px; height: 13px;
+    line-height: 13px; text-align: center; pointer-events: none;
+    z-index: 5;
+}
+/* ── Cobertura strip ────────────────────────────────────────────────────────── */
+.cob-strip { overflow-x: auto; margin-top: 4px; }
+.cob-table { border-collapse: collapse; min-width: 100%; }
+.cob-table td { border: 1px solid #e2e8f0; text-align: center; padding: 2px 1px; min-width: 22px; }
+.cob-label { font-weight: 700; font-size: .6rem; color: #6b7280; background: #f8fafc; position: sticky; left: 0; z-index: 2; padding: 0 4px !important; }
+.cob-day { font-size: .6rem; }
+.cob-day-empty { background: #f8fafc; color: #d1d5db; }
+.cob-sunday-empty { background: #fee2e2; color: #fca5a5; }
+.tipo-cob {
+    display: inline-block; width: 13px; height: 13px; border-radius: 50%;
+    font-size: 8px; font-weight: 700; line-height: 13px; text-align: center; color: #fff;
+}
+.tipo-cob.A { background: #16a34a; }
+.tipo-cob.B { background: #2563eb; }
+.tipo-cob.C { background: #7c3aed; }
 </style>
 {% endblock %}
 
@@ -143,9 +173,10 @@ const TODOS_FUNCIONARIOS = [
         <div class="palette-badge" draggable="true"
              data-turno-id="{{ t.id }}" data-turno-nome="{{ t.nome }}"
              data-color="{{ t.color or '#4f46e5' }}"
+             data-tipo-turno="{{ t.tipo_turno or '' }}"
              style="background:{{ t.color or '#4f46e5' }};"
              title="{{ t.nome }} — {{ t.hora_inicio.strftime('%H:%M') }}–{{ t.hora_fim.strftime('%H:%M') }}">
-            {{ t.nome }}
+            {% if t.tipo_turno %}<span style="opacity:.8;font-size:.6rem;">[{{ t.tipo_turno }}]</span> {% endif %}{{ t.nome }}
         </div>
         {% endfor %}
         {% if not turnos %}<span class="small text-muted">Nenhum turno.</span>{% endif %}
@@ -153,6 +184,36 @@ const TODOS_FUNCIONARIOS = [
 </div>
 
 <div id="toastBox" class="position-fixed bottom-0 end-0 p-3" style="z-index:9999"></div>
+
+<!-- Modal: compensação de domingo (Turno A) -->
+<div class="modal fade" id="modalCompDomingo" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title fw-bold">
+                    <i class="fas fa-sun me-2 text-warning"></i>Turno A → Domingo
+                </h6>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">Conceder folga compensatória na <strong>sexta-feira anterior</strong>
+                    (<span id="compSextaLabel">—</span>)?</p>
+                <div class="alert alert-warning py-2 small mb-0">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    Atenção: Abertura às 05:00 — Turno C deverá cobrir a sexta-feira.
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button id="btnCompSim" class="btn btn-primary btn-sm">
+                    <i class="fas fa-check me-1"></i>Sim, dar folga na sexta
+                </button>
+                <button id="btnCompNao" class="btn btn-outline-secondary btn-sm">
+                    Só alocar o domingo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
 const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
@@ -247,7 +308,7 @@ function mesAnoStr() {
 document.addEventListener('dragstart', function(e) {
     const el = e.target.closest('[data-turno-id]');
     if (!el) return;
-    dragData = { turno_id: +el.dataset.turnoId, turno_nome: el.dataset.turnoNome, color: el.dataset.color };
+    dragData = { turno_id: +el.dataset.turnoId, turno_nome: el.dataset.turnoNome, color: el.dataset.color, tipo_turno: el.dataset.tipoTurno || '' };
     e.dataTransfer.effectAllowed = 'copy';
 });
 
@@ -266,7 +327,11 @@ document.addEventListener('drop', function(e) {
     if (!c || !dragData) return;
     e.preventDefault();
     c.classList.remove('drag-over');
-    aplicarMudanca(c.dataset.funcId, c.dataset.data, dragData.turno_id, dragData.turno_nome, dragData.color, c);
+    if (dragData.tipo_turno === 'A' && c.classList.contains('domingo')) {
+        aplicarMudancaComCompensacao(c.dataset.funcId, c.dataset.data, dragData, c);
+    } else {
+        aplicarMudanca(c.dataset.funcId, c.dataset.data, dragData.turno_id, dragData.turno_nome, dragData.color, c);
+    }
     dragData = null;
 });
 
@@ -346,9 +411,11 @@ function carregarTodos() {
 // ── Calendar rendering ────────────────────────────────────────────────────────
 
 function renderCalendar(idx, func, data) {
-    const { dias_no_mes, ano, mes, sabados, domingos } = data;
-    const sab = new Set(sabados), dom = new Set(domingos);
+    const { dias_no_mes, ano, mes, sabados, domingos, cobertura_tipos, domingo_counts } = data;
+    const dom = new Set(domingos);
     const fw  = new Date(ano, mes-1, 1).getDay();
+    const domCt = (domingo_counts || {})[func.id] || 0;
+    const ultimoDomingo = domingos.length ? Math.max(...domingos) : -1;
 
     let h = '<table class="cal-table"><thead><tr>';
     DIAS_PT.forEach(d => h += `<th>${d}</th>`);
@@ -362,18 +429,56 @@ function renderCalendar(idx, func, data) {
         const aloc = func.dias[String(d)];
         let inner  = `<div class="cal-day-num">${d}</div>`;
         if (aloc) {
-            inner += `<div class="turno-badge${aloc.warning?' clt-warn':''}" draggable="true"
+            const wCls     = aloc.warning ? ' clt-warn' : '';
+            const style    = aloc.base
+                ? `background:transparent;color:${aloc.color};border:2px solid ${aloc.color};`
+                : `background:${aloc.color};color:#fff;`;
+            const tip      = esc(aloc.turno) + (aloc.base ? ' (horário base)' : '');
+            const tipoHtml = aloc.tipo_turno
+                ? `<span class="tipo-badge">${esc(aloc.tipo_turno)}</span>`
+                : '';
+            inner += `<div class="turno-badge${wCls}" draggable="true"
                 data-turno-id="${aloc.turno_id}" data-turno-nome="${esc(aloc.turno)}"
                 data-color="${aloc.color}" data-func-id="${func.id}" data-data="${ds}"
-                style="background:${aloc.color};" title="${esc(aloc.turno)}">${esc(aloc.turno)}</div>`;
+                data-tipo-turno="${esc(aloc.tipo_turno || '')}"
+                style="${style}" title="${tip}">${tipoHtml}${esc(aloc.turno)}</div>`;
         }
-        h += `<td class="cal-cell ${cls}" data-data="${ds}" data-func-id="${func.id}">${inner}</td>`;
+        if (wd === 0 && d === ultimoDomingo && domCt > 0) {
+            inner += `<span class="dom-count-badge" title="${domCt} domingo(s) consecutivo(s)">${domCt}</span>`;
+        }
+        h += `<td class="cal-cell ${cls}" data-data="${ds}" data-func-id="${func.id}" data-dia-semana="${wd}">${inner}</td>`;
         if (wd===6 && d<dias_no_mes) h += '</tr><tr>';
     }
     const lw = new Date(ano, mes-1, dias_no_mes).getDay();
     if (lw !== 6) for (let i = lw+1; i <= 6; i++) h += '<td class="cal-empty"></td>';
     h += '</tr></tbody></table>';
+
+    // Append coverage strip below calendar
+    h += renderCoberturaStrip(data);
+
     document.getElementById('calPainel' + idx).innerHTML = h;
+}
+
+function renderCoberturaStrip(data) {
+    const { dias_no_mes, domingos, cobertura_tipos } = data;
+    const ct  = cobertura_tipos || {};
+    const dom = new Set(domingos);
+
+    let h = '<div class="cob-strip"><table class="cob-table"><tbody><tr>';
+    h += '<td class="cob-label">COB</td>';
+    for (let d = 1; d <= dias_no_mes; d++) {
+        const tipos  = ct[String(d)] || [];
+        const isDom  = dom.has(d);
+        if (tipos.length === 0) {
+            const cls = isDom ? 'cob-sunday-empty' : 'cob-day-empty';
+            h += `<td class="cob-day ${cls}">–</td>`;
+        } else {
+            const pills = tipos.map(t => `<span class="tipo-cob ${t}">${t}</span>`).join('');
+            h += `<td class="cob-day">${pills}</td>`;
+        }
+    }
+    h += '</tr></tbody></table></div>';
+    return h;
 }
 
 // ── Save ──────────────────────────────────────────────────────────────────────
@@ -431,6 +536,48 @@ function showToast(msg, type) {
     document.getElementById('toastBox').appendChild(el);
     setTimeout(() => { try { el.remove(); } catch(_){} }, 5000);
 }
+
+// ── Compensação de Domingo (Turno A) ─────────────────────────────────────────
+
+let pendingCompData = null;
+
+function aplicarMudancaComCompensacao(funcId, dataStr, drag, cell) {
+    const [yyyy, mm, dd] = dataStr.split('-').map(Number);
+    const domingo = new Date(yyyy, mm - 1, dd);
+    const sexta   = new Date(domingo);
+    sexta.setDate(domingo.getDate() - 2);  // domingo - 2 = sexta-feira
+    const sextaStr = `${sexta.getFullYear()}-${String(sexta.getMonth()+1).padStart(2,'0')}-${String(sexta.getDate()).padStart(2,'0')}`;
+
+    pendingCompData = { funcId, dataStr, drag, cell, sextaStr };
+    document.getElementById('compSextaLabel').textContent =
+        `${String(sexta.getDate()).padStart(2,'0')}/${String(sexta.getMonth()+1).padStart(2,'0')}/${sexta.getFullYear()}`;
+    new bootstrap.Modal(document.getElementById('modalCompDomingo')).show();
+}
+
+document.getElementById('btnCompSim').addEventListener('click', function () {
+    if (!pendingCompData) return;
+    bootstrap.Modal.getInstance(document.getElementById('modalCompDomingo'))?.hide();
+    const { funcId, dataStr, drag, cell, sextaStr } = pendingCompData;
+
+    // Alocar turno A no domingo
+    aplicarMudanca(funcId, dataStr, drag.turno_id, drag.turno_nome, drag.color, cell);
+    // Enfileirar folga na sexta
+    enqueueChange(funcId, sextaStr, null, 'delete');
+    // Limpar badge da sexta visualmente se o painel estiver aberto
+    const sextaCell = document.querySelector(`.cal-cell[data-func-id="${funcId}"][data-data="${sextaStr}"]`);
+    if (sextaCell) { const b = sextaCell.querySelector('.turno-badge'); if (b) b.remove(); }
+
+    showToast('Folga na sexta enfileirada. Lembre de alocar o Turno C no lugar.', 'warning');
+    pendingCompData = null;
+});
+
+document.getElementById('btnCompNao').addEventListener('click', function () {
+    if (!pendingCompData) return;
+    const { funcId, dataStr, drag, cell } = pendingCompData;
+    aplicarMudanca(funcId, dataStr, drag.turno_id, drag.turno_nome, drag.color, cell);
+    pendingCompData = null;
+    bootstrap.Modal.getInstance(document.getElementById('modalCompDomingo'))?.hide();
+});
 
 // Init
 atualizarMesLabel();
