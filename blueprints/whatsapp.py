@@ -156,6 +156,7 @@ def _processar_mensagem(data: dict):
         else:
             ultima_inc.justificativa = nova_just
         
+        ultima_inc.justificada_via = 'Bot'
         db.session.commit()
         
         # Confirma para o funcionário

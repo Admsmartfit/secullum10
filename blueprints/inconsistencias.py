@@ -270,6 +270,7 @@ def batida_editar(bid):
         b.tipo = novo_tipo
     if justif:
         b.justificativa = justif
+        b.justificada_via  = 'RH'
     b.origem           = 'Manual'
     b.inconsistente    = False
 
@@ -314,6 +315,7 @@ def batida_nova():
         tipo=tipo,
         origem='Manual',
         justificativa=justif,
+        justificada_via='RH' if justif else None,
         inconsistente=False,
     )
     try:

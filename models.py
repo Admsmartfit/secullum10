@@ -101,6 +101,7 @@ class Batida(db.Model):
     origem = db.Column(db.String(100))  # REP, App, Manual, etc
     inconsistente = db.Column(db.Boolean, default=False)
     justificativa = db.Column(db.Text)
+    justificada_via = db.Column(db.String(50)) # Bot, Portal Web, RH
 
     # Localização (se disponível)
     latitude = db.Column(db.String(20))

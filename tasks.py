@@ -186,6 +186,48 @@ def register_tasks(celery):
             logger.error(f'[alerta_docs] Falha ao enviar e-mail: {e}')
         return {'docs': len(docs)}
 
+    @celery.task(name='tasks.gerar_acordos_mensais')
+    def gerar_acordos_mensais():
+        """Periodic Task: Dia 01 – Gera e envia acordos de banco de horas."""
+        from models import Funcionario, TemplateDocumento
+        from services.documento_service import gerar_pdf_de_template, enviar_documentos_para_lider
+        from services.whatsapp_bot import enviar_documento as enviar_wa
+        
+        hoje = date.today()
+        if hoje.day != 1:
+            logger.info('[acordos_mensais] Hoje não é dia 01, abortando.')
+            return {'status': 'dia_incorreto'}
+
+        template = TemplateDocumento.query.filter_by(nome='Acordo de Banco de Horas').first()
+        if not template:
+            logger.error('[acordos_mensais] Template "Acordo de Banco de Horas" não encontrado.')
+            return {'status': 'template_faltando'}
+
+        funcionarios = Funcionario.query.filter_by(ativo=True).all()
+        enviados = 0
+        
+        for f in funcionarios:
+            try:
+                pdf_bytes, nome_pdf = gerar_pdf_de_template(template, f)
+                
+                # 1. Enviar para Líder (e-mail)
+                enviar_documentos_para_lider(f, [(pdf_bytes, nome_pdf)])
+                
+                # 2. Enviar para Funcionário (WhatsApp)
+                if f.celular:
+                    enviar_wa(
+                        celular=f.celular,
+                        pdf_bytes=pdf_bytes,
+                        filename=nome_pdf,
+                        caption=f'Olá, {f.nome}! Segue seu acordo de banco de horas para assinatura.',
+                        func_id=f.id
+                    )
+                enviados += 1
+            except Exception as e:
+                logger.error(f'[acordos_mensais] Erro para {f.id}: {e}')
+
+        return {'enviados': enviados}
+
     # ── Sync automático de batidas (configurável) ─────────────────────────────
 
     @celery.task(name='tasks.sync_batidas_rapida')
