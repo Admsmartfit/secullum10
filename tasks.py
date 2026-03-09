@@ -46,46 +46,19 @@ def register_tasks(celery):
 
     @celery.task(name='tasks.bot_ausencia')
     def bot_ausencia():
-        from models import AlocacaoDiaria, Batida
-        from services.whatsapp_bot import enviar_texto
-        hoje = date.today()
-        alocacoes = AlocacaoDiaria.query.filter_by(data=hoje).all()
-        func_com_batida = {b.funcionario_id for b in Batida.query.filter_by(data=hoje).all()}
-        enviados = 0
-        for aloc in alocacoes:
-            if aloc.funcionario_id in func_com_batida:
-                continue
-            func = aloc.funcionario
-            if not func or not func.celular:
-                continue
-            msg = (f'Ola, {func.nome.split()[0]}! Voce ainda nao registrou ponto hoje. '
-                   'Aconteceu algo? Responda esta mensagem.')
-            if enviar_texto(celular=func.celular, mensagem=msg, func_id=func.id, tipo='ausencia'):
-                enviados += 1
-        logger.info(f'[bot_ausencia] {enviados} mensagens enviadas.')
-        return {'enviados': enviados}
+        """Proxy: executa regras DAILY_ABSENCE ativas no banco de dados."""
+        from services.notification_processor import processar_regras_evento
+        result = processar_regras_evento('EVENT_ABSENCE')
+        logger.info(f'[bot_ausencia] {result}')
+        return result
 
     @celery.task(name='tasks.checkin_previo')
     def checkin_previo():
-        from datetime import datetime
-        from models import AlocacaoDiaria
-        from services.whatsapp_bot import enviar_texto
-        agora = datetime.now()
-        hoje = agora.date()
-        hora_alvo = agora.hour + 1
-        for aloc in AlocacaoDiaria.query.filter_by(data=hoje).all():
-            if aloc.turno.hora_inicio.hour != hora_alvo:
-                continue
-            func = aloc.funcionario
-            if not func or not func.celular or aloc.pre_checkin:
-                continue
-            enviar_texto(
-                celular=func.celular,
-                mensagem=(f'Lembrete: turno "{aloc.turno.nome}" começa em 1 hora '
-                          f'({aloc.turno.hora_inicio.strftime("%H:%M")}). '
-                          'Responda SIM para confirmar presenca.'),
-                func_id=func.id, tipo='checkin',
-            )
+        """Proxy: executa regras PRE_CHECKIN ativas no banco de dados."""
+        from services.notification_processor import processar_regras_evento
+        result = processar_regras_evento('EVENT_HOURLY')
+        logger.info(f'[checkin_previo] {result}')
+        return result
 
     @celery.task(name='tasks.calcular_banco_horas_todos')
     def calcular_banco_horas_todos():

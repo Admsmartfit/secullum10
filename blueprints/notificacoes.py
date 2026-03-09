@@ -2,6 +2,7 @@
 Módulo de Regras de Notificação WhatsApp (Fase 4).
 CRUD de regras + execução manual para teste.
 """
+from collections import defaultdict  # noqa: F401 — usado em index()
 from datetime import datetime
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required
@@ -15,6 +16,7 @@ TRIGGER_LABELS = {
     'EVENT_ABSENCE': 'Ao detectar ausência',
     'DAILY':         'Diário (hora configurável)',
     'WEEKLY':        'Semanal (dia configurável)',
+    'EVENT_HOURLY':  'A cada hora (verificação contínua)',
 }
 
 CONDITION_LABELS = {
@@ -23,9 +25,33 @@ CONDITION_LABELS = {
     'ABSENCE':               'Ausência (sem ponto)',
     'OVERTIME':              'Hora extra na saída',
     'INTERJORNADA':          'Violação de interjornada',
-    'ESCALA_ENVIO':          'Envio de escala ao funcionário',
+    'ESCALA_ENVIO':          'Envio de escala semanal',
     'INCONSISTENCY_REPORT':  'Relatório de inconsistências (dia anterior)',
     'DESCANSO_DOMINGO_F':    'Descanso dominical feminino (CLT art. 386)',
+    'PRE_CHECKIN':           'Lembrete pré-turno (1h antes)',
+    'DAILY_ABSENCE':         'Cobrança de ausência (sem ponto no dia)',
+}
+
+# ── Categorias ─────────────────────────────────────────────────────────────────
+CATEGORIA_LABELS = {
+    'geral':      'Mensagens Gerais',
+    'bot':        'Interação com o Bot',
+    'alerta':     'Alertas / Regras',
+    'fechamento': 'Fechamentos',
+}
+
+# Sugestão automática: condition_type → categoria padrão
+CONDITION_CATEGORIA = {
+    'ESCALA_ENVIO':         'geral',
+    'ABSENCE':              'bot',
+    'LATE_ENTRY':           'alerta',
+    'EARLY_LEAVE':          'alerta',
+    'OVERTIME':             'alerta',
+    'INTERJORNADA':         'alerta',
+    'DESCANSO_DOMINGO_F':   'alerta',
+    'INCONSISTENCY_REPORT': 'fechamento',
+    'PRE_CHECKIN':          'automacao',
+    'DAILY_ABSENCE':        'automacao',
 }
 
 # Templates padrão por tipo de condição
@@ -62,6 +88,47 @@ _DEFAULTS = {
         'manager':  '{full_name} trabalhou todos os dias da semana incluindo domingo (CLT art. 386 — descanso feminino). Verifique a escala.',
         'employee': '',
     },
+    'PRE_CHECKIN': {
+        'manager':  '',
+        'employee': 'Olá, {name}! Seu turno {turno} começa em 1h ({inicio}). Responda SIM para confirmar presença.',
+    },
+    'DAILY_ABSENCE': {
+        'manager':  'O funcionário {full_name} não registrou ponto hoje. Turno: {turno} ({inicio}).',
+        'employee': 'Olá, {name}! Você ainda não registrou ponto hoje (turno {turno} às {inicio}). Aconteceu algo?',
+    },
+    'ESCALA_ENVIO': {
+        'manager':  '',
+        'employee': '{{escala}}',
+    },
+}
+
+
+# ── Configurações do Chatbot (Respostas do Robô) ───────────────────────────────
+BOT_MSG_CHAVES = [
+    'bot_msg_sim_func',
+    'bot_msg_nao_func',
+    'bot_msg_nao_lider',
+    'bot_msg_justificativa_func',
+    'bot_msg_justificativa_lider',
+    'bot_msg_transbordo_lider',
+]
+
+BOT_MSG_LABELS = {
+    'bot_msg_sim_func':             '✅ Resposta ao "SIM" (funcionário confirmou presença)',
+    'bot_msg_nao_func':             '❌ Resposta ao "NÃO" (funcionário confirmou ausência)',
+    'bot_msg_nao_lider':            '⚠️ Notificação ao gestor quando funcionário confirma ausência',
+    'bot_msg_justificativa_func':   '📝 Confirmação ao funcionário que enviou justificativa',
+    'bot_msg_justificativa_lider':  '📋 Notificação ao gestor com a justificativa do funcionário',
+    'bot_msg_transbordo_lider':     '💬 Encaminhar mensagem livre ao gestor (sem inconsistência)',
+}
+
+BOT_MSG_DEFAULTS = {
+    'bot_msg_sim_func':             'Perfeito, {{nome}}! Presença confirmada. Bom turno! 👍',
+    'bot_msg_nao_func':             'Entendido! Sua ausência foi registrada. Qualquer dúvida, entre em contato com o RH.',
+    'bot_msg_nao_lider':            '⚠️ {{nome}} confirmou AUSÊNCIA hoje.',
+    'bot_msg_justificativa_func':   '✅ Recebido! Sua justificativa para {{data}} foi registrada no espelho de ponto.',
+    'bot_msg_justificativa_lider':  '📝 *{{nome}}* enviou uma justificativa:\n"{{mensagem}}"',
+    'bot_msg_transbordo_lider':     '💬 Mensagem de *{{nome}}*:\n"{{mensagem}}"',
 }
 
 
@@ -69,6 +136,7 @@ def _save_from_form(regra: NotificationRule, form):
     cond = form.get('condition_type', 'LATE_ENTRY')
     regra.nome               = (form.get('nome') or '').strip() or f'Regra {cond}'
     regra.ativo              = form.get('ativo') == '1'
+    regra.categoria          = form.get('categoria') or CONDITION_CATEGORIA.get(cond, 'alerta')
     regra.trigger_type       = form.get('trigger_type', 'EVENT_SYNC')
     regra.trigger_hour       = int(form.get('trigger_hour') or 8)
     regra.trigger_weekday    = int(form.get('trigger_weekday') or 4)
@@ -88,14 +156,37 @@ def _save_from_form(regra: NotificationRule, form):
 @notificacoes_bp.route('/')
 @login_required
 def index():
+    from models import Configuracao
     regras = NotificationRule.query.order_by(
         NotificationRule.ativo.desc(), NotificationRule.id
     ).all()
+    grupos = defaultdict(list)
+    for r in regras:
+        grupos[r.categoria or 'alerta'].append(r)
+
+    # Separar regras por tab
+    alertas    = [r for r in regras if r.trigger_type == 'EVENT_SYNC']
+    automacoes = [r for r in regras if r.trigger_type in ('DAILY', 'WEEKLY', 'EVENT_HOURLY', 'EVENT_ABSENCE')]
+
+    # Lê configurações do chatbot da tabela Configuracao
+    bot_cfg = {}
+    for chave in BOT_MSG_CHAVES:
+        row = Configuracao.query.filter_by(chave=chave).first()
+        bot_cfg[chave] = row.valor if (row and row.valor) else BOT_MSG_DEFAULTS.get(chave, '')
+
     return render_template(
         'notificacoes/index.html',
         regras=regras,
+        grupos=grupos,
+        alertas=alertas,
+        automacoes=automacoes,
+        bot_cfg=bot_cfg,
+        bot_msg_labels=BOT_MSG_LABELS,
+        bot_msg_defaults=BOT_MSG_DEFAULTS,
+        categorias=CATEGORIA_LABELS,
         trigger_labels=TRIGGER_LABELS,
         condition_labels=CONDITION_LABELS,
+        condition_categoria=CONDITION_CATEGORIA,
         defaults_json=_DEFAULTS,
     )
 
@@ -151,6 +242,24 @@ def executar(rid):
     regra.ultima_execucao = datetime.utcnow()
     db.session.commit()
     return jsonify({'ok': True, 'mensagens': result.get('mensagens', 0)})
+
+
+@notificacoes_bp.route('/chatbot/salvar', methods=['POST'])
+@login_required
+def chatbot_salvar():
+    from models import Configuracao
+    for chave in BOT_MSG_CHAVES:
+        valor = request.form.get(chave, '').strip()
+        if not valor:
+            continue
+        row = Configuracao.query.filter_by(chave=chave).first()
+        if row:
+            row.valor = valor
+        else:
+            db.session.add(Configuracao(chave=chave, valor=valor))
+    db.session.commit()
+    flash('Configurações do robô salvas!', 'success')
+    return redirect(url_for('notificacoes.index') + '#tab-chatbot')
 
 
 @notificacoes_bp.route('/defaults/<condition_type>')

@@ -22,7 +22,7 @@ COOLDOWN_HORAS = int(os.getenv('NOTIF_COOLDOWN_HORAS', '12'))
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _render(template: str, func, minutos: int = 0, aloc=None, data_ref: date = None) -> str:
+def _render(template: str, func, minutos: int = 0, aloc=None, data_ref: date = None, extra: dict = None) -> str:
     if not template:
         return ''
     
@@ -81,6 +81,11 @@ def _render(template: str, func, minutos: int = 0, aloc=None, data_ref: date = N
     
     for var, val in subs.items():
         template = template.replace(var, val)
+
+    if extra:
+        for k, v in extra.items():
+            template = template.replace(f'{{{{{k}}}}}', str(v))
+
     return template
 
 
@@ -303,9 +308,42 @@ def _checar_ausencia(func_id, data_ref: date) -> bool:
     return Batida.query.filter_by(funcionario_id=func_id, data=data_ref).count() == 0
 
 
+# ── Escala Semanal ─────────────────────────────────────────────────────────────
+
+def _montar_escala(func, data_ref: date) -> str:
+    """Monta texto da escala dos próximos 7 dias a partir de data_ref."""
+    DIAS_PT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+    linhas = [f'📅 Olá, {func.nome.split()[0]}! Sua escala da semana:']
+    for delta in range(7):
+        dia = data_ref + timedelta(days=delta)
+        aloc = AlocacaoDiaria.query.filter_by(funcionario_id=func.id, data=dia).first()
+        dia_str = f'{DIAS_PT[dia.weekday()]} {dia.strftime("%d/%m")}'
+        if aloc and aloc.turno:
+            linhas.append(
+                f'  {dia_str}: {aloc.turno.hora_inicio.strftime("%H:%M")}–{aloc.turno.hora_fim.strftime("%H:%M")}'
+            )
+        else:
+            linhas.append(f'  {dia_str}: Folga 🏖️')
+    return '\n'.join(linhas)
+
+
+def _checar_pre_checkin(func, data_ref: date) -> bool:
+    """True se falta 45-75 min para o turno de hoje e pre_checkin ainda não confirmado."""
+    if data_ref != date.today():
+        return False
+    aloc = AlocacaoDiaria.query.filter_by(funcionario_id=func.id, data=data_ref).first()
+    if not aloc or not aloc.turno:
+        return False
+    if getattr(aloc, 'pre_checkin', False):
+        return False
+    inicio = datetime.combine(data_ref, aloc.turno.hora_inicio)
+    diff_min = (inicio - datetime.now()).total_seconds() / 60
+    return 45 <= diff_min <= 75
+
+
 # ── Envio (com cooldown + Direito à Desconexão) ────────────────────────────────
 
-def _enviar(regra: NotificationRule, func, minutos: int, aloc, data_ref: date) -> int:
+def _enviar(regra: NotificationRule, func, minutos: int, aloc, data_ref: date, extra: dict = None) -> int:
     from services.whatsapp_bot import enviar_texto
     enviados = 0
     fora = regra.only_working_hours and _fora_do_expediente(aloc)
@@ -313,21 +351,21 @@ def _enviar(regra: NotificationRule, func, minutos: int, aloc, data_ref: date) -
     tipo_msg = f'regra_{regra.condition_type}'
 
     if regra.dest_employee and func.celular:
-        msg = _render(regra.template_employee or '', func, minutos, aloc, data_ref)
+        msg = _render(regra.template_employee or '', func, minutos, aloc, data_ref, extra=extra)
         if msg:
             if fora and not regra.send_immediately:
-                _enfileirar(regra, func.celular, msg, func.id, aloc, tipo_msg, 
+                _enfileirar(regra, func.celular, msg, func.id, aloc, tipo_msg,
                            tipo_regra=regra.condition_type, data_ref=data_ref)
                 enviados += 1
             elif enviar_texto(celular=func.celular, mensagem=msg,
-                              func_id=func.id, tipo='regra', 
+                              func_id=func.id, tipo='regra',
                               tipo_regra=regra.condition_type, data_ref=data_ref):
                 enviados += 1
 
     if regra.dest_manager:
         cel = _celular_gestor(func)
         if cel:
-            msg = _render(regra.template_manager or '', func, minutos, aloc, data_ref)
+            msg = _render(regra.template_manager or '', func, minutos, aloc, data_ref, extra=extra)
             if msg:
                 if fora and not regra.send_immediately:
                     _enfileirar(regra, cel, msg, func.id, aloc, tipo_msg,
@@ -339,7 +377,7 @@ def _enviar(regra: NotificationRule, func, minutos: int, aloc, data_ref: date) -
                     enviados += 1
 
     if regra.dest_rh and GESTOR_CELULAR:
-        msg = _render(regra.template_manager or '', func, minutos, aloc, data_ref)
+        msg = _render(regra.template_manager or '', func, minutos, aloc, data_ref, extra=extra)
         if msg:
             if fora and not regra.send_immediately:
                 _enfileirar(regra, GESTOR_CELULAR, msg, func.id, aloc, tipo_msg,
@@ -453,6 +491,8 @@ def processar_regras_evento(trigger_type: str, data_ref: date = None) -> dict:
             threshold = regra.threshold_minutes or 15
             matched, minutos = False, 0
 
+            extra_ctx = None
+
             if regra.condition_type == 'LATE_ENTRY':
                 matched, minutos = _checar_atraso(func.id, data_ref, aloc, threshold)
             elif regra.condition_type == 'OVERTIME':
@@ -467,6 +507,15 @@ def processar_regras_evento(trigger_type: str, data_ref: date = None) -> dict:
                     matched = True
             elif regra.condition_type == 'DESCANSO_DOMINGO_F':
                 matched = _checar_descanso_domingo_f(func, data_ref)
+            elif regra.condition_type == 'ESCALA_ENVIO':
+                escala_txt = _montar_escala(func, data_ref)
+                if escala_txt:
+                    matched = True
+                    extra_ctx = {'escala': escala_txt}
+            elif regra.condition_type == 'PRE_CHECKIN':
+                matched = _checar_pre_checkin(func, data_ref)
+            elif regra.condition_type == 'DAILY_ABSENCE':
+                matched = _checar_ausencia(func.id, data_ref)
 
             if not matched:
                 continue
@@ -475,7 +524,7 @@ def processar_regras_evento(trigger_type: str, data_ref: date = None) -> dict:
             if _em_cooldown(func.id, regra.condition_type, data_ref):
                 continue
 
-            enviados_regra += _enviar(regra, func, minutos, aloc, data_ref)
+            enviados_regra += _enviar(regra, func, minutos, aloc, data_ref, extra=extra_ctx)
 
         if enviados_regra > 0:
             regra.mensagens_enviadas = (regra.mensagens_enviadas or 0) + enviados_regra
@@ -488,24 +537,33 @@ def processar_regras_evento(trigger_type: str, data_ref: date = None) -> dict:
 
 def processar_regras_agendadas() -> dict:
     """
-    Verifica regras DAILY e WEEKLY para a hora/dia atual.
+    Verifica regras DAILY, WEEKLY e EVENT_ABSENCE para a hora/dia atual,
+    e EVENT_HOURLY sempre (sem filtro de hora).
     Chamado a cada hora via Celery beat.
     """
     agora = datetime.now()
     hora_atual = agora.hour
     dia_atual  = agora.weekday()
 
-    regras = NotificationRule.query.filter(
+    # Regras baseadas em hora configurável
+    regras_hora = NotificationRule.query.filter(
         NotificationRule.ativo == True,
-        NotificationRule.trigger_type.in_(['DAILY', 'WEEKLY']),
+        NotificationRule.trigger_type.in_(['DAILY', 'WEEKLY', 'EVENT_ABSENCE']),
         NotificationRule.trigger_hour == hora_atual,
     ).all()
 
     total = 0
-    for regra in regras:
+    processed_types = set()
+    for regra in regras_hora:
         if regra.trigger_type == 'WEEKLY' and regra.trigger_weekday != dia_atual:
             continue
-        result = processar_regras_evento(regra.trigger_type)
-        total += result.get('mensagens', 0)
+        if regra.trigger_type not in processed_types:
+            result = processar_regras_evento(regra.trigger_type)
+            total += result.get('mensagens', 0)
+            processed_types.add(regra.trigger_type)
+
+    # EVENT_HOURLY: sempre executa (verificação contínua, sem filtro de hora)
+    result_hourly = processar_regras_evento('EVENT_HOURLY')
+    total += result_hourly.get('mensagens', 0)
 
     return {'total': total}

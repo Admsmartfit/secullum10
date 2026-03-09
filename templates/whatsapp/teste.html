@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block title %}Simulador de Testes WhatsApp{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0 text-white">Simulador de Testes <span class="badge bg-primary ms-2 small" style="font-size: 0.5em;"><i class="fas fa-flask me-1"></i>QA Module</span></h1>
+    <a href="{{ url_for('whatsapp.logs') }}" class="btn btn-outline-light shadow-sm">
+        <i class="fas fa-arrow-left me-2"></i>Voltar para o Hub
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 offset-lg-2">
+        <div class="card border-0 shadow-lg bg-dark text-white p-4">
+            
+            <div class="alert alert-info border-0 rounded-4 d-flex align-items-start mb-4">
+                <i class="fas fa-info-circle fa-2x me-3 mt-1"></i>
+                <div class="small">
+                    <strong>Ambiente de Homologação.</strong><br>
+                    Utilize esta ferramenta para disparar individualmente cada tipo de mensagem projetada no sistema e validar se a entrega está ocorrendo na Mega-API conforme esperado.
+                </div>
+            </div>
+
+            <form method="POST" action="{{ url_for('whatsapp.teste') }}">
+                
+                <div class="mb-4">
+                    <label class="form-label fw-bold text-muted small"><i class="fas fa-phone me-2"></i>NÚMERO DE DESTINO</label>
+                    <input type="text" name="celular" class="form-control bg-secondary text-white border-0 py-2 form-control-lg" placeholder="Ex: 5511999999999" required autofocus>
+                    <div class="form-text text-muted small">Insira o DDI + DDD + Celular (somente números).</div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-bold text-muted small"><i class="fas fa-envelope-open-text me-2"></i>TIPO DE MENSAGEM A TESTAR</label>
+                    <select name="tipo_msg" id="tipo_msg" class="form-select bg-secondary text-white border-0 py-2" required>
+                        <option value="" disabled selected>Selecione um cenário do sistema...</option>
+                        <optgroup label="Mensagens Gerais">
+                            <option value="texto_livre">📝 Mensagem de Texto Livre</option>
+                            <option value="documento">📄 Envio de Documento / PDF (Teste Prontuário)</option>
+                            <option value="boas_vindas">🎉 Boas Vindas Integradas</option>
+                        </optgroup>
+                        <optgroup label="Motor Bot - Interação">
+                            <option value="checkin_confirmado">✅ Confirmação de Check-in (Resposta SIM)</option>
+                            <option value="ausencia_confirmada">❌ Confirmação de Ausência (Resposta NÃO)</option>
+                            <option value="justificativa_automatica">✍️ Justificativa Automática Registrada</option>
+                            <option value="notificacao_gestor_justificativa">👤 Notificação ao Gestor sobre Justificativa</option>
+                        </optgroup>
+                        <optgroup label="Notificações Automatizadas (Alerts)">
+                            <option value="regra_atraso">⚠️ Regra: Alerta de Atraso</option>
+                            <option value="regra_hora_extra">⏰ Regra: Alerta de Hora Extra</option>
+                            <option value="regra_inconsistencia">📊 Regra: Relatório de Inconsistências (Gestores)</option>
+                            <option value="banco_horas_diario">📈 Relatório: Resumo Diário de Banco de Horas</option>
+                        </optgroup>
+                    </select>
+                </div>
+                
+                <div class="mb-4" id="divMensagemLivre" style="display: none;">
+                    <label class="form-label fw-bold text-muted small">CONTEÚDO DA MENSAGEM LIVRE</label>
+                    <textarea name="mensagem_livre" class="form-control bg-secondary text-white border-0" rows="3" placeholder="Digite apenas se houver escolhido a opção Texto Livre acima..."></textarea>
+                </div>
+
+                <div class="d-grid mt-4">
+                    <button type="submit" class="btn btn-success btn-lg fw-bold py-3 shadow-sm rounded-3">
+                        <i class="fas fa-paper-plane me-2"></i> Disparar Mensagem de Teste
+                    </button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const selectTipo = document.getElementById('tipo_msg');
+        const divMsgLivre = document.getElementById('divMensagemLivre');
+        
+        selectTipo.addEventListener('change', function() {
+            if (this.value === 'texto_livre') {
+                divMsgLivre.style.display = 'block';
+                divMsgLivre.querySelector('textarea').setAttribute('required', 'true');
+            } else {
+                divMsgLivre.style.display = 'none';
+                divMsgLivre.querySelector('textarea').removeAttribute('required');
+            }
+        });
+    });
+</script>
+{% endblock %}

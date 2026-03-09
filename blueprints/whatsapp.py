@@ -11,6 +11,18 @@ MEGAAPI_SECRET = os.getenv('MEGAAPI_SECRET', '')
 GESTOR_CELULAR = os.getenv('GESTOR_CELULAR', '')
 
 
+def _bot_msg(chave: str, vars: dict = None) -> str:
+    """Lê texto do robô da tabela Configuracao, interpola variáveis {{key}}."""
+    from models import Configuracao
+    from blueprints.notificacoes import BOT_MSG_DEFAULTS
+    row = Configuracao.query.filter_by(chave=chave).first()
+    texto = row.valor if (row and row.valor) else BOT_MSG_DEFAULTS.get(chave, '')
+    if vars:
+        for k, v in vars.items():
+            texto = texto.replace(f'{{{{{k}}}}}', str(v))
+    return texto
+
+
 def _celular_lider(func: 'Funcionario') -> str:
     """Retorna o celular do líder da unidade do funcionário.
     Fallback: GESTOR_CELULAR global do .env."""
@@ -107,7 +119,7 @@ def _processar_mensagem(data: dict):
             db.session.commit()
         enviar_texto(
             celular=func.celular,
-            mensagem=f'Perfeito, {func.nome.split()[0]}! Presença confirmada. Bom turno!',
+            mensagem=_bot_msg('bot_msg_sim_func', {'nome': func.nome.split()[0]}),
             func_id=func.id,
             tipo='checkin_confirmado',
         )
@@ -119,13 +131,13 @@ def _processar_mensagem(data: dict):
         if lider_cel:
             enviar_texto(
                 celular=lider_cel,
-                mensagem=f'⚠️ {func.nome} confirmou AUSÊNCIA hoje.',
+                mensagem=_bot_msg('bot_msg_nao_lider', {'nome': func.nome}),
                 func_id=func.id,
                 tipo='ausencia_confirmada',
             )
         enviar_texto(
             celular=func.celular,
-            mensagem='Entendido! Sua ausência foi registrada. Qualquer problema, entre em contato com o RH.',
+            mensagem=_bot_msg('bot_msg_nao_func', {'nome': func.nome.split()[0]}),
             func_id=func.id,
             tipo='ausencia_confirmada',
         )
@@ -162,18 +174,23 @@ def _processar_mensagem(data: dict):
         # Confirma para o funcionário
         enviar_texto(
             celular=func.celular,
-            mensagem=(f'✅ Recebido! Sua justificativa para o dia {ultima_inc.data.strftime("%d/%m")} '
-                      'foi registrada no espelho de ponto.'),
+            mensagem=_bot_msg('bot_msg_justificativa_func', {
+                'nome': func.nome.split()[0],
+                'data': ultima_inc.data.strftime('%d/%m'),
+            }),
             func_id=func.id,
             tipo='justificativa_automatica'
         )
-        
+
         # Notifica o líder (opcional, mas bom pra compliance)
         lider_cel = _celular_lider(func)
         if lider_cel:
             enviar_texto(
                 celular=lider_cel,
-                mensagem=f'📝 *{func.nome}* enviou uma justificativa via WhatsApp:\n"{texto}"',
+                mensagem=_bot_msg('bot_msg_justificativa_lider', {
+                    'nome': func.nome,
+                    'mensagem': texto,
+                }),
                 func_id=func.id,
                 tipo='notificacao_gestor_justificativa'
             )
@@ -184,7 +201,10 @@ def _processar_mensagem(data: dict):
     if lider_cel:
         enviar_texto(
             celular=lider_cel,
-            mensagem=f'💬 Mensagem de *{func.nome}*:\n"{texto}"',
+            mensagem=_bot_msg('bot_msg_transbordo_lider', {
+                'nome': func.nome,
+                'mensagem': texto,
+            }),
             func_id=func.id,
             tipo='notificacao_gestor',
         )
@@ -265,3 +285,79 @@ def enviar():
     ok = enviar_texto(celular=func.celular, mensagem=mensagem, func_id=func_id, tipo='manual')
     flash('Mensagem enviada!' if ok else 'Falha ao enviar (verifique MEGAAPI_TOKEN).', 'success' if ok else 'danger')
     return redirect(url_for('whatsapp.logs'))
+
+
+@whatsapp_bp.route('/teste', methods=['GET', 'POST'])
+@login_required
+def teste():
+    """Módulo de testes para envio dos diversos tipos de mensagem do sistema."""
+    if request.method == 'POST':
+        celular = request.form.get('celular', '').strip()
+        tipo_msg = request.form.get('tipo_msg', '').strip()
+        
+        if not celular:
+            flash('Informe o celular de destino.', 'danger')
+            return redirect(url_for('whatsapp.teste'))
+            
+        from services.whatsapp_bot import enviar_texto, enviar_documento
+        
+        ok = False
+        if tipo_msg == 'texto_livre':
+            texto = request.form.get('mensagem_livre', 'Teste de mensagem livre do sistema.')
+            ok = enviar_texto(celular, texto, tipo='teste_manual')
+            
+        elif tipo_msg == 'documento':
+            # Dummy minimalist PDF content
+            pdf_bytes = b"%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n2 0 obj\n<<\n/Type /Pages\n/Count 1\n/Kids [ 3 0 R ]\n>>\nendobj\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [ 0 0 612 792 ]\n/Resources <<\n/Font <<\n/F1 4 0 R\n>>\n>>\n/Contents 5 0 R\n>>\nendobj\n4 0 obj\n<<\n/Type /Font\n/Subtype /Type1\n/BaseFont /Helvetica\n>>\nendobj\n5 0 obj\n<<\n/Length 55\n>>\nstream\nBT\n/F1 24 Tf\n100 700 Td\n(Documento de Teste do Sistema) Tj\nET\nendstream\nendobj\nxref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000219 00000 n \n0000000307 00000 n \ntrailer\n<<\n/Size 6\n/Root 1 0 R\n>>\nstartxref\n413\n%%EOF\n"
+            ok = enviar_documento(celular, pdf_bytes, 'documento_teste.pdf', caption='Segue o documento de teste.', tipo='teste_pdf')
+            
+        elif tipo_msg == 'checkin_confirmado':
+            texto = "Perfeito, João! Presença confirmada. Bom turno!"
+            ok = enviar_texto(celular, texto, tipo='teste_checkin')
+            
+        elif tipo_msg == 'ausencia_confirmada':
+            texto = "Entendido! Sua ausência foi registrada. Qualquer problema, entre em contato com o RH."
+            ok = enviar_texto(celular, texto, tipo='teste_ausencia')
+            
+        elif tipo_msg == 'justificativa_automatica':
+            data_hoje = date.today().strftime("%d/%m")
+            texto = f"✅ Recebido! Sua justificativa para o dia {data_hoje} foi registrada no espelho de ponto."
+            ok = enviar_texto(celular, texto, tipo='teste_justificativa')
+            
+        elif tipo_msg == 'notificacao_gestor_justificativa':
+            texto = "📝 *Maria* enviou uma justificativa via WhatsApp:\n\"Meu ônibus quebrou na avenida principal.\""
+            ok = enviar_texto(celular, texto, tipo='teste_notificacao_gestor')
+            
+        elif tipo_msg == 'boas_vindas':
+            texto = "🎉 *Bem-vindo(a) à nossa plataforma!*\nSeu cadastro foi realizado com sucesso. Agora você receberá notificações e alertas do seu ponto via WhatsApp."
+            ok = enviar_texto(celular, texto, tipo='teste_boas_vindas')
+            
+        elif tipo_msg == 'regra_atraso':
+            texto = "⚠️ *Alerta de Atraso:*\nIdentificamos que seu turno iniciou, mas seu ponto de entrada ainda não foi registrado no Secullum."
+            ok = enviar_texto(celular, texto, tipo='teste_regra_atraso')
+            
+        elif tipo_msg == 'regra_hora_extra':
+             texto = "⏰ *Alerta de Hora Extra:*\nSeu turno encerrou já faz alguns minutos. Não esqueça de registrar seu ponto de saída!"
+             ok = enviar_texto(celular, texto, tipo='teste_regra_he')
+             
+        elif tipo_msg == 'regra_inconsistencia':
+             ontem = (date.today() - timedelta(days=1)).strftime("%d/%m")
+             texto = f"📋 *Inconsistências — {ontem}*\n\n⚠️ Batidas inconsistentes (2):\n  • Carlos Eduardo: marcação ímpar\n  • Juliana Silva: marcação ausente\n\n🚫 Ausências (1):\n  • Rodrigo Alves"
+             ok = enviar_texto(celular, texto, tipo='teste_relatorio')
+             
+        elif tipo_msg == 'banco_horas_diario':
+             texto = "📊 *Seu resumo diário de Horas:*\n\nSaldo do dia (Ontem): +1.50 horas\nSaldo Acumulado Atual: +14.20 horas\n\nContinue acompanhando seu ponto!"
+             ok = enviar_texto(celular, texto, tipo='teste_banco_horas')
+             
+        else:
+            flash('Tipo de mensagem inválido ou não implementado.', 'warning')
+            return redirect(url_for('whatsapp.teste'))
+            
+        if ok:
+            flash(f'Mensagem de teste ({tipo_msg}) disparada com sucesso para {celular}!', 'success')
+        else:
+            flash(f'Falha ao disparar a mensagem ({tipo_msg}). Verifique os logs do WhatsApp ou a conexão com a Mega-API.', 'danger')
+            
+        return redirect(url_for('whatsapp.teste'))
+        
+    return render_template('whatsapp/teste.html')

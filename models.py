@@ -342,6 +342,9 @@ class NotificationRule(db.Model):
     trigger_hour    = db.Column(db.Integer, nullable=True, default=8)     # hour for DAILY/WEEKLY
     trigger_weekday = db.Column(db.Integer, nullable=True, default=4)     # 0=Mon … 6=Sun
 
+    # Categoria UI: geral | bot | alerta | fechamento
+    categoria = db.Column(db.String(30), nullable=True, default='alerta')
+
     # Condition: LATE_ENTRY | EARLY_LEAVE | ABSENCE | OVERTIME | INTERJORNADA | ESCALA_ENVIO
     condition_type      = db.Column(db.String(50), nullable=False, default='LATE_ENTRY')
     threshold_minutes   = db.Column(db.Integer, nullable=True, default=15)

@@ -288,29 +288,62 @@ def gerar_pdf_de_template(template_doc, funcionario) -> tuple:
     return pdf_bytes, nome_pdf
 
 
-def _convert_to_pdf(docx_path: str, output_dir: str) -> str:
-    """Converte .docx → .pdf. Tenta LibreOffice (Linux) depois docx2pdf (Windows)."""
-    # Tentativa 1: LibreOffice headless
-    try:
-        result = subprocess.run(
-            [
-                'libreoffice', '--headless',
-                '--convert-to', 'pdf',
-                '--outdir', output_dir,
-                docx_path,
-            ],
-            capture_output=True,
-            timeout=60,
-        )
-        if result.returncode == 0:
-            base = os.path.splitext(os.path.basename(docx_path))[0]
-            return os.path.join(output_dir, base + '.pdf')
-        logger.warning('[documento_service] LibreOffice retornou %d: %s',
-                       result.returncode, result.stderr.decode())
-    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
-        logger.warning('[documento_service] LibreOffice indisponível: %s', exc)
+def _libreoffice_exe() -> str | None:
+    """Localiza o executável do LibreOffice/soffice no sistema."""
+    import shutil, sys
 
-    # Tentativa 2: python-docx2pdf (Windows com Word)
+    # Nomes de comando diretos (funciona se estiver no PATH)
+    for cmd in ('soffice', 'libreoffice'):
+        if shutil.which(cmd):
+            return cmd
+
+    # Caminhos fixos comuns no Windows
+    if sys.platform == 'win32':
+        caminhos_windows = [
+            r'C:\Program Files\LibreOffice\program\soffice.exe',
+            r'C:\Program Files (x86)\LibreOffice\program\soffice.exe',
+        ]
+        for p in caminhos_windows:
+            if os.path.exists(p):
+                return p
+
+    return None
+
+
+def _convert_to_pdf(docx_path: str, output_dir: str) -> str:
+    """Converte .docx → .pdf. Tenta LibreOffice headless, depois docx2pdf."""
+    exe = _libreoffice_exe()
+
+    if exe:
+        try:
+            result = subprocess.run(
+                [
+                    exe, '--headless',
+                    '--convert-to', 'pdf',
+                    '--outdir', output_dir,
+                    docx_path,
+                ],
+                capture_output=True,
+                timeout=120,
+            )
+            if result.returncode == 0:
+                base = os.path.splitext(os.path.basename(docx_path))[0]
+                pdf = os.path.join(output_dir, base + '.pdf')
+                if os.path.exists(pdf):
+                    return pdf
+            logger.warning(
+                '[documento_service] LibreOffice retornou %d: %s',
+                result.returncode,
+                result.stderr.decode(errors='replace'),
+            )
+        except subprocess.TimeoutExpired:
+            logger.warning('[documento_service] LibreOffice timeout.')
+        except Exception as exc:
+            logger.warning('[documento_service] LibreOffice erro: %s', exc)
+    else:
+        logger.warning('[documento_service] LibreOffice não encontrado no PATH nem em caminhos padrão.')
+
+    # Fallback: python-docx2pdf (requer Microsoft Word instalado)
     try:
         from docx2pdf import convert
         pdf_path = docx_path.replace('.docx', '.pdf')
@@ -322,7 +355,9 @@ def _convert_to_pdf(docx_path: str, output_dir: str) -> str:
 
     raise RuntimeError(
         'Não foi possível converter o documento para PDF. '
-        'Instale LibreOffice (Linux) ou Microsoft Word (Windows).'
+        'Verifique se o LibreOffice está instalado e acessível. '
+        'No Windows, o executável deve estar em: '
+        r'C:\Program Files\LibreOffice\program\soffice.exe'
     )
 
 
