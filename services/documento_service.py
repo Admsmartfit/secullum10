@@ -7,11 +7,14 @@ Fluxo:
   3. Converte para PDF via LibreOffice headless (Linux) ou docx2pdf (Windows)
   4. Envia por e-mail ao líder da unidade via Flask-Mail
 """
+import io
 import json
 import logging
 import os
+import re
 import subprocess
 import tempfile
+import zipfile
 from datetime import date, timedelta
 
 from flask import current_app
@@ -182,12 +185,58 @@ def templates_dir() -> str:
     return os.path.join(current_app.root_path, 'storage', 'templates')
 
 
+def _sanitize_docx(docx_path: str) -> io.BytesIO:
+    """
+    Escapa chaves literais `{` e `}` no .docx que NÃO fazem parte de tags
+    Jinja2/docxtpl (`{{var}}`, `{%block%}`).
+
+    Causa do erro "unexpected '}'": Word insere `}` em texto normal (cláusulas,
+    referências a artigos, etc.) e o Jinja2 do docxtpl confunde com fechamento
+    de uma expressão `{{...}}`.
+
+    Estratégia: percorre os nós <w:t>...</w:t> do XML interno do .docx,
+    protege os pares legítimos com sentinelas, escapa os restantes, restaura.
+    """
+    # Sentinelas que nunca aparecem em texto natural
+    _OO = '\x00\x01'   # {{
+    _CC = '\x02\x03'   # }}
+    _PO = '\x04\x05'   # {%
+    _PC = '\x06\x07'   # %}
+
+    W_T_RE = re.compile(r'(<w:t(?:\s[^>]*)?>)(.*?)(</w:t>)', re.DOTALL)
+
+    def _fix_node(m: re.Match) -> str:
+        o, text, c = m.group(1), m.group(2), m.group(3)
+        text = text.replace('{{', _OO).replace('}}', _CC)
+        text = text.replace('{%', _PO).replace('%}', _PC)
+        text = text.replace('{', '{{').replace('}', '}}')
+        text = (text.replace(_OO, '{{').replace(_CC, '}}')
+                    .replace(_PO, '{%').replace(_PC, '%}'))
+        return o + text + c
+
+    def _process_xml(data: bytes) -> bytes:
+        xml = data.decode('utf-8', errors='replace')
+        return W_T_RE.sub(_fix_node, xml).encode('utf-8')
+
+    out = io.BytesIO()
+    with zipfile.ZipFile(docx_path, 'r') as zin:
+        with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                data = zin.read(item.filename)
+                if item.filename.startswith('word/') and item.filename.endswith('.xml'):
+                    data = _process_xml(data)
+                zout.writestr(item, data)
+    out.seek(0)
+    return out
+
+
 def gerar_pdf_de_template(template_doc, funcionario) -> tuple:
     """
     Preenche o .docx e converte para PDF.
     Retorna (bytes_pdf, nome_arquivo_pdf).
     """
     from docxtpl import DocxTemplate
+    from jinja2.exceptions import TemplateSyntaxError
 
     docx_path = os.path.join(templates_dir(), template_doc.arquivo_nome)
     if not os.path.exists(docx_path):
@@ -203,7 +252,26 @@ def gerar_pdf_de_template(template_doc, funcionario) -> tuple:
     ctx.update(_contexto_banco_horas(funcionario))
 
     tpl = DocxTemplate(docx_path)
-    tpl.render(ctx)
+    try:
+        tpl.render(ctx)
+    except TemplateSyntaxError as e:
+        # O .docx contém { ou } literais no texto que o Jinja2 interpreta como
+        # tags malformadas. Tenta corrigir automaticamente e renderizar de novo.
+        logger.warning(
+            '[documento_service] TemplateSyntaxError em "%s": %s — tentando sanitizar.',
+            template_doc.nome, e,
+        )
+        try:
+            sanitized = _sanitize_docx(docx_path)
+            tpl = DocxTemplate(sanitized)
+            tpl.render(ctx)
+        except Exception as e2:
+            raise ValueError(
+                f'Erro ao gerar "{template_doc.nome}": {e}\n\n'
+                f'O documento .docx contém chaves "{{" ou "}}" fora de uma tag '
+                f'{{{{variavel}}}}. Abra o arquivo no Word, localize os caracteres '
+                f'problemáticos e remova-os ou envolva-os em {{% raw %}}...{{% endraw %}}.'
+            ) from e2
 
     with tempfile.TemporaryDirectory() as tmpdir:
         filled_docx = os.path.join(tmpdir, 'filled.docx')
