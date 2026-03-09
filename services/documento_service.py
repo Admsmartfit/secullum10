@@ -150,6 +150,26 @@ def _contexto_salario(func) -> dict:
     }
 
 
+def _contexto_banco_horas(func, data_ref: date = None) -> dict:
+    if data_ref is None:
+        data_ref = date.today()
+    from models import BancoHorasSaldo
+    res = {
+        'saldo_dia': '0.00',
+        'saldo_acumulado': '0.00',
+        'saldo_dia_extenso': 'zero horas',
+        'saldo_acumulado_extenso': 'zero horas',
+    }
+    s = BancoHorasSaldo.query.filter_by(funcionario_id=func.id, data=data_ref).first()
+    if s:
+        res['saldo_dia'] = f"{float(s.saldo_dia):.2f}"
+        res['saldo_acumulado'] = f"{float(s.saldo_acumulado):.2f}"
+        # Simplified extense since it's hours, not currency
+        res['saldo_dia_extenso'] = f"{float(s.saldo_dia):.2f} horas"
+        res['saldo_acumulado_extenso'] = f"{float(s.saldo_acumulado):.2f} horas"
+    return res
+
+
 def _admissao_extenso(d) -> str:
     if not d:
         return ''
@@ -180,6 +200,7 @@ def gerar_pdf_de_template(template_doc, funcionario) -> tuple:
     ctx.update(_contexto_salario(funcionario))
     ctx.update(_contexto_datas_hoje())
     ctx.update(_contexto_experiencia(funcionario))
+    ctx.update(_contexto_banco_horas(funcionario))
 
     tpl = DocxTemplate(docx_path)
     tpl.render(ctx)

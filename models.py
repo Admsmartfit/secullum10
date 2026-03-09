@@ -546,6 +546,8 @@ class NotificacaoFila(db.Model):
     celular = db.Column(db.String(20), nullable=False)
     mensagem = db.Column(db.Text, nullable=False)
     tipo = db.Column(db.String(50))                   # regra / relatorio
+    tipo_regra = db.Column(db.String(50), nullable=True)
+    data_referencia = db.Column(db.Date, nullable=True)
     # Enviar somente após este timestamp (próximo início de turno)
     enviar_apos = db.Column(db.DateTime, nullable=True)
     # pendente / enviado / erro / cancelado

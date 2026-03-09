@@ -28,6 +28,31 @@ def validar_intrajornada(turno: Turno, data_ref: 'date') -> dict | None:
     return None
 
 
+def calcular_gap_interjornada(func_id: str, data_nova: 'date', turno_novo: Turno) -> float | None:
+    """Retorna o número de horas entre o fim do turno anterior e o início do novo turno."""
+    if not turno_novo:
+        return None
+        
+    dia_anterior = data_nova - timedelta(days=1)
+    aloc_anterior = (
+        AlocacaoDiaria.query
+        .filter_by(funcionario_id=func_id, data=dia_anterior)
+        .first()
+    )
+    if aloc_anterior and aloc_anterior.turno:
+        h_ini_ant, h_fim_ant, _ = aloc_anterior.turno.get_horario_dia(dia_anterior.weekday())
+        fim_anterior = _combine(dia_anterior, h_fim_ant)
+        if h_fim_ant < h_ini_ant: # Turno atravessa meia-noite
+            fim_anterior += timedelta(days=1)
+        
+        h_ini_novo, _, _ = turno_novo.get_horario_dia(data_nova.weekday())
+        inicio_novo = _combine(data_nova, h_ini_novo)
+            
+        intervalo = (inicio_novo - fim_anterior).total_seconds() / 3600
+        return round(intervalo, 2)
+    return None
+
+
 def validar_interjornada(func_id: str, data_nova: 'date', turno_novo: Turno) -> dict | None:
     """Entre dois turnos deve haver pelo menos 11h de intervalo (CLT art. 66)."""
     # Verifica alocação no dia anterior

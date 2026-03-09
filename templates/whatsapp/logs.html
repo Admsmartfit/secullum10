@@ -1,65 +1,146 @@
 {% extends 'base.html' %}
-{% block title %}WhatsApp Logs{% endblock %}
+{% block title %}WhatsApp Hub{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="h3 mb-0">Histórico WhatsApp</h1>
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalEnviar">
+    <h1 class="h3 mb-0 text-white">WhatsApp Hub <span class="badge bg-secondary ms-2 small" style="font-size: 0.5em;">PRD 2.0</span></h1>
+    <button class="btn btn-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#modalEnviar">
         <i class="fas fa-paper-plane me-2"></i>Enviar Mensagem
     </button>
 </div>
 
-<div class="card p-4">
-    <div class="table-responsive">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Data/Hora</th>
-                    <th>Funcionário</th>
-                    <th>Tipo</th>
-                    <th>Mensagem</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for log in logs %}
-                <tr>
-                    <td class="text-muted small">{{ log.criado_em.strftime('%d/%m %H:%M') }}</td>
-                    <td>{{ log.funcionario.nome if log.funcionario else log.celular }}</td>
-                    <td>
-                        <span class="badge {{ 'bg-success' if log.tipo == 'entrada' else 'bg-blue-soft' }}">
-                            {{ log.tipo }}
-                        </span>
-                    </td>
-                    <td class="small" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                        {{ log.mensagem }}
-                    </td>
-                    <td>
-                        <span class="badge {{ 'bg-success' if log.status in ('enviado','recebido') else 'bg-danger' }}">
-                            {{ log.status }}
-                        </span>
-                    </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="5" class="text-center text-muted py-4">Nenhuma mensagem registrada.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-success text-white p-3 border-0 shadow-sm">
+            <div class="small fw-bold opacity-75">SUCESSO (LOGS)</div>
+            <div class="h3 mb-0">{{ logs|selectattr('status', 'equalto', 'enviado')|list|length + logs|selectattr('status', 'equalto', 'recebido')|list|length }}</div>
+        </div>
     </div>
+    <div class="col-md-4">
+        <div class="card bg-danger text-white p-3 border-0 shadow-sm">
+            <div class="small fw-bold opacity-75">FALHA DE ENTREGA</div>
+            <div class="h3 mb-0">{{ logs|rejectattr('status', 'in', ['enviado', 'recebido', 'pendente'])|list|length }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-info text-white p-3 border-0 shadow-sm">
+            <div class="small fw-bold opacity-75">AGUARDANDO JANELA</div>
+            <div class="h3 mb-0">{{ fila|length }}</div>
+        </div>
+    </div>
+</div>
+
+<ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" id="pills-logs-tab" data-bs-toggle="pill" data-bs-target="#pills-logs">Histórico</button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" id="pills-fila-tab" data-bs-toggle="pill" data-bs-target="#pills-fila">Fila (Aguardando)</button>
+    </li>
+</ul>
+
+<div class="tab-content" id="pills-tabContent">
+  <div class="tab-pane fade show active" id="pills-logs">
+    <div class="card p-0 border-0 shadow-sm overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-secondary text-muted small px-3">
+                    <tr>
+                        <th class="ps-4">DATA/HORA</th>
+                        <th>DESTINATÁRIO</th>
+                        <th>TIPO</th>
+                        <th>MENSAGEM</th>
+                        <th>STATUS</th>
+                        <th class="pe-4 text-end">AÇÕES</th>
+                    </tr>
+                </thead>
+                <tbody class="border-top-0">
+                    {% for log in logs %}
+                    <tr>
+                        <td class="ps-4 text-muted small">{{ log.criado_em.strftime('%d/%m %H:%M') }}</td>
+                        <td>
+                            <div class="fw-bold">{{ log.funcionario.nome if log.funcionario else 'Global/Novo' }}</div>
+                            <div class="small text-muted">{{ log.celular }}</div>
+                        </td>
+                        <td>
+                            <span class="badge {{ 'bg-success' if log.tipo == 'entrada' else 'bg-blue-soft' }}">
+                                {{ log.tipo_regra if log.tipo_regra else log.tipo }}
+                            </span>
+                        </td>
+                        <td class="small" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                            {{ log.mensagem }}
+                        </td>
+                        <td>
+                            <span class="badge {{ 'bg-success' if log.status in ('enviado','recebido') else 'bg-danger' }}">
+                                {{ log.status }}
+                            </span>
+                        </td>
+                        <td class="pe-4 text-end">
+                            {% if 'erro' in log.status %}
+                            <button class="btn btn-sm btn-outline-warning py-0" title="Reenviar Manualmente">
+                                <i class="fas fa-redo-alt"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="text-center text-muted py-5">Nenhum registro de envio.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+  </div>
+
+  <div class="tab-pane fade" id="pills-fila">
+    <div class="card p-0 border-0 shadow-sm overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-secondary text-muted small px-3">
+                    <tr>
+                        <th class="ps-4">CRIADA EM</th>
+                        <th>DESTINATÁRIO</th>
+                        <th>MENSAGEM</th>
+                        <th>ENVIAR APÓS</th>
+                        <th class="pe-4">TENTATIVAS</th>
+                    </tr>
+                </thead>
+                <tbody class="border-top-0">
+                    {% for f in fila %}
+                    <tr>
+                        <td class="ps-4 text-muted small">{{ f.criada_em.strftime('%d/%m %H:%M') }}</td>
+                        <td>
+                            <div class="fw-bold">{{ f.funcionario.nome if f.funcionario else '?' }}</div>
+                            <div class="small text-muted">{{ f.celular }}</div>
+                        </td>
+                        <td class="small">{{ f.mensagem }}</td>
+                        <td class="text-info fw-bold small">
+                            {{ f.enviar_apos.strftime('%d/%m %H:%M') if f.enviar_apos else 'Imediato' }}
+                        </td>
+                        <td class="pe-4">{{ f.tentativas }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="text-center text-muted py-5">Nenhuma mensagem aguardando janela de horário.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+  </div>
 </div>
 
 <!-- Modal Envio Manual -->
 <div class="modal fade" id="modalEnviar" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content bg-secondary text-white border-0">
-            <div class="modal-header border-0">
-                <h5 class="modal-title">Enviar Mensagem WhatsApp</h5>
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title">Novo Envio WhatsApp</h5>
                 <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <form method="POST" action="{{ url_for('whatsapp.enviar') }}">
                     <div class="mb-3">
                         <label class="form-label small fw-bold text-muted">FUNCIONÁRIO</label>
-                        <select name="funcionario_id" class="form-select bg-dark text-white border-secondary" required>
+                        <select name="funcionario_id" class="form-select bg-dark text-white border-0" required>
                             <option value="">Selecione...</option>
                             {% for f in funcionarios %}
                             <option value="{{ f.id }}">{{ f.nome }}</option>
@@ -68,9 +149,9 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold text-muted">MENSAGEM</label>
-                        <textarea name="mensagem" class="form-control bg-dark text-white border-secondary" rows="3" required></textarea>
+                        <textarea name="mensagem" class="form-control bg-dark text-white border-0" rows="4" placeholder="Digite sua mensagem aqui..." required></textarea>
                     </div>
-                    <button class="btn btn-primary w-100"><i class="fas fa-paper-plane me-2"></i>Enviar</button>
+                    <button class="btn btn-primary w-100 py-2"><i class="fas fa-paper-plane me-2"></i>Enviar agora</button>
                 </form>
             </div>
         </div>

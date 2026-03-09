@@ -31,6 +31,13 @@ with app.app_context():
             ADD COLUMN IF NOT EXISTS data_referencia DATE;
         """))
         
+        # Adiciona colunas em notificacao_fila
+        conn.execute(db.text("""
+            ALTER TABLE notificacao_fila
+            ADD COLUMN IF NOT EXISTS tipo_regra VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS data_referencia DATE;
+        """))
+        
         # Cria índice para busca rápida (idempotência)
         conn.execute(db.text("""
             CREATE INDEX IF NOT EXISTS idx_whatsapp_logs_idemp

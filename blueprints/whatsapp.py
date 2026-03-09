@@ -1,9 +1,9 @@
 import hmac, hashlib, os
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required
 from extensions import db
-from models import WhatsappLog, Funcionario, AlocacaoDiaria, UnidadeLider
+from models import WhatsappLog, Funcionario, AlocacaoDiaria, UnidadeLider, Batida, NotificacaoFila
 
 whatsapp_bp = Blueprint('whatsapp', __name__, url_prefix='/whatsapp')
 
@@ -131,7 +131,54 @@ def _processar_mensagem(data: dict):
         )
         return
 
-    # ── Texto livre → encaminha ao líder da unidade (RF4.3) ──────────────────
+    # ── Texto livre → Justificativa Automática (RF02) ou Encaminha ao Líder ────
+    import re
+    # Se não for SIM/NÃO e tiver pelo menos 3 palavras, ou for explicitamente uma justificativa
+    # Vamos procurar uma batida inconsistente nos últimos 2 dias
+    hoje = date.today()
+    ontem = hoje - timedelta(days=1)
+    
+    ultima_inc = (
+        Batida.query
+        .filter(Batida.funcionario_id == func.id)
+        .filter(Batida.data.in_([hoje, ontem]))
+        .filter(Batida.inconsistente == True)
+        .order_by(Batida.data.desc(), Batida.hora.desc())
+        .first()
+    )
+    
+    if ultima_inc:
+        # Salva justificativa
+        prefixo = f"[WhatsApp {datetime.now().strftime('%d/%m %H:%M')}] "
+        nova_just = f"{prefixo}{texto}"
+        if ultima_inc.justificativa:
+            ultima_inc.justificativa = f"{ultima_inc.justificativa}\n{nova_just}"
+        else:
+            ultima_inc.justificativa = nova_just
+        
+        db.session.commit()
+        
+        # Confirma para o funcionário
+        enviar_texto(
+            celular=func.celular,
+            mensagem=(f'✅ Recebido! Sua justificativa para o dia {ultima_inc.data.strftime("%d/%m")} '
+                      'foi registrada no espelho de ponto.'),
+            func_id=func.id,
+            tipo='justificativa_automatica'
+        )
+        
+        # Notifica o líder (opcional, mas bom pra compliance)
+        lider_cel = _celular_lider(func)
+        if lider_cel:
+            enviar_texto(
+                celular=lider_cel,
+                mensagem=f'📝 *{func.nome}* enviou uma justificativa via WhatsApp:\n"{texto}"',
+                func_id=func.id,
+                tipo='notificacao_gestor_justificativa'
+            )
+        return
+
+    # Caso não encontre inconsistência, apenas encaminha ao líder como texto livre
     lider_cel = _celular_lider(func)
     if lider_cel:
         enviar_texto(
@@ -177,10 +224,16 @@ def _transcrever_audio(data: dict) -> str:
 @whatsapp_bp.route('/logs')
 @login_required
 def logs():
-    logs = (
+    logs_lista = (
         WhatsappLog.query
         .order_by(WhatsappLog.criado_em.desc())
         .limit(200)
+        .all()
+    )
+    fila = (
+        NotificacaoFila.query
+        .filter(NotificacaoFila.status == 'pendente')
+        .order_by(NotificacaoFila.criada_em.desc())
         .all()
     )
     funcionarios = (
@@ -189,7 +242,10 @@ def logs():
         .order_by(Funcionario.nome)
         .all()
     )
-    return render_template('whatsapp/logs.html', logs=logs, funcionarios=funcionarios)
+    return render_template('whatsapp/logs.html', 
+                           logs=logs_lista, 
+                           fila=fila,
+                           funcionarios=funcionarios)
 
 
 @whatsapp_bp.route('/enviar', methods=['POST'])

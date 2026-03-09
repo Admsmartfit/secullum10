@@ -22,20 +22,63 @@ COOLDOWN_HORAS = int(os.getenv('NOTIF_COOLDOWN_HORAS', '12'))
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _render(template: str, func, minutos: int = 0, aloc=None, data_ref=None) -> str:
+def _render(template: str, func, minutos: int = 0, aloc=None, data_ref: date = None) -> str:
     if not template:
         return ''
+    
+    if data_ref is None:
+        data_ref = date.today()
+
     partes = func.nome.split()
+    
+    # ── Expansão PRD 2.0: Saldo de Banco de Horas ─────────────────────────────
+    saldo_dia = "0.00"
+    saldo_acumulado = "0.00"
+    try:
+        from models import BancoHorasSaldo
+        s = BancoHorasSaldo.query.filter_by(funcionario_id=func.id, data=data_ref).first()
+        if s:
+            saldo_dia = f"{float(s.saldo_dia):.2f}"
+            saldo_acumulado = f"{float(s.saldo_acumulado):.2f}"
+    except Exception:
+        pass
+
+    # ── Expansão PRD 2.0: Interjornada Devida ──────────────────────────────────
+    interjornada_devida = "0.00"
+    try:
+        from services.motor_clt import calcular_gap_interjornada
+        from models import Turno
+        turno_ref = aloc.turno if aloc else None
+        gap = calcular_gap_interjornada(func.id, data_ref, turno_ref)
+        if gap and gap < 11.0:
+            interjornada_devida = f"{11.0 - gap:.2f}"
+    except Exception:
+        pass
+
     subs = {
+        # Legado/Padrão
         '{name}':      partes[0] if partes else func.nome,
         '{full_name}': func.nome,
         '{minutes}':   str(minutos),
         '{turno}':     aloc.turno.nome if aloc else '',
-        '{inicio}':    aloc.turno.hora_inicio.strftime('%H:%M') if aloc else '',
-        '{fim}':       aloc.turno.hora_fim.strftime('%H:%M') if aloc else '',
-        '{data}':      (data_ref or date.today()).strftime('%d/%m/%Y'),
+        '{inicio}':    aloc.turno.hora_inicio.strftime('%H:%M') if aloc and aloc.turno else '',
+        '{fim}':       aloc.turno.hora_fim.strftime('%H:%M') if aloc and aloc.turno else '',
+        '{data}':      data_ref.strftime('%d/%m/%Y'),
         '{sexo_art}':  'a' if (func.sexo == 'F') else 'o',
+        
+        # PRD 2.0 (Tags sugeridas pelo usuário com {{ }})
+        '{{name}}':      partes[0] if partes else func.nome,
+        '{{full_name}}': func.nome,
+        '{{minutes}}':   str(minutos),
+        '{{turno}}':     aloc.turno.nome if aloc else '',
+        '{{inicio}}':    aloc.turno.hora_inicio.strftime('%H:%M') if aloc and aloc.turno else '',
+        '{{fim}}':       aloc.turno.hora_fim.strftime('%H:%M') if aloc and aloc.turno else '',
+        '{{data}}':      data_ref.strftime('%d/%m/%Y'),
+        '{{saldo_dia}}':       saldo_dia,
+        '{{saldo_acumulado}}': saldo_acumulado,
+        '{{interjornada_devida}}': interjornada_devida,
     }
+    
     for var, val in subs.items():
         template = template.replace(var, val)
     return template
@@ -123,10 +166,17 @@ def _enfileirar(regra: NotificationRule, celular: str, mensagem: str,
 
 
 def _fora_do_expediente(aloc) -> bool:
-    """True se o horário atual está fora do turno da alocação."""
+    """True se o horário atual está fora do turno da alocação OU em horário de silêncio (22h-07h)."""
+    agora = datetime.now().time()
+    
+    # Janela de silêncio absoluta para compliance (22h às 07h)
+    if agora >= datetime.strptime('22:00', '%H:%M').time() or \
+       agora <= datetime.strptime('07:00', '%H:%M').time():
+        return True
+
     if not aloc or not aloc.turno:
         return False
-    agora = datetime.now().time()
+        
     return not (aloc.turno.hora_inicio <= agora <= aloc.turno.hora_fim)
 
 
@@ -338,7 +388,15 @@ def processar_fila_notificacoes() -> dict:
             item.enviado_em = datetime.utcnow()
             enviados += 1
         else:
-            if item.tentativas >= 3:
+            # Exponential Backoff (PRD 2.0): 5min, 15min, 30min
+            tentativas = item.tentativas or 1
+            if tentativas == 1:
+                item.enviar_apos = datetime.utcnow() + timedelta(minutes=5)
+            elif tentativas == 2:
+                item.enviar_apos = datetime.utcnow() + timedelta(minutes=15)
+            elif tentativas == 3:
+                item.enviar_apos = datetime.utcnow() + timedelta(minutes=30)
+            else:
                 item.status = 'erro'
             erros += 1
     db.session.commit()
