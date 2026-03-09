@@ -100,6 +100,10 @@ def create_app():
             'task': 'tasks.sync_batidas_completa',
             'schedule': crontab(minute='*/5'),  # verifica a cada 5 min, self-limita por config
         },
+        'processar-fila-notificacoes-hourly': {
+            'task': 'tasks.processar_fila_notificacoes',
+            'schedule': crontab(minute=10),  # :10 de cada hora — despacha fila de desconexão
+        },
     }
     celery.conf.timezone = 'America/Sao_Paulo'
     app.extensions['celery'] = celery

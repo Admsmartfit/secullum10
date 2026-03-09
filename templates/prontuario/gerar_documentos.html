@@ -1,0 +1,242 @@
+{% extends 'base.html' %}
+{% block title %}Gerar Documentos Contratuais{% endblock %}
+{% block content %}
+
+<style>
+    .func-card { border: 2px solid transparent; border-radius: 10px; cursor: pointer; transition: all .18s; }
+    .func-card:hover { border-color: var(--primary); background: var(--primary-soft); }
+    .template-item { border: 2px solid var(--border-color); border-radius: 8px; padding: 12px 14px;
+        cursor: pointer; transition: all .18s; user-select: none; }
+    .template-item:hover { border-color: var(--primary); }
+    .template-item.selected { border-color: var(--primary); background: var(--primary-soft); }
+    .template-item .check-icon { opacity: 0; transition: opacity .15s; }
+    .template-item.selected .check-icon { opacity: 1; }
+    #infoPanel { background: var(--card-bg); border-radius: 10px; border: 1px solid var(--border-color); padding: 20px; }
+    .log-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 20px; }
+    .empty-state { text-align: center; color: var(--text-muted); padding: 40px 20px; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-0">Gerar Documentos Contratuais</h1>
+        <div class="text-muted small mt-1">Preenche templates Word com dados do funcionário e envia ao líder</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('prontuario.gerenciar_templates') }}#tags" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-tags me-1"></i>Ver Tags Disponíveis
+        </a>
+        <a href="{{ url_for('prontuario.gerenciar_templates') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-file-word me-1"></i>Gerenciar Templates
+        </a>
+    </div>
+</div>
+
+{% if not templates %}
+<div class="card p-5 text-center">
+    <i class="fas fa-file-word fa-3x text-muted mb-3"></i>
+    <h5 class="text-muted">Nenhum template cadastrado</h5>
+    <p class="text-muted small">Faça upload de um arquivo .docx para começar.</p>
+    <a href="{{ url_for('prontuario.gerenciar_templates') }}" class="btn btn-primary">
+        <i class="fas fa-upload me-1"></i>Enviar Template
+    </a>
+</div>
+{% else %}
+
+<form method="POST" id="frmGerar">
+<div class="row g-4">
+
+    <!-- Coluna esquerda: funcionário + templates -->
+    <div class="col-lg-7">
+
+        <!-- Busca de funcionário -->
+        <div class="card p-4 mb-4">
+            <h6 class="fw-bold mb-3"><i class="fas fa-user me-2 text-primary"></i>Funcionário</h6>
+            <select name="func_id" id="selectFunc" class="form-select select2-func" required>
+                <option value="">— Selecione o funcionário —</option>
+                {% for f in funcionarios %}
+                <option value="{{ f.id }}"
+                        data-nome="{{ f.nome }}"
+                        data-funcao="{{ f.funcao or '—' }}"
+                        data-dept="{{ f.departamento or '—' }}"
+                        data-cpf="{{ f.cpf or '—' }}"
+                        data-ec="{{ f.estado_civil or '—' }}"
+                        data-adm="{{ f.admissao.strftime('%d/%m/%Y') if f.admissao else '—' }}">
+                    {{ f.nome }} {% if f.departamento %}· {{ f.departamento }}{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Seleção de documentos -->
+        <div class="card p-4">
+            <h6 class="fw-bold mb-3">
+                <i class="fas fa-file-contract me-2 text-primary"></i>
+                Documentos
+                <span id="countSel" class="badge bg-primary ms-2" style="display:none">0</span>
+            </h6>
+
+            {% if templates %}
+            <div class="d-flex flex-column gap-2" id="templateList">
+                {% for t in templates %}
+                <div class="template-item d-flex align-items-center gap-3"
+                     onclick="toggleTemplate(this, {{ t.id }})" data-id="{{ t.id }}">
+                    <input type="checkbox" name="template_ids" value="{{ t.id }}"
+                           class="d-none tmpl-check">
+                    <i class="fas fa-file-word fa-lg" style="color:#2563eb; min-width:22px"></i>
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold small">{{ t.nome }}</div>
+                        {% if t.descricao %}
+                        <div class="text-muted" style="font-size:.78rem">{{ t.descricao }}</div>
+                        {% endif %}
+                    </div>
+                    <i class="fas fa-check-circle text-primary check-icon"></i>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state"><i class="fas fa-inbox fa-2x mb-2"></i><br>Nenhum template ativo.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Coluna direita: info + ações -->
+    <div class="col-lg-5">
+        <div id="infoPanel">
+            <h6 class="fw-bold mb-3"><i class="fas fa-id-card me-2 text-primary"></i>Dados do Funcionário</h6>
+            <div id="funcInfo" class="text-muted small">
+                <i class="fas fa-arrow-left me-1"></i> Selecione um funcionário para ver os dados.
+            </div>
+            <div id="funcInfoLoaded" style="display:none">
+                <table class="table table-sm mb-0" style="font-size:.82rem">
+                    <tr><td class="text-muted" style="width:110px">Nome</td><td id="fi-nome" class="fw-semibold">—</td></tr>
+                    <tr><td class="text-muted">Função</td><td id="fi-funcao">—</td></tr>
+                    <tr><td class="text-muted">Departamento</td><td id="fi-dept">—</td></tr>
+                    <tr><td class="text-muted">CPF</td><td id="fi-cpf">—</td></tr>
+                    <tr><td class="text-muted">Estado Civil</td><td id="fi-ec">—</td></tr>
+                    <tr><td class="text-muted">Admissão</td><td id="fi-adm">—</td></tr>
+                </table>
+                <hr class="my-3">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="fas fa-envelope text-muted" style="width:16px"></i>
+                    <span class="text-muted small">Líder da unidade:</span>
+                </div>
+                <div id="fi-lider" class="small fw-semibold ps-4">—</div>
+            </div>
+
+            <hr class="my-4">
+
+            <div id="acoes" style="opacity:.4; pointer-events:none" id="acoes">
+                <div class="d-grid gap-2">
+                    <button type="submit" name="acao" value="enviar"
+                            class="btn btn-primary"
+                            onclick="return confirmarEnvio(this)">
+                        <i class="fas fa-paper-plane me-2"></i>Gerar PDF e Enviar para Líder
+                    </button>
+                    <button type="submit" name="acao" value="baixar"
+                            class="btn btn-outline-secondary">
+                        <i class="fas fa-download me-2"></i>Gerar e Baixar (sem enviar)
+                    </button>
+                </div>
+                <div class="text-muted mt-2" style="font-size:.75rem">
+                    <i class="fas fa-lock me-1"></i>Os PDFs não são armazenados no servidor (LGPD).
+                </div>
+            </div>
+        </div>
+
+        <!-- Log de envios recentes -->
+        {% if logs %}
+        <div class="card p-4 mt-4">
+            <h6 class="fw-bold mb-3"><i class="fas fa-history me-2 text-muted"></i>Envios Recentes</h6>
+            <div style="max-height:220px; overflow-y:auto">
+                {% for log in logs %}
+                <div class="d-flex align-items-start gap-2 mb-2 pb-2 border-bottom">
+                    <i class="fas fa-check-circle text-success mt-1" style="font-size:.8rem"></i>
+                    <div style="font-size:.78rem">
+                        <div class="fw-semibold">{{ log.funcionario.nome }}</div>
+                        <div class="text-muted">→ {{ log.email_destinatario }}</div>
+                        <div class="text-muted">{{ log.criado_em.strftime('%d/%m/%Y %H:%M') }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+</form>
+{% endif %}
+
+<script>
+const selectedIds = new Set();
+
+function toggleTemplate(el, id) {
+    el.classList.toggle('selected');
+    const chk = el.querySelector('.tmpl-check');
+    chk.checked = !chk.checked;
+    if (chk.checked) selectedIds.add(id);
+    else selectedIds.delete(id);
+    updateAcoes();
+}
+
+function updateAcoes() {
+    const hasTmpl = selectedIds.size > 0;
+    const hasFunc = document.getElementById('selectFunc').value !== '';
+    const acoes = document.getElementById('acoes');
+    const count  = document.getElementById('countSel');
+    acoes.style.opacity = (hasTmpl && hasFunc) ? '1' : '.4';
+    acoes.style.pointerEvents = (hasTmpl && hasFunc) ? 'auto' : 'none';
+    if (selectedIds.size > 0) {
+        count.textContent = selectedIds.size;
+        count.style.display = '';
+    } else {
+        count.style.display = 'none';
+    }
+}
+
+function confirmarEnvio(btn) {
+    const nome = document.getElementById('fi-nome').textContent;
+    const lider = document.getElementById('fi-lider').textContent;
+    if (!confirm(`Enviar ${selectedIds.size} documento(s) de "${nome}" para ${lider}?`)) {
+        return false;
+    }
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gerando…';
+    btn.closest('form').submit();
+    return false;
+}
+
+// Ao selecionar funcionário, preenche painel de info
+document.getElementById('selectFunc').addEventListener('change', function () {
+    const opt = this.options[this.selectedIndex];
+    if (!opt.value) {
+        document.getElementById('funcInfo').style.display = '';
+        document.getElementById('funcInfoLoaded').style.display = 'none';
+        updateAcoes();
+        return;
+    }
+    document.getElementById('funcInfo').style.display = 'none';
+    document.getElementById('funcInfoLoaded').style.display = '';
+    document.getElementById('fi-nome').textContent = opt.dataset.nome;
+    document.getElementById('fi-funcao').textContent = opt.dataset.funcao;
+    document.getElementById('fi-dept').textContent = opt.dataset.dept;
+    document.getElementById('fi-cpf').textContent = opt.dataset.cpf;
+    document.getElementById('fi-ec').textContent = opt.dataset.ec;
+    document.getElementById('fi-adm').textContent = opt.dataset.adm;
+
+    // Busca e-mail do líder via AJAX
+    fetch(`/prontuario/api/funcionario/${opt.value}`)
+        .then(r => r.json())
+        .then(d => {
+            const lEl = document.getElementById('fi-lider');
+            if (d.email_lider) {
+                lEl.innerHTML = `<span class="text-success">${d.nome_lider}</span> <span class="text-muted">&lt;${d.email_lider}&gt;</span>`;
+            } else {
+                lEl.innerHTML = '<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Líder não configurado para este departamento</span>';
+            }
+        });
+
+    updateAcoes();
+});
+</script>
+{% endblock %}

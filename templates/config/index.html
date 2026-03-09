@@ -10,9 +10,12 @@
     .form-control, .form-select { background: #0f172a; border-color: rgba(255,255,255,0.15); color: var(--text-main); }
     .form-control:focus, .form-select:focus { background: #0f172a; border-color: var(--accent-color); color: var(--text-main); box-shadow: none; }
     .form-control::placeholder { color: var(--text-muted); }
-    .badge-nivel-gestor { background: rgba(56,189,248,0.15); color: #38bdf8; }
-    .badge-nivel-professor { background: rgba(168,85,247,0.15); color: #a855f7; }
+    .badge-nivel-administrador { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .badge-nivel-gerente       { background: rgba(56,189,248,0.15); color: #38bdf8; }
+    .badge-nivel-funcionario   { background: rgba(168,85,247,0.15); color: #a855f7; }
     .unidade-row { background: rgba(255,255,255,0.02); border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.5rem; border: 1px solid rgba(255,255,255,0.06); }
+    .sal-badge-set   { background:#dcfce7; color:#15803d; font-size:.7rem; padding:2px 8px; border-radius:20px; }
+    .sal-badge-unset { background:#f1f5f9; color:#94a3b8; font-size:.7rem; padding:2px 8px; border-radius:20px; }
     .phone-preview { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem; }
     #importPreview table { font-size: 0.85rem; }
     .star-badge { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--accent-color); margin-right: 4px; }
@@ -50,6 +53,11 @@
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-sync"
                 id="btnTabSync">
             <i class="fas fa-sync-alt me-1"></i> Sync Automático
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-salarios">
+            <i class="fas fa-dollar-sign me-1"></i> Salários / Benefícios
         </button>
     </li>
 </ul>
@@ -129,8 +137,9 @@
                         <div class="mb-2">
                             <label class="form-label small">Perfil de acesso</label>
                             <select class="form-select form-select-sm" name="nivel_acesso" id="u_nivel">
-                                <option value="gestor">Gestor (acesso total)</option>
-                                <option value="professor">Professor (acesso limitado)</option>
+                                <option value="administrador">Administrador (acesso total)</option>
+                                <option value="gerente">Gerente (acesso de gestão)</option>
+                                <option value="funcionario" selected>Funcionário (acesso limitado)</option>
                             </select>
                         </div>
                         <div class="mb-3 d-none" id="u_ativo_wrap">
@@ -499,6 +508,115 @@
         </div>
     </div>
 
+
+    <!-- ══ TAB SALÁRIOS / BENEFÍCIOS ══════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-salarios">
+
+        <!-- Tempo de experiência -->
+        <div class="card p-4 mb-4 bg-secondary border-0">
+            <h6 class="fw-bold mb-3"><i class="fas fa-sliders-h me-2 text-primary"></i>Configurações de Documentos</h6>
+            <div class="row g-4 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label text-muted small fw-bold">TEMPO DE EXPERIÊNCIA (dias)</label>
+                    <div class="input-group">
+                        <input type="number" id="cfgExpDias" class="form-control"
+                               min="1" max="365" value="{{ experiencia_dias }}" placeholder="45">
+                        <span class="input-group-text text-muted">dias</span>
+                        <button class="btn btn-primary" onclick="cfgSalvarExp()">
+                            <i class="fas fa-save me-1"></i>Salvar
+                        </button>
+                    </div>
+                    <div class="text-muted mt-1" style="font-size:.75rem">CLT art. 445: máximo 90 dias. Padrão: 45 dias.</div>
+                </div>
+                <div class="col-md-7">
+                    <div class="p-3 rounded" style="background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,.15); font-size:.8rem; color:#e2e8f0">
+                        <div class="fw-bold mb-2" style="color:#94a3b8"><i class="fas fa-calendar-check me-1"></i>Preview (tags geradas hoje)</div>
+                        <div class="row g-1">
+                            <div class="col-6"><span style="color:#94a3b8">data_hoje:</span> <strong id="cfg-prev-data"></strong></div>
+                            <div class="col-6"><span style="color:#94a3b8">mes_hoje:</span> <strong id="cfg-prev-mes"></strong></div>
+                            <div class="col-12 mt-1 pt-1" style="border-top:1px solid rgba(255,255,255,.15)">
+                                <span style="color:#94a3b8">fim_experiencia</span> (admissão 01/01/2025 +
+                                <span id="cfg-prev-dias">{{ experiencia_dias }}</span> dias):
+                                <strong id="cfg-prev-fim"></strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabela salarial por função -->
+        <div class="alert alert-info p-2 mb-3" style="font-size:.82rem">
+            <i class="fas fa-info-circle me-1"></i>
+            Valores por cargo aplicados automaticamente nas tags <code>{{salario}}</code>, <code>{{auxilio_alimentacao}}</code> e <code>{{premiacao}}</code> ao gerar documentos.
+        </div>
+
+        {% if funcoes_sal %}
+        <div class="table-responsive">
+            <table class="table align-middle" style="min-width:680px">
+                <thead>
+                    <tr>
+                        <th>Cargo / Função</th>
+                        <th><i class="fas fa-dollar-sign me-1 text-success"></i>Salário Base (R$)</th>
+                        <th><i class="fas fa-utensils me-1 text-warning"></i>Aux. Alimentação (R$)</th>
+                        <th><i class="fas fa-trophy me-1 text-primary"></i>Premiação (R$)</th>
+                        <th style="width:110px">Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for funcao in funcoes_sal %}
+                {% set sal = salarios_map.get(funcao) %}
+                <tr data-funcao="{{ funcao }}">
+                    <td class="fw-semibold">{{ funcao }}
+                        <span class="d-block mt-1 sal-status
+                            {% if sal %}sal-badge-set{% else %}sal-badge-unset{% endif %}">
+                            {% if sal %}Configurado{% else %}Não configurado{% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm sal-input" data-campo="salario"
+                               placeholder="0,00" style="max-width:140px"
+                               value="{{ '%.2f'|format(sal.salario|float) if sal and sal.salario is not none else '' }}"
+                               oninput="salMarkDirty(this)">
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm sal-input" data-campo="auxilio_alimentacao"
+                               placeholder="0,00" style="max-width:140px"
+                               value="{{ '%.2f'|format(sal.auxilio_alimentacao|float) if sal and sal.auxilio_alimentacao is not none else '' }}"
+                               oninput="salMarkDirty(this)">
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm sal-input" data-campo="premiacao"
+                               placeholder="0,00" style="max-width:140px"
+                               value="{{ '%.2f'|format(sal.premiacao|float) if sal and sal.premiacao is not none else '' }}"
+                               oninput="salMarkDirty(this)">
+                    </td>
+                    <td>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-primary sal-save-btn" onclick="salSalvar(this)" disabled>
+                                <i class="fas fa-save me-1"></i>Salvar
+                            </button>
+                            {% if sal %}
+                            <button class="btn btn-sm btn-outline-danger" onclick="salExcluir(this)" title="Remover">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-5">
+            <i class="fas fa-users fa-2x mb-2 d-block"></i>
+            Nenhum funcionário ativo com cargo cadastrado encontrado.
+        </div>
+        {% endif %}
+
+    </div><!-- /tab-salarios -->
+
 </div><!-- /tab-content -->
 
 <!-- Modal Edição de Usuário -->
@@ -526,8 +644,9 @@
                     <div class="mb-2">
                         <label class="form-label small">Perfil</label>
                         <select class="form-select form-select-sm" name="nivel_acesso" id="eu_nivel">
-                            <option value="gestor">Gestor</option>
-                            <option value="professor">Professor</option>
+                            <option value="administrador">Administrador</option>
+                            <option value="gerente">Gerente</option>
+                            <option value="funcionario">Funcionário</option>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -545,6 +664,16 @@
         </div>
     </div>
 
+</div>
+
+<!-- Toast feedback salários -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:9999">
+    <div id="cfgToast" class="toast align-items-center text-white border-0" role="alert" aria-live="assertive">
+        <div class="d-flex">
+            <div class="toast-body" id="cfgToastMsg"></div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -566,7 +695,7 @@ function abrirEdicao(id, nome, email, nivel, ativo) {
 (function() {
     const hash = window.location.hash;
     if (hash) {
-        const tabMap = {'#usuarios':'tab-usuarios','#unidades':'tab-unidades','#whatsapp':'tab-whatsapp','#escalas':'tab-escalas','#tab-sync':'tab-sync','#sync':'tab-sync'};
+        const tabMap = {'#usuarios':'tab-usuarios','#unidades':'tab-unidades','#whatsapp':'tab-whatsapp','#escalas':'tab-escalas','#tab-sync':'tab-sync','#sync':'tab-sync','#salarios':'tab-salarios'};
         const target = tabMap[hash];
         if (target) {
             document.querySelector(`[data-bs-target="#${target}"]`).click();
@@ -711,6 +840,92 @@ function renderizarPreview(horarios) {
 
 function toggleAllPreview(cb) {
     document.querySelectorAll('.preview-check').forEach(c => c.checked = cb.checked);
+}
+
+// ── Salários / Benefícios ─────────────────────────────────────────────────────
+const _MESES_PT = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+
+function cfgAtualizarPreview() {
+    const hoje = new Date();
+    document.getElementById('cfg-prev-data').textContent = `${String(hoje.getDate()).padStart(2,'0')}/${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
+    document.getElementById('cfg-prev-mes').textContent = _MESES_PT[hoje.getMonth()];
+    const dias = parseInt(document.getElementById('cfgExpDias').value) || 45;
+    document.getElementById('cfg-prev-dias').textContent = dias;
+    const adm = new Date(2025, 0, 1);
+    const fim = new Date(adm.getTime() + dias * 86400000);
+    document.getElementById('cfg-prev-fim').textContent = `${String(fim.getDate()).padStart(2,'0')}/${String(fim.getMonth()+1).padStart(2,'0')}/${fim.getFullYear()}`;
+}
+
+document.getElementById('cfgExpDias')?.addEventListener('input', cfgAtualizarPreview);
+cfgAtualizarPreview();
+
+function cfgSalvarExp() {
+    const dias = document.getElementById('cfgExpDias').value;
+    const fd = new FormData(); fd.append('experiencia_dias', dias);
+    fetch('/prontuario/salarios/config', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) { cfgAtualizarPreview(); cfgToast('Tempo de experiência salvo: ' + d.experiencia_dias + ' dias.', 'bg-success'); }
+            else cfgToast('Erro: ' + d.erro, 'bg-danger');
+        });
+}
+
+function salMarkDirty(input) {
+    input.closest('tr').querySelector('.sal-save-btn').disabled = false;
+}
+
+function salSalvar(btn) {
+    const row = btn.closest('tr');
+    const funcao = row.dataset.funcao;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    const fd = new FormData();
+    fd.append('funcao', funcao);
+    row.querySelectorAll('.sal-input').forEach(inp => fd.append(inp.dataset.campo, inp.value.trim()));
+    fetch('/prontuario/salarios/salvar', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) {
+                const badge = row.querySelector('.sal-status');
+                badge.textContent = 'Configurado';
+                badge.className = 'sal-status sal-badge-set';
+                if (!row.querySelector('.btn-outline-danger')) {
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'btn btn-sm btn-outline-danger';
+                    delBtn.title = 'Remover'; delBtn.innerHTML = '<i class="fas fa-times"></i>';
+                    delBtn.onclick = function() { salExcluir(delBtn); };
+                    row.querySelector('.d-flex').appendChild(delBtn);
+                }
+                cfgToast('Benefícios salvos!', 'bg-success');
+            } else cfgToast('Erro: ' + d.erro, 'bg-danger');
+        })
+        .catch(() => cfgToast('Falha na comunicação.', 'bg-danger'))
+        .finally(() => { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar'; });
+}
+
+function salExcluir(btn) {
+    const row = btn.closest('tr');
+    const funcao = row.dataset.funcao;
+    if (!confirm(`Remover salário de "${funcao}"?`)) return;
+    const fd = new FormData(); fd.append('funcao', funcao);
+    fetch('/prontuario/salarios/excluir', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) {
+                row.querySelector('.sal-status').textContent = 'Não configurado';
+                row.querySelector('.sal-status').className = 'sal-status sal-badge-unset';
+                row.querySelectorAll('.sal-input').forEach(inp => inp.value = '');
+                btn.remove();
+                cfgToast('Salário removido.', 'bg-warning');
+            }
+        });
+}
+
+function cfgToast(msg, bgClass) {
+    const el = document.getElementById('cfgToast');
+    document.getElementById('cfgToastMsg').textContent = msg;
+    el.className = `toast align-items-center text-white border-0 ${bgClass}`;
+    new bootstrap.Toast(el, { delay: 3000 }).show();
 }
 
 function confirmarImportacao() {

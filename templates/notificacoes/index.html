@@ -107,7 +107,7 @@
                 </button>
                 <button class="btn btn-sm btn-outline-light" title="Editar"
                         data-bs-toggle="modal" data-bs-target="#modalRegra"
-                        onclick="abrirEditar({{ r|tojson }})">
+                        onclick="abrirEditar({{ {'id':r.id,'nome':r.nome,'ativo':r.ativo,'trigger_type':r.trigger_type,'trigger_hour':r.trigger_hour,'trigger_weekday':r.trigger_weekday,'condition_type':r.condition_type,'threshold_minutes':r.threshold_minutes,'dest_employee':r.dest_employee,'dest_manager':r.dest_manager,'dest_rh':r.dest_rh,'template_manager':r.template_manager or '','template_employee':r.template_employee or '','only_working_hours':r.only_working_hours,'send_immediately':r.send_immediately}|tojson }})">
                     <i class="fas fa-edit"></i>
                 </button>
                 <button class="btn btn-sm {% if r.ativo %}btn-warning{% else %}btn-outline-success{% endif %}"

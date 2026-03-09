@@ -475,6 +475,8 @@
 
     <div class="sidebar" id="sidebar">
         <div class="sidebar-inner">
+            {% set is_admin   = current_user.nivel_acesso == 'administrador' %}
+            {% set is_gerente = current_user.nivel_acesso in ['administrador', 'gerente'] %}
             <nav class="nav flex-column">
                 <a class="nav-link {% if request.path == '/' %}active{% endif %}"
                    href="/" data-tooltip="Dashboard">
@@ -486,6 +488,7 @@
                     <i class="fas fa-calendar-alt"></i>
                     <span class="nav-link-text">Espelho de Ponto</span>
                 </a>
+                {% if is_gerente %}
                 <a class="nav-link {% if request.path == '/funcionarios' %}active{% endif %}"
                    href="/funcionarios" data-tooltip="Funcionários">
                     <i class="fas fa-users"></i>
@@ -501,7 +504,9 @@
                     <i class="fas fa-exclamation-triangle"></i>
                     <span class="nav-link-text">Inconsistências</span>
                 </a>
+                {% endif %}
 
+                {% if is_gerente %}
                 <hr class="sidebar-separator">
                 <div class="section-label">Gestão</div>
 
@@ -546,7 +551,26 @@
                     <span class="badge bg-danger ms-auto" style="font-size:0.65rem;">{{ alertas_docs }}</span>
                     {% endif %}
                 </a>
+                <a class="nav-link {% if request.path.startswith('/prontuario/gerar') or request.path.startswith('/prontuario/templates') %}active{% endif %}"
+                   href="/prontuario/gerar-documentos" data-tooltip="Docs Contratuais">
+                    <i class="fas fa-file-contract"></i>
+                    <span class="nav-link-text">Docs Contratuais</span>
+                </a>
+                {% else %}
+                {# Funcionário: acesso ao marketplace e trocas #}
+                <a class="nav-link {% if request.path.startswith('/marketplace') %}active{% endif %}"
+                   href="/marketplace/" data-tooltip="Marketplace">
+                    <i class="fas fa-store"></i>
+                    <span class="nav-link-text">Marketplace</span>
+                </a>
+                <a class="nav-link {% if request.path.startswith('/trocas') %}active{% endif %}"
+                   href="/trocas/minha-escala" data-tooltip="Trocas de Turno">
+                    <i class="fas fa-exchange-alt"></i>
+                    <span class="nav-link-text">Trocas de Turno</span>
+                </a>
+                {% endif %}
 
+                {% if is_admin %}
                 <hr class="sidebar-separator">
                 <div class="section-label">Sistema</div>
 
@@ -563,6 +587,7 @@
                     <i class="fas fa-clock-rotate-left"></i>
                     <span class="nav-link-text">Sincronizar Batidas</span>
                 </a>
+                {% endif %}
             </nav>
         </div>
 

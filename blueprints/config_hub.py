@@ -12,12 +12,12 @@ config_hub_bp = Blueprint('config_hub', __name__, url_prefix='/config')
 
 
 def _somente_gestor(f):
-    """Decorator simples para restringir a gestores."""
+    """Decorator simples para restringir a administradores."""
     from functools import wraps
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not current_user.is_authenticated or current_user.nivel_acesso != 'gestor':
-            flash('Acesso restrito a gestores.', 'danger')
+        if not current_user.is_authenticated or current_user.nivel_acesso != 'administrador':
+            flash('Acesso restrito a administradores.', 'danger')
             return redirect(url_for('dashboard.index'))
         return f(*args, **kwargs)
     return decorated
@@ -72,6 +72,19 @@ def index():
         'completa_ultimo_run':    _cfg('sync_completa_ultimo_run', ''),
     }
 
+    from models import TabelaSalarial
+    funcoes_db = (
+        db.session.query(Funcionario.funcao)
+        .filter(Funcionario.ativo == True, Funcionario.funcao.isnot(None))
+        .distinct()
+        .order_by(Funcionario.funcao)
+        .all()
+    )
+    funcoes_sal = [f[0] for f in funcoes_db if f[0]]
+    salarios_map = {s.funcao: s for s in TabelaSalarial.query.all()}
+    cfg_exp = Configuracao.query.filter_by(chave='experiencia_dias').first()
+    experiencia_dias = int(cfg_exp.valor) if cfg_exp and cfg_exp.valor else 45
+
     return render_template(
         'config/index.html',
         usuarios=usuarios,
@@ -84,6 +97,9 @@ def index():
         megaapi_token=bool(os.getenv('MEGAAPI_TOKEN')),
         megaapi_instance=bool(os.getenv('MEGAAPI_INSTANCE')),
         sync_cfg=sync_cfg,
+        funcoes_sal=funcoes_sal,
+        salarios_map=salarios_map,
+        experiencia_dias=experiencia_dias,
     )
 
 
@@ -96,7 +112,7 @@ def usuario_novo():
     nome = request.form.get('nome', '').strip()
     email = request.form.get('email', '').strip().lower()
     senha = request.form.get('senha', '').strip()
-    nivel = request.form.get('nivel_acesso', 'professor')
+    nivel = request.form.get('nivel_acesso', 'funcionario')
 
     if not nome or not email or not senha:
         flash('Preencha nome, e-mail e senha.', 'danger')

@@ -18,12 +18,14 @@ TRIGGER_LABELS = {
 }
 
 CONDITION_LABELS = {
-    'LATE_ENTRY':   'Atraso na entrada',
-    'EARLY_LEAVE':  'Saída antecipada',
-    'ABSENCE':      'Ausência (sem ponto)',
-    'OVERTIME':     'Hora extra na saída',
-    'INTERJORNADA': 'Violação de interjornada',
-    'ESCALA_ENVIO': 'Envio de escala ao funcionário',
+    'LATE_ENTRY':            'Atraso na entrada',
+    'EARLY_LEAVE':           'Saída antecipada',
+    'ABSENCE':               'Ausência (sem ponto)',
+    'OVERTIME':              'Hora extra na saída',
+    'INTERJORNADA':          'Violação de interjornada',
+    'ESCALA_ENVIO':          'Envio de escala ao funcionário',
+    'INCONSISTENCY_REPORT':  'Relatório de inconsistências (dia anterior)',
+    'DESCANSO_DOMINGO_F':    'Descanso dominical feminino (CLT art. 386)',
 }
 
 # Templates padrão por tipo de condição
@@ -51,6 +53,14 @@ _DEFAULTS = {
     'ESCALA_ENVIO': {
         'manager':  '',
         'employee': 'Olá, {name}! Sua escala: {turno} — {inicio} às {fim} ({data}).',
+    },
+    'INCONSISTENCY_REPORT': {
+        'manager':  '{relatorio}',
+        'employee': '',
+    },
+    'DESCANSO_DOMINGO_F': {
+        'manager':  '{full_name} trabalhou todos os dias da semana incluindo domingo (CLT art. 386 — descanso feminino). Verifique a escala.',
+        'employee': '',
     },
 }
 

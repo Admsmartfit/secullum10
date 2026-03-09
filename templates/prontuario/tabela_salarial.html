@@ -1,0 +1,288 @@
+{% extends 'base.html' %}
+{% block title %}Tabela Salarial por Função{% endblock %}
+{% block content %}
+
+<style>
+    .sal-row td { vertical-align: middle; }
+    .sal-input { max-width: 160px; }
+    .sal-badge-set { background: #dcfce7; color: #15803d; font-size:.72rem; padding:2px 8px; border-radius:20px; }
+    .sal-badge-unset { background: #f1f5f9; color: #94a3b8; font-size:.72rem; padding:2px 8px; border-radius:20px; }
+    .save-btn { min-width: 72px; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-0">Tabela Salarial por Função</h1>
+        <div class="text-muted small mt-1">
+            Define o valor usado pela tag <code>&#123;&#123;salario&#125;&#125;</code> nos documentos contratuais
+        </div>
+    </div>
+    <a href="{{ url_for('prontuario.gerenciar_templates') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left me-1"></i>Voltar a Templates
+    </a>
+</div>
+
+<!-- Card de configurações gerais de documentos -->
+<div class="card p-4 mb-4">
+    <h6 class="fw-bold mb-3"><i class="fas fa-sliders-h me-2 text-primary"></i>Configurações de Documentos</h6>
+    <div class="row g-4 align-items-end">
+
+        <!-- Tempo de experiência -->
+        <div class="col-md-5">
+            <label class="form-label text-muted small fw-bold">TEMPO DE EXPERIÊNCIA (dias)</label>
+            <div class="input-group">
+                <input type="number" id="inputExpDias" class="form-control"
+                       min="1" max="365" value="{{ experiencia_dias }}"
+                       placeholder="45">
+                <span class="input-group-text text-muted">dias</span>
+                <button class="btn btn-primary" onclick="salvarConfig()">
+                    <i class="fas fa-save me-1"></i>Salvar
+                </button>
+            </div>
+            <div class="text-muted mt-1" style="font-size:.75rem">
+                CLT art. 445: máximo 90 dias (podendo ser prorrogado uma vez).
+                Padrão: 45 dias.
+            </div>
+        </div>
+
+        <!-- Preview das datas calculadas -->
+        <div class="col-md-7">
+            <div class="p-3 rounded" style="background:#f8fafc; border:1px solid var(--border-color); font-size:.8rem">
+                <div class="fw-bold text-muted mb-2"><i class="fas fa-calendar-check me-1"></i>Preview (tags geradas hoje)</div>
+                <div class="row g-1">
+                    <div class="col-6"><span class="text-muted">data_hoje:</span> <strong id="prev-data-hoje"></strong></div>
+                    <div class="col-6"><span class="text-muted">dia_hoje:</span> <strong id="prev-dia"></strong></div>
+                    <div class="col-6"><span class="text-muted">mes_hoje:</span> <strong id="prev-mes"></strong></div>
+                    <div class="col-6"><span class="text-muted">ano_hoje:</span> <strong id="prev-ano"></strong></div>
+                    <div class="col-12 mt-1 pt-1 border-top">
+                        <span class="text-muted">fim_experiencia</span> (ex. admissão 01/01/2025 +
+                        <span id="prev-dias">{{ experiencia_dias }}</span> dias):
+                        <strong id="prev-fim-exp"></strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div class="card p-4">
+
+    <div class="alert alert-info p-2 mb-4" style="font-size:.82rem">
+        <i class="fas fa-info-circle me-1"></i>
+        Funções extraídas do cadastro de funcionários ativos. Os valores são aplicados a
+        <strong>todos os funcionários daquela função</strong> ao gerar um documento.
+        Deixe em branco para não incluir o campo no documento.
+    </div>
+
+    {% if funcoes %}
+    <div class="table-responsive">
+        <table class="table align-middle" id="tblSalarios" style="min-width:720px">
+            <thead>
+                <tr>
+                    <th style="min-width:160px">Cargo / Função</th>
+                    <th>
+                        <i class="fas fa-dollar-sign me-1 text-success"></i>Salário Base (R$)
+                        <div class="text-muted fw-normal" style="font-size:.7rem">tag: <code>{{salario}}</code></div>
+                    </th>
+                    <th>
+                        <i class="fas fa-utensils me-1 text-warning"></i>Auxílio-Alimentação (R$)
+                        <div class="text-muted fw-normal" style="font-size:.7rem">tag: <code>{{auxilio_alimentacao}}</code></div>
+                    </th>
+                    <th>
+                        <i class="fas fa-trophy me-1 text-primary"></i>Premiação (R$)
+                        <div class="text-muted fw-normal" style="font-size:.7rem">tag: <code>{{premiacao}}</code></div>
+                    </th>
+                    <th style="width:130px">Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for funcao in funcoes %}
+                {% set sal = salarios.get(funcao) %}
+                <tr class="sal-row" data-funcao="{{ funcao }}">
+                    <td class="fw-semibold">{{ funcao }}
+                        <span class="sal-status d-block mt-1
+                            {% if sal %}sal-badge-set{% else %}sal-badge-unset{% endif %}">
+                            {% if sal %}Configurado{% else %}Não configurado{% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm sal-input"
+                               data-campo="salario"
+                               placeholder="0,00"
+                               value="{{ '%.2f'|format(sal.salario|float) if sal and sal.salario is not none else '' }}"
+                               oninput="markDirty(this)">
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm sal-input"
+                               data-campo="auxilio_alimentacao"
+                               placeholder="0,00"
+                               value="{{ '%.2f'|format(sal.auxilio_alimentacao|float) if sal and sal.auxilio_alimentacao is not none else '' }}"
+                               oninput="markDirty(this)">
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm sal-input"
+                               data-campo="premiacao"
+                               placeholder="0,00"
+                               value="{{ '%.2f'|format(sal.premiacao|float) if sal and sal.premiacao is not none else '' }}"
+                               oninput="markDirty(this)">
+                    </td>
+                    <td>
+                        <div class="d-flex gap-1 flex-wrap">
+                            <button class="btn btn-sm btn-primary save-btn"
+                                    onclick="salvar(this)" disabled>
+                                <i class="fas fa-save me-1"></i>Salvar
+                            </button>
+                            {% if sal %}
+                            <button class="btn btn-sm btn-outline-danger"
+                                    onclick="excluir(this)" title="Remover todos os valores">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-5">
+        <i class="fas fa-users fa-2x mb-2 d-block"></i>
+        Nenhum funcionário ativo com função cadastrada encontrado.
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- Toast feedback -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:9999">
+    <div id="toast" class="toast align-items-center text-white border-0" role="alert" aria-live="assertive">
+        <div class="d-flex">
+            <div class="toast-body" id="toastMsg"></div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    </div>
+</div>
+
+<script>
+function markDirty(input) {
+    const row = input.closest('tr');
+    row.querySelector('.save-btn').disabled = false;
+}
+
+function salvar(btn) {
+    const row = btn.closest('tr');
+    const funcao = row.dataset.funcao;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    const fd = new FormData();
+    fd.append('funcao', funcao);
+    row.querySelectorAll('.sal-input').forEach(inp => {
+        fd.append(inp.dataset.campo, inp.value.trim());
+    });
+
+    fetch('/prontuario/salarios/salvar', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) {
+                const badge = row.querySelector('.sal-status');
+                badge.textContent = 'Configurado';
+                badge.className = 'sal-status sal-badge-set';
+                if (!row.querySelector('.btn-outline-danger')) {
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'btn btn-sm btn-outline-danger';
+                    delBtn.title = 'Remover todos os valores';
+                    delBtn.innerHTML = '<i class="fas fa-times"></i>';
+                    delBtn.onclick = function() { excluir(delBtn); };
+                    row.querySelector('.d-flex').appendChild(delBtn);
+                }
+                showToast('Benefícios salvos com sucesso!', 'bg-success');
+            } else {
+                showToast('Erro: ' + d.erro, 'bg-danger');
+            }
+        })
+        .catch(() => showToast('Falha na comunicação.', 'bg-danger'))
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar';
+        });
+}
+
+function excluir(btn) {
+    const row = btn.closest('tr');
+    const funcao = row.dataset.funcao;
+    if (!confirm(`Remover salário de "${funcao}"?`)) return;
+
+    const fd = new FormData();
+    fd.append('funcao', funcao);
+
+    fetch('/prontuario/salarios/excluir', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) {
+                const badge = row.querySelector('.sal-status');
+                badge.textContent = 'Não configurado';
+                badge.className = 'sal-status sal-badge-unset';
+                row.querySelector('input').value = '';
+                btn.remove();
+                showToast('Salário removido.', 'bg-warning');
+            }
+        });
+}
+
+// ── Config de experiência ─────────────────────────────────────────────────────
+
+function salvarConfig() {
+    const dias = document.getElementById('inputExpDias').value;
+    const fd = new FormData();
+    fd.append('experiencia_dias', dias);
+    fetch('/prontuario/salarios/config', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) {
+                document.getElementById('prev-dias').textContent = d.experiencia_dias;
+                atualizarPreview();
+                showToast('Tempo de experiência salvo: ' + d.experiencia_dias + ' dias.', 'bg-success');
+            } else {
+                showToast('Erro: ' + d.erro, 'bg-danger');
+            }
+        });
+}
+
+const MESES_PT = ['janeiro','fevereiro','março','abril','maio','junho',
+                   'julho','agosto','setembro','outubro','novembro','dezembro'];
+
+function atualizarPreview() {
+    const hoje = new Date();
+    const dd = String(hoje.getDate()).padStart(2, '0');
+    const mm = String(hoje.getMonth() + 1).padStart(2, '0');
+    const yyyy = hoje.getFullYear();
+    document.getElementById('prev-data-hoje').textContent = `${dd}/${mm}/${yyyy}`;
+    document.getElementById('prev-dia').textContent = String(hoje.getDate());
+    document.getElementById('prev-mes').textContent = MESES_PT[hoje.getMonth()];
+    document.getElementById('prev-ano').textContent = String(yyyy);
+
+    // Simula admissão em 01/01/2025
+    const dias = parseInt(document.getElementById('inputExpDias').value) || 45;
+    const adm = new Date(2025, 0, 1);
+    const fim = new Date(adm.getTime() + dias * 86400000);
+    const fdd = String(fim.getDate()).padStart(2, '0');
+    const fmm = String(fim.getMonth() + 1).padStart(2, '0');
+    document.getElementById('prev-fim-exp').textContent =
+        `${fdd}/${fmm}/${fim.getFullYear()} (${MESES_PT[fim.getMonth()]})`;
+}
+
+document.getElementById('inputExpDias').addEventListener('input', atualizarPreview);
+atualizarPreview();
+
+function showToast(msg, bgClass) {
+    const el = document.getElementById('toast');
+    document.getElementById('toastMsg').textContent = msg;
+    el.className = `toast align-items-center text-white border-0 ${bgClass}`;
+    new bootstrap.Toast(el, { delay: 3000 }).show();
+}
+</script>
+{% endblock %}

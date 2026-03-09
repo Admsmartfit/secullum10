@@ -121,6 +121,14 @@ def register_tasks(celery):
         logger.info(f'[regras_agendadas] {result}')
         return result
 
+    @celery.task(name='tasks.processar_fila_notificacoes')
+    def processar_fila_notificacoes():
+        """Despacha mensagens enfileiradas (Direito à Desconexão) cujo horário chegou."""
+        from services.notification_processor import processar_fila_notificacoes as _proc
+        result = _proc()
+        logger.info(f'[fila_notificacoes] {result}')
+        return result
+
     @celery.task(name='tasks.processar_regras_evento_sync')
     def processar_regras_evento_sync():
         """Processa regras EVENT_SYNC após cada ciclo de sync de batidas."""

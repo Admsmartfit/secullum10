@@ -49,12 +49,16 @@ def _configured() -> bool:
     return bool(MEGAAPI_TOKEN and MEGAAPI_INSTANCE)
 
 
-def enviar_texto(celular: str, mensagem: str, func_id: str = None, tipo: str = 'saida') -> bool:
+def enviar_texto(celular: str, mensagem: str, func_id: str = None, 
+                 tipo: str = 'saida', tipo_regra: str = None, 
+                 data_ref=None) -> bool:
     """Envia mensagem de texto via Mega-API e registra o log."""
     fone = _fone(celular)
     log = WhatsappLog(
         funcionario_id=func_id,
         tipo=tipo,
+        tipo_regra=tipo_regra,
+        data_referencia=data_ref,
         mensagem=mensagem,
         celular=fone,
         status='enviado',
@@ -95,12 +99,16 @@ def enviar_texto(celular: str, mensagem: str, func_id: str = None, tipo: str = '
 
 
 def enviar_documento(celular: str, pdf_bytes: bytes, filename: str,
-                     caption: str = '', func_id: str = None, tipo: str = 'espelho') -> bool:
+                     caption: str = '', func_id: str = None, 
+                     tipo: str = 'espelho', tipo_regra: str = None,
+                     data_ref=None) -> bool:
     """RF4.4 – Envia PDF via Mega-API (mediaBase64) e registra log."""
     fone = _fone(celular)
     log = WhatsappLog(
         funcionario_id=func_id,
         tipo=tipo,
+        tipo_regra=tipo_regra,
+        data_referencia=data_ref,
         mensagem=caption or filename,
         celular=fone,
         status='enviado',

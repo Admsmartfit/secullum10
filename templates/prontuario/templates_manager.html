@@ -1,0 +1,399 @@
+{% extends 'base.html' %}
+{% block title %}Templates de Documentos{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-0">Templates de Documentos</h1>
+        <div class="text-muted small mt-1">Arquivos .docx com tags <code>&#123;&#123;campo&#125;&#125;</code> para preenchimento automático</div>
+    </div>
+    <a href="{{ url_for('prontuario.gerar_documentos') }}" class="btn btn-primary btn-sm">
+        <i class="fas fa-file-contract me-1"></i>Gerar Documentos
+    </a>
+</div>
+
+<!-- Upload de novo template -->
+<div class="card p-4 mb-4">
+    <h6 class="fw-bold mb-3"><i class="fas fa-upload me-2"></i>Enviar Novo Template</h6>
+    <form method="POST" action="{{ url_for('prontuario.upload_template') }}" enctype="multipart/form-data"
+          class="row g-3">
+        <div class="col-md-3">
+            <label class="form-label text-muted small fw-bold">NOME DO DOCUMENTO *</label>
+            <input type="text" name="nome" class="form-control" required
+                   placeholder="Ex: Acordo Banco de Horas">
+        </div>
+        <div class="col-md-4">
+            <label class="form-label text-muted small fw-bold">DESCRIÇÃO</label>
+            <input type="text" name="descricao" class="form-control"
+                   placeholder="Breve descrição (opcional)">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label text-muted small fw-bold">ARQUIVO .DOCX *</label>
+            <input type="file" name="arquivo" class="form-control" accept=".docx" required>
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">
+                <i class="fas fa-upload me-1"></i>Enviar
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Dicionário de tags -->
+<div class="card p-4 mb-4" id="tags">
+    <div class="d-flex justify-content-between align-items-center" style="cursor:pointer" onclick="toggleTags()">
+        <h6 class="fw-bold mb-0">
+            <i class="fas fa-tags me-2 text-primary"></i>Dicionário de Tags — use esses campos dentro do seu arquivo .docx
+        </h6>
+        <i class="fas fa-chevron-up text-muted" id="tagsChevron" style="transition:transform .2s"></i>
+    </div>
+    <div id="tagsBody" class="mt-3">
+
+        <div class="alert alert-primary p-3 mb-3" style="font-size:.83rem; border-radius:8px">
+            <i class="fas fa-info-circle me-2"></i>
+            No seu arquivo <strong>.docx</strong>, escreva a tag exatamente como mostrado abaixo (com <code>&#123;&#123;</code> e <code>&#125;&#125;</code>).
+            O sistema substituirá cada tag pelo valor real do funcionário/empresa no momento da geração.
+            <br><strong>Exemplo:</strong> escreva <code>&#123;&#123;nome_funcionario&#125;&#125;</code> e será substituído por <em>João Silva</em>.
+        </div>
+
+        <div class="row g-4">
+
+            <!-- FUNCIONÁRIO - Identificação -->
+            <div class="col-md-6 col-lg-4">
+                <div class="h-100" style="border:1px solid #dbeafe; border-radius:10px; overflow:hidden">
+                    <div class="px-3 py-2 fw-bold small" style="background:#eff6ff; color:#1d4ed8; border-bottom:1px solid #dbeafe">
+                        <i class="fas fa-user me-2"></i>IDENTIFICAÇÃO DO FUNCIONÁRIO
+                    </div>
+                    <table class="table table-sm table-hover mb-0" style="font-size:.8rem">
+                        <tbody>
+                            <tr>
+                                <td><code class="text-primary">&#123;&#123;nome_funcionario&#125;&#125;</code></td>
+                                <td class="text-muted">Nome completo</td>
+                            </tr>
+                            <tr>
+                                <td><code class="text-primary">&#123;&#123;cpf_funcionario&#125;&#125;</code></td>
+                                <td class="text-muted">CPF</td>
+                            </tr>
+                            <tr>
+                                <td><code class="text-primary">&#123;&#123;rg_funcionario&#125;&#125;</code></td>
+                                <td class="text-muted">RG</td>
+                            </tr>
+                            <tr>
+                                <td><code class="text-primary">&#123;&#123;profissao&#125;&#125;</code></td>
+                                <td class="text-muted">Função / Cargo</td>
+                            </tr>
+                            <tr>
+                                <td><code class="text-primary">&#123;&#123;estado_civil&#125;&#125;</code></td>
+                                <td class="text-muted">Estado civil</td>
+                            </tr>
+                            <tr>
+                                <td><code class="text-primary">&#123;&#123;departamento&#125;&#125;</code></td>
+                                <td class="text-muted">Departamento / Unidade</td>
+                            </tr>
+                            <tr>
+                                <td><code class="text-primary">&#123;&#123;email_funcionario&#125;&#125;</code></td>
+                                <td class="text-muted">E-mail</td>
+                            </tr>
+                            <tr>
+                                <td><code class="text-primary">&#123;&#123;celular_funcionario&#125;&#125;</code></td>
+                                <td class="text-muted">Celular</td>
+                            </tr>
+                            <tr style="background:#fffbeb">
+                                <td>
+                                    <code class="text-primary">&#123;&#123;salario&#125;&#125;</code>
+                                    <span class="badge ms-1" style="background:#f59e0b;font-size:.65rem">R$</span>
+                                </td>
+                                <td class="text-muted">
+                                    Salário base da função
+                                    {% if current_user.nivel_acesso == 'administrador' %}<br><a href="{{ url_for('prontuario.tabela_salarial') }}" class="small" style="font-size:.72rem">→ Configurar salários</a>{% endif %}
+                                </td>
+                            </tr>
+                            <tr style="background:#fffbeb">
+                                <td><code class="text-primary">&#123;&#123;salario_extenso&#125;&#125;</code></td>
+                                <td class="text-muted" style="font-size:.78rem">Salário por extenso<br><span style="font-size:.7rem">Ex: <em>dois mil reais</em></span></td>
+                            </tr>
+                            <tr style="background:#fefce8">
+                                <td>
+                                    <code class="text-primary">&#123;&#123;auxilio_alimentacao&#125;&#125;</code>
+                                    <span class="badge ms-1" style="background:#ca8a04;font-size:.65rem"><i class="fas fa-utensils"></i></span>
+                                </td>
+                                <td class="text-muted">Auxílio-Alimentação (R$)</td>
+                            </tr>
+                            <tr style="background:#fefce8">
+                                <td><code class="text-primary">&#123;&#123;auxilio_alimentacao_extenso&#125;&#125;</code></td>
+                                <td class="text-muted" style="font-size:.78rem">Auxílio-Alimentação por extenso</td>
+                            </tr>
+                            <tr style="background:#f0f9ff">
+                                <td>
+                                    <code class="text-primary">&#123;&#123;premiacao&#125;&#125;</code>
+                                    <span class="badge ms-1" style="background:#2563eb;font-size:.65rem"><i class="fas fa-trophy"></i></span>
+                                </td>
+                                <td class="text-muted">Premiação (R$)</td>
+                            </tr>
+                            <tr style="background:#f0f9ff">
+                                <td><code class="text-primary">&#123;&#123;premiacao_extenso&#125;&#125;</code></td>
+                                <td class="text-muted" style="font-size:.78rem">Premiação por extenso</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- DATA ATUAL -->
+            <div class="col-md-6 col-lg-4">
+                <div class="h-100" style="border:1px solid #e9d5ff; border-radius:10px; overflow:hidden">
+                    <div class="px-3 py-2 fw-bold small" style="background:#faf5ff; color:#7c3aed; border-bottom:1px solid #e9d5ff">
+                        <i class="fas fa-calendar-day me-2"></i>DATA ATUAL (geração do documento)
+                    </div>
+                    <table class="table table-sm table-hover mb-0" style="font-size:.8rem">
+                        <tbody>
+                            <tr>
+                                <td><code style="color:#7c3aed">&#123;&#123;data_hoje&#125;&#125;</code></td>
+                                <td class="text-muted">Data atual (dd/mm/aaaa)</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#7c3aed">&#123;&#123;dia_hoje&#125;&#125;</code></td>
+                                <td class="text-muted">Dia atual (número)</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#7c3aed">&#123;&#123;mes_hoje&#125;&#125;</code></td>
+                                <td class="text-muted">Mês por extenso<br><span style="font-size:.7rem">Ex: <em>setembro</em></span></td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#7c3aed">&#123;&#123;mes_hoje_num&#125;&#125;</code></td>
+                                <td class="text-muted">Mês em número (09)</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#7c3aed">&#123;&#123;ano_hoje&#125;&#125;</code></td>
+                                <td class="text-muted">Ano atual (2025)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="px-3 py-2" style="font-size:.73rem; background:#faf5ff; color:#6d28d9; border-top:1px solid #e9d5ff">
+                        <i class="fas fa-clock me-1"></i>Calculado automaticamente no momento da geração
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONTRATO DE EXPERIÊNCIA -->
+            <div class="col-md-6 col-lg-4">
+                <div class="h-100" style="border:1px solid #fecdd3; border-radius:10px; overflow:hidden">
+                    <div class="px-3 py-2 fw-bold small" style="background:#fff1f2; color:#be123c; border-bottom:1px solid #fecdd3">
+                        <i class="fas fa-file-signature me-2"></i>CONTRATO DE EXPERIÊNCIA
+                    </div>
+                    <table class="table table-sm table-hover mb-0" style="font-size:.8rem">
+                        <tbody>
+                            <tr>
+                                <td><code style="color:#be123c">&#123;&#123;experiencia_dias&#125;&#125;</code></td>
+                                <td class="text-muted">Duração configurada<br><span style="font-size:.7rem">Ex: <em>45</em></span></td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#be123c">&#123;&#123;inicio_experiencia&#125;&#125;</code></td>
+                                <td class="text-muted">Data de admissão (dd/mm/aaaa)</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#be123c">&#123;&#123;fim_experiencia&#125;&#125;</code></td>
+                                <td class="text-muted">Admissão + dias configurados<br><span style="font-size:.7rem">Ex: <em>15/02/2025</em></span></td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#be123c">&#123;&#123;fim_experiencia_extenso&#125;&#125;</code></td>
+                                <td class="text-muted">Fim por extenso<br><span style="font-size:.7rem">Ex: <em>15 de fevereiro de 2025</em></span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="px-3 py-2" style="font-size:.73rem; background:#fff1f2; color:#9f1239; border-top:1px solid #fecdd3">
+                        <i class="fas fa-cog me-1"></i>Duração configurada em {% if current_user.nivel_acesso == 'administrador' %}<a href="{{ url_for('prontuario.tabela_salarial') }}" style="color:#9f1239">Tabela Salarial</a>{% else %}<span style="color:#9f1239">Tabela Salarial</span>{% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- FUNCIONÁRIO - Endereço e Datas -->
+            <div class="col-md-6 col-lg-4">
+                <div class="h-100" style="border:1px solid #dcfce7; border-radius:10px; overflow:hidden">
+                    <div class="px-3 py-2 fw-bold small" style="background:#f0fdf4; color:#15803d; border-bottom:1px solid #dcfce7">
+                        <i class="fas fa-map-marker-alt me-2"></i>ENDEREÇO E DATAS
+                    </div>
+                    <table class="table table-sm table-hover mb-0" style="font-size:.8rem">
+                        <tbody>
+                            <tr>
+                                <td><code style="color:#15803d">&#123;&#123;endereco_func&#125;&#125;</code></td>
+                                <td class="text-muted">Endereço completo (linha única)</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#15803d">&#123;&#123;endereco&#125;&#125;</code></td>
+                                <td class="text-muted">Logradouro</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#15803d">&#123;&#123;bairro&#125;&#125;</code></td>
+                                <td class="text-muted">Bairro</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#15803d">&#123;&#123;cidade&#125;&#125;</code></td>
+                                <td class="text-muted">Cidade</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#15803d">&#123;&#123;uf&#125;&#125;</code></td>
+                                <td class="text-muted">UF (sigla)</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#15803d">&#123;&#123;cep&#125;&#125;</code></td>
+                                <td class="text-muted">CEP</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#15803d">&#123;&#123;admissao&#125;&#125;</code></td>
+                                <td class="text-muted">Data admissão (dd/mm/aaaa)</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#15803d">&#123;&#123;data_admissao&#125;&#125;</code></td>
+                                <td class="text-muted">Admissão por extenso<br><span class="text-muted" style="font-size:.72rem">Ex: 5 de março de 2024</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- EMPRESA -->
+            <div class="col-md-6 col-lg-4">
+                <div class="h-100" style="border:1px solid #fde8d8; border-radius:10px; overflow:hidden">
+                    <div class="px-3 py-2 fw-bold small" style="background:#fff7ed; color:#c2410c; border-bottom:1px solid #fde8d8">
+                        <i class="fas fa-building me-2"></i>DADOS DA EMPRESA
+                    </div>
+                    <table class="table table-sm table-hover mb-0" style="font-size:.8rem">
+                        <tbody>
+                            <tr>
+                                <td><code style="color:#c2410c">&#123;&#123;empresa_nome&#125;&#125;</code></td>
+                                <td class="text-muted">Razão social</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#c2410c">&#123;&#123;empresa_cnpj&#125;&#125;</code></td>
+                                <td class="text-muted">CNPJ</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#c2410c">&#123;&#123;empresa_socio&#125;&#125;</code></td>
+                                <td class="text-muted">Sócio administrador</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#c2410c">&#123;&#123;socio_cpf&#125;&#125;</code></td>
+                                <td class="text-muted">CPF do sócio</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#c2410c">&#123;&#123;empresa_endereco&#125;&#125;</code></td>
+                                <td class="text-muted">Endereço da empresa</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#c2410c">&#123;&#123;empresa_cidade&#125;&#125;</code></td>
+                                <td class="text-muted">Cidade da empresa</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#c2410c">&#123;&#123;empresa_uf&#125;&#125;</code></td>
+                                <td class="text-muted">UF da empresa</td>
+                            </tr>
+                            <tr>
+                                <td><code style="color:#c2410c">&#123;&#123;empresa_cep&#125;&#125;</code></td>
+                                <td class="text-muted">CEP da empresa</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="px-3 py-2" style="font-size:.73rem; background:#fff7ed; color:#7c3000; border-top:1px solid #fde8d8">
+                        <i class="fas fa-cog me-1"></i>Configurado em <strong>Configurações → Dados da Empresa</strong>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Dica de uso -->
+        <div class="alert alert-secondary mt-4 p-3" style="font-size:.8rem">
+            <div class="fw-bold mb-2"><i class="fas fa-lightbulb me-1 text-warning"></i>Dicas para criar o template no Word</div>
+            <ul class="mb-0 ps-3">
+                <li>Escreva as tags diretamente no texto, sem espaços extras: <code>&#123;&#123;nome_funcionario&#125;&#125;</code></li>
+                <li>As tags diferenciam maiúsculas/minúsculas — use sempre letras minúsculas.</li>
+                <li>Se a tag aparecer em branco no PDF, verifique se o campo está preenchido no cadastro do funcionário ou em Configurações.</li>
+                <li>O campo <strong>estado_civil</strong> deve ser preenchido manualmente no cadastro do funcionário (não vem da Secullum).</li>
+                <li>Use <code>&#123;&#123;data_admissao&#125;&#125;</code> para datas em contratos formais (ex.: <em>"5 de março de 2024"</em>).</li>
+            </ul>
+        </div>
+
+    </div>
+</div>
+
+<!-- Lista de templates -->
+<div class="card p-4">
+    <h6 class="fw-bold mb-3"><i class="fas fa-list me-2"></i>Templates Cadastrados ({{ templates|length }})</h6>
+    {% if templates %}
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Descrição</th>
+                    <th>Arquivo</th>
+                    <th>Cadastrado em</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in templates %}
+                <tr>
+                    <td class="fw-semibold">{{ t.nome }}</td>
+                    <td class="text-muted small">{{ t.descricao or '—' }}</td>
+                    <td>
+                        <span class="badge bg-secondary" style="font-size:.72rem">
+                            <i class="fas fa-file-word me-1"></i>{{ t.arquivo_nome }}
+                        </span>
+                    </td>
+                    <td class="text-muted small">{{ t.criado_em.strftime('%d/%m/%Y') }}</td>
+                    <td>
+                        {% if t.ativo %}
+                        <span class="badge bg-success">Ativo</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Inativo</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST"
+                              action="{{ url_for('prontuario.excluir_template', tmpl_id=t.id) }}"
+                              onsubmit="return confirm('Excluir template \'{{ t.nome }}\'?')">
+                            <button class="btn btn-sm btn-outline-danger">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-4">
+        <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+        Nenhum template cadastrado ainda. Faça upload de um arquivo .docx acima.
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function toggleTags() {
+    const body = document.getElementById('tagsBody');
+    const chevron = document.getElementById('tagsChevron');
+    const collapsed = body.style.display === 'none';
+    body.style.display = collapsed ? '' : 'none';
+    chevron.style.transform = collapsed ? '' : 'rotate(180deg)';
+    localStorage.setItem('tagsDictCollapsed', collapsed ? '0' : '1');
+}
+
+// Restaura estado salvo
+(function () {
+    if (localStorage.getItem('tagsDictCollapsed') === '1') {
+        document.getElementById('tagsBody').style.display = 'none';
+        document.getElementById('tagsChevron').style.transform = 'rotate(180deg)';
+    }
+    // Scroll para âncora #tags se vier da página de geração
+    if (window.location.hash === '#tags') {
+        document.getElementById('tagsBody').style.display = '';
+        document.getElementById('tagsChevron').style.transform = '';
+    }
+})();
+</script>
+{% endblock %}

@@ -10,7 +10,7 @@ class Usuario(UserMixin, db.Model):
     nome = db.Column(db.String(200), nullable=False)
     email = db.Column(db.String(200), unique=True, nullable=False)
     senha_hash = db.Column(db.String(256), nullable=False)
-    nivel_acesso = db.Column(db.String(20), default='professor')  # gestor / professor
+    nivel_acesso = db.Column(db.String(20), default='funcionario')  # administrador / gerente / funcionario
     ativo = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -70,6 +70,8 @@ class Funcionario(db.Model):
 
     # Sexo: 'M' = masculino, 'F' = feminino (usado p/ regra Art. 386 CLT)
     sexo = db.Column(db.String(1), nullable=True)
+    # Estado civil (preenchido manualmente pelo RH)
+    estado_civil = db.Column(db.String(30), nullable=True)
 
     # Status e controles
     ativo = db.Column(db.Boolean, default=True)
@@ -260,7 +262,9 @@ class WhatsappLog(db.Model):
     __tablename__ = 'whatsapp_logs'
     id = db.Column(db.Integer, primary_key=True)
     funcionario_id = db.Column(db.String(50), db.ForeignKey('funcionarios.id'), nullable=True)
-    tipo = db.Column(db.String(50))      # saida / entrada / checkin / espelho
+    tipo = db.Column(db.String(50))      # saida / entrada / checkin / espelho / regra
+    tipo_regra = db.Column(db.String(50), nullable=True)  # LATE_ENTRY, etc.
+    data_referencia = db.Column(db.Date, nullable=True)   # Data da ocorrência
     mensagem = db.Column(db.Text)
     status = db.Column(db.String(20), default='enviado')   # enviado / erro / recebido
     celular = db.Column(db.String(20))
@@ -491,3 +495,83 @@ class GrupoDepartamento(db.Model):
 
     def __repr__(self):
         return f'<GrupoDepartamento {self.nome}>'
+
+
+# ── Módulo de Documentos Contratuais ─────────────────────────────────────────
+
+class TemplateDocumento(db.Model):
+    """Template .docx armazenado em storage/templates/.
+    Tags suportadas: {{nome_funcionario}}, {{cpf_funcionario}}, {{empresa_nome}}, etc.
+    """
+    __tablename__ = 'template_documentos'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(200), nullable=False)          # Nome exibido na UI
+    descricao = db.Column(db.Text, nullable=True)
+    arquivo_nome = db.Column(db.String(300), nullable=False)  # Filename em storage/templates/
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<TemplateDocumento {self.nome}>'
+
+
+class EnvioDocumento(db.Model):
+    """Log de envios realizados (auditoria LGPD)."""
+    __tablename__ = 'envios_documento'
+    id = db.Column(db.Integer, primary_key=True)
+    funcionario_id = db.Column(db.String(50), db.ForeignKey('funcionarios.id'), nullable=False)
+    email_destinatario = db.Column(db.String(200), nullable=False)
+    templates_enviados = db.Column(db.Text)       # JSON list de nomes
+    enviado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    funcionario = db.relationship('Funcionario', backref='envios_documento')
+    enviado_por = db.relationship('Usuario', backref='envios_realizados')
+
+    def __repr__(self):
+        return f'<EnvioDocumento func={self.funcionario_id} para={self.email_destinatario}>'
+
+
+# ── PRD: Fila de Notificações (Direito à Desconexão) ─────────────────────────
+
+class NotificacaoFila(db.Model):
+    """Mensagens aguardando janela de expediente para serem enviadas.
+    Implementa o Direito à Desconexão: notificações fora do horário de trabalho
+    ficam enfileiradas e são enviadas no início do próximo turno do destinatário.
+    """
+    __tablename__ = 'notificacao_fila'
+    id = db.Column(db.Integer, primary_key=True)
+    regra_id = db.Column(db.Integer, db.ForeignKey('notification_rules.id'), nullable=True)
+    funcionario_id = db.Column(db.String(50), db.ForeignKey('funcionarios.id'), nullable=True)
+    celular = db.Column(db.String(20), nullable=False)
+    mensagem = db.Column(db.Text, nullable=False)
+    tipo = db.Column(db.String(50))                   # regra / relatorio
+    # Enviar somente após este timestamp (próximo início de turno)
+    enviar_apos = db.Column(db.DateTime, nullable=True)
+    # pendente / enviado / erro / cancelado
+    status = db.Column(db.String(20), default='pendente')
+    tentativas = db.Column(db.Integer, default=0)
+    criada_em = db.Column(db.DateTime, default=datetime.utcnow)
+    enviado_em = db.Column(db.DateTime, nullable=True)
+
+    regra = db.relationship('NotificationRule', backref='fila')
+    funcionario = db.relationship('Funcionario', backref='notificacoes_fila')
+
+    def __repr__(self):
+        return f'<NotificacaoFila {self.id} [{self.status}] enviar_apos={self.enviar_apos}>'
+
+
+class TabelaSalarial(db.Model):
+    """Benefícios por função, configurados pelo administrador.
+    Tags: {{salario}}, {{auxilio_alimentacao}}, {{premiacao}} e variantes _extenso.
+    """
+    __tablename__ = 'tabela_salarial'
+    id = db.Column(db.Integer, primary_key=True)
+    funcao = db.Column(db.String(200), nullable=False, unique=True)
+    salario = db.Column(db.Numeric(10, 2), nullable=True)
+    auxilio_alimentacao = db.Column(db.Numeric(10, 2), nullable=True)
+    premiacao = db.Column(db.Numeric(10, 2), nullable=True)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<TabelaSalarial {self.funcao} = {self.salario}>'
