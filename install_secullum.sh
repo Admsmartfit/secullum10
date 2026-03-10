@@ -35,7 +35,16 @@ mkdir -p uploads/prontuario
 chmod -R 777 instance
 chmod -R 777 uploads
 
-# 4. Compilação e Build
+# 4. Credenciais da API Secullum
+echo "============================================="
+echo " Credenciais da API Secullum"
+echo " (usadas para sincronizar batidas e funcionários)"
+echo "============================================="
+read -p "E-mail de acesso ao Secullum: " secullum_email
+read -p "Senha do Secullum: " secullum_password
+read -p "ID do banco Secullum (secullumidbancoselecionado): " secullum_banco
+
+# 5. Compilação e Build
 echo "============================================="
 echo " Escolha o tipo de instalação:"
 echo " 1) Instalação de Teste/Local (com Banco de Dados Interno do Docker)"
@@ -49,6 +58,9 @@ if [ "$tipo_inst" == "1" ]; then
     echo "FLASK_ENV=production" >> .env
     echo "REDIS_URL=redis://redis:6379/0" >> .env
     echo "DATABASE_URL=postgresql://secullum_user:secullum_pass@db:5432/secullum10" >> .env
+    echo "SECULLUM_EMAIL=$secullum_email" >> .env
+    echo "SECULLUM_PASSWORD=$secullum_password" >> .env
+    echo "SECULLUM_BANCO=$secullum_banco" >> .env
     echo "============================================="
     echo " Subindo os contêineres com DB interno..."
     echo "============================================="
@@ -63,6 +75,9 @@ else
         user_db="postgresql://postgres:postgres@SEU_IP_AQUI:5432/secullum10"
     fi
     echo "DATABASE_URL=$user_db" >> .env
+    echo "SECULLUM_EMAIL=$secullum_email" >> .env
+    echo "SECULLUM_PASSWORD=$secullum_password" >> .env
+    echo "SECULLUM_BANCO=$secullum_banco" >> .env
     echo "============================================="
     echo " Subindo os contêineres conectando no banco externo..."
     echo "============================================="

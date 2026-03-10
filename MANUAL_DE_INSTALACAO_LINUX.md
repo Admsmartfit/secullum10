@@ -63,47 +63,47 @@ Se preferir não usar o script:
      docker-compose -f docker-compose.yml -f docker-compose-db.yml up -d --build
      ```
 
-## 3. Configurando o Tunnelamento do Cloudflare (Para Porta 5020)
+## 3. Cloudflare Tunnel — Configuração Atual
 
-Uma vez que o contêiner Docker esteja rodando com sucesso no Linux local, a aplicação responderá pela porta **5020**.
+A aplicação está exposta publicamente através do Cloudflare Tunnel já configurado:
 
-### Caso utilize o painel Cloudflare Zero Trust (Recomendado)
-A forma mais fácil (já que você informou que tem o túnel `101f11c8...cfargotunnel.com` estabelecido):
-1. Entre no Painel do **Cloudflare Zero Trust** (https://one.dash.cloudflare.com/).
-2. Vá em **Networks > Tunnels** (Redes > Túneis) e selecione o seu túnel existente (o que cobre o `ricardo.home.nom.br`).
-3. Clique em **Configure** (Configurar), depois vá na aba **Public Hostname** (Nomes de host públicos).
-4. Clique em **Add a public hostname** (Adicionar nome de host público).
-5. Preencha as configurações:
-   - **Subdomain:** `secullum` (formando `secullum.ricardo.home.nom.br`)
-   - **Domain:** `ricardo.home.nom.br`
-   - **Type:** `HTTP`
-   - **URL:** `localhost:5020` (ou o IP interno do servidor, como `192.168.0.100:5020`)
-6. Salve a configuração ("Save hostname").
+| Campo | Valor |
+|-------|-------|
+| **URL pública** | https://ponto.ricardo.home.nom.br |
+| **DNS (CNAME)** | `ponto.ricardo.home.nom.br` → `101f11c8-d843-456a-8c9f-4936efcfe076.cfargotunnel.com` |
+| **Tunnel ID** | `101f11c8-d843-456a-8c9f-4936efcfe076` |
+| **Porta interna** | `localhost:5020` |
 
-**Pronto!** A aplicação agora estará acessível online em [https://secullum.ricardo.home.nom.br](https://secullum.ricardo.home.nom.br).
+### Verificar se o túnel está ativo
 
-### Caso utilize um arquivo local `config.yml` para o cloudflared
-Se você configurou o túnel no seu servidor manualmente pelo arquivo `config.yml` (normalmente em `/etc/cloudflared/config.yml` ou `~/.cloudflared/config.yml`), adicione uma nova regra antes da rota "catch-all":
+```bash
+sudo systemctl status cloudflared
+```
+
+Se estiver usando `config.yml` (em `/etc/cloudflared/config.yml`), confirme que existe a entrada:
 
 ```yaml
 tunnel: 101f11c8-d843-456a-8c9f-4936efcfe076
 credentials-file: /etc/cloudflared/101f11c8-d843-456a-8c9f-4936efcfe076.json
 
 ingress:
-  # Nova rota para a porta 5020
-  - hostname: secullum.ricardo.home.nom.br
+  - hostname: ponto.ricardo.home.nom.br
     service: http://localhost:5020
 
-  # Rota existente para a porta 5010
-  - hostname: sistema-antigo.ricardo.home.nom.br  # (exemplo)
-    service: http://localhost:5010
-    
   - service: http_status:404
 ```
 
-Reinicie o serviço cloudflared em seguida:
+Após qualquer alteração no `config.yml`, reinicie:
 ```bash
 sudo systemctl restart cloudflared
+```
+
+### Adicionar nova entrada (se necessário)
+
+Se precisar expor outro serviço no mesmo túnel, adicione **antes** do `http_status:404`:
+```yaml
+  - hostname: outro.ricardo.home.nom.br
+    service: http://localhost:PORTA
 ```
 
 ---
