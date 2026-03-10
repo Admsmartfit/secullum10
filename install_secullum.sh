@@ -105,10 +105,10 @@ app = create_app()
 with app.app_context():
     u = Usuario.query.filter_by(email='admin@admin.com').first()
     if not u:
-        u = Usuario(nome='Administrador', email='admin@admin.com', nivel_acesso='gestor')
+        u = Usuario(nome='Administrador', email='admin@admin.com', nivel_acesso='administrador')
         db.session.add(u)
     u.set_senha('admin123')
-    u.nivel_acesso = 'gestor'
+    u.nivel_acesso = 'administrador'
     db.session.commit()
     print('OK')
 " 2>&1)

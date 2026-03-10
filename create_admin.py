@@ -19,7 +19,7 @@ def main():
             print('Erro: email ja cadastrado.')
             return
 
-        admin = Usuario(nome=nome, email=email, nivel_acesso='gestor')
+        admin = Usuario(nome=nome, email=email, nivel_acesso='administrador')
         admin.set_senha(senha)
         db.session.add(admin)
         db.session.commit()
