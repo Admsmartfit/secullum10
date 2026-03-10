@@ -35,50 +35,130 @@ mkdir -p uploads/prontuario
 chmod -R 777 instance
 chmod -R 777 uploads
 
-# 4. Credenciais da API Secullum
-echo "============================================="
-echo " Credenciais da API Secullum"
-echo " (usadas para sincronizar batidas e funcionários)"
-echo "============================================="
-read -p "E-mail de acesso ao Secullum: " secullum_email
-read -p "Senha do Secullum: " secullum_password
-read -p "ID do banco Secullum (secullumidbancoselecionado): " secullum_banco
+# 4. Configurar .env
+if [ -f ".env" ]; then
+    echo "============================================="
+    echo " Arquivo .env encontrado!"
+    echo " 1) Manter o .env existente (recomendado se só está atualizando)"
+    echo " 2) Reconfigurar tudo (cria novo .env)"
+    echo "============================================="
+    read -p "Digite 1 ou 2: " opcao_env
+else
+    opcao_env="2"
+fi
+
+if [ "$opcao_env" == "2" ]; then
+    echo "============================================="
+    echo " Configurando credenciais..."
+    echo "============================================="
+
+    # Secullum API
+    read -p "E-mail de acesso ao Secullum: " secullum_email
+    read -p "Senha do Secullum: " secullum_password
+    read -p "ID do banco Secullum (secullumidbancoselecionado): " secullum_banco
+
+    # WhatsApp / MegaAPI
+    echo ""
+    echo "--- WhatsApp / MegaAPI (deixe em branco para configurar depois) ---"
+    read -p "MEGAAPI_HOST (ex: apistart01.megaapi.com.br): " mega_host
+    read -p "MEGAAPI_INSTANCE: " mega_instance
+    read -p "MEGAAPI_TOKEN: " mega_token
+    read -p "MEGAAPI_SECRET: " mega_secret
+    read -p "Celular do gestor (ex: 5527988010899): " gestor_cel
+
+    # Banco de dados
+    echo ""
+    echo "============================================="
+    echo " Escolha o tipo de instalação:"
+    echo " 1) Banco de Dados Interno do Docker"
+    echo " 2) Banco de Dados Externo (Postgres na rede)"
+    echo "============================================="
+    read -p "Digite 1 ou 2: " tipo_inst
+
+    if [ "$tipo_inst" == "1" ]; then
+        db_url="postgresql://secullum_user:secullum_pass@db:5432/secullum10"
+    else
+        read -p "Digite a sua DATABASE_URL (ex: postgresql://user:pass@192.168.0.10:5432/db): " db_url
+        if [ -z "$db_url" ]; then
+            db_url="postgresql://postgres:postgres@SEU_IP_AQUI:5432/secullum10"
+        fi
+    fi
+
+    cat > .env <<EOF
+SECRET_KEY=sua_chave_secreta_super_segura
+FLASK_ENV=production
+REDIS_URL=redis://redis:6379/0
+DATABASE_URL=$db_url
+
+# API Secullum
+SECULLUM_EMAIL=$secullum_email
+SECULLUM_PASSWORD=$secullum_password
+SECULLUM_BANCO=$secullum_banco
+
+# WhatsApp / MegaAPI
+MEGAAPI_HOST=${mega_host:-apistart01.megaapi.com.br}
+MEGAAPI_INSTANCE=$mega_instance
+MEGAAPI_TOKEN=$mega_token
+MEGAAPI_SECRET=$mega_secret
+GESTOR_CELULAR=$gestor_cel
+
+# Flask-Mail (opcional)
+MAIL_SERVER=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USE_TLS=true
+MAIL_USERNAME=
+MAIL_PASSWORD=
+MAIL_DEFAULT_SENDER=
+RH_EMAIL=
+
+# Whisper (opcional)
+OPENAI_API_KEY=
+EOF
+    echo "[✓] Arquivo .env criado."
+else
+    echo "[✓] Mantendo credenciais do .env existente."
+    echo ""
+    echo "============================================="
+    echo " Qual banco de dados usar no Docker?"
+    echo " 1) Banco de Dados Interno do Docker (recomendado)"
+    echo " 2) Banco de Dados Externo (Postgres na rede)"
+    echo "============================================="
+    read -p "Digite 1 ou 2: " tipo_inst
+
+    # Ajusta valores que mudam entre desenvolvimento e Docker
+    # FLASK_ENV
+    sed -i 's/^FLASK_ENV=.*/FLASK_ENV=production/' .env
+    # REDIS_URL — sempre aponta para o container redis
+    if grep -q "^REDIS_URL=" .env; then
+        sed -i 's|^REDIS_URL=.*|REDIS_URL=redis://redis:6379/0|' .env
+    else
+        echo "REDIS_URL=redis://redis:6379/0" >> .env
+    fi
+    # DATABASE_URL
+    if [ "$tipo_inst" == "1" ]; then
+        if grep -q "^DATABASE_URL=" .env; then
+            sed -i 's|^DATABASE_URL=.*|DATABASE_URL=postgresql://secullum_user:secullum_pass@db:5432/secullum10|' .env
+        else
+            echo "DATABASE_URL=postgresql://secullum_user:secullum_pass@db:5432/secullum10" >> .env
+        fi
+    else
+        current_db=$(grep "^DATABASE_URL=" .env | cut -d'=' -f2-)
+        echo "  DATABASE_URL atual: $current_db"
+        read -p "  Nova DATABASE_URL (Enter para manter): " new_db
+        if [ -n "$new_db" ]; then
+            sed -i "s|^DATABASE_URL=.*|DATABASE_URL=$new_db|" .env
+        fi
+    fi
+    echo "[✓] .env ajustado para ambiente Docker."
+fi
 
 # 5. Compilação e Build
 echo "============================================="
-echo " Escolha o tipo de instalação:"
-echo " 1) Instalação de Teste/Local (com Banco de Dados Interno do Docker)"
-echo " 2) Instalação Definitiva (conectar a um Postgres Externo na sua rede)"
-echo "============================================="
-read -p "Digite 1 ou 2: " tipo_inst
-
 if [ "$tipo_inst" == "1" ]; then
-    echo "Configurando Banco de Dados Interno..."
-    echo "SECRET_KEY=sua_chave_secreta_super_segura" > .env
-    echo "FLASK_ENV=production" >> .env
-    echo "REDIS_URL=redis://redis:6379/0" >> .env
-    echo "DATABASE_URL=postgresql://secullum_user:secullum_pass@db:5432/secullum10" >> .env
-    echo "SECULLUM_EMAIL=$secullum_email" >> .env
-    echo "SECULLUM_PASSWORD=$secullum_password" >> .env
-    echo "SECULLUM_BANCO=$secullum_banco" >> .env
-    echo "============================================="
     echo " Subindo os contêineres com DB interno..."
     echo "============================================="
     sudo docker-compose -f docker-compose.yml -f docker-compose-db.yml up -d --build
 else
-    echo "Configurando Banco de Dados Externo..."
-    echo "SECRET_KEY=sua_chave_secreta_super_segura" > .env
-    echo "FLASK_ENV=production" >> .env
-    echo "REDIS_URL=redis://redis:6379/0" >> .env
-    read -p "Digite a sua DATABASE_URL (ex: postgresql://user:pass@192.168.0.10:5432/db): " user_db
-    if [ -z "$user_db" ]; then
-        user_db="postgresql://postgres:postgres@SEU_IP_AQUI:5432/secullum10"
-    fi
-    echo "DATABASE_URL=$user_db" >> .env
-    echo "SECULLUM_EMAIL=$secullum_email" >> .env
-    echo "SECULLUM_PASSWORD=$secullum_password" >> .env
-    echo "SECULLUM_BANCO=$secullum_banco" >> .env
-    echo "============================================="
     echo " Subindo os contêineres conectando no banco externo..."
     echo "============================================="
     sudo docker-compose up -d --build
