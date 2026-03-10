@@ -3,9 +3,11 @@
 
 {% block extra_css %}
 <style>
-    .nav-tabs .nav-link { color: var(--text-muted); border-color: transparent; }
+    .nav-tabs .nav-link { color: var(--text-muted); border-color: transparent; white-space: nowrap; }
     .nav-tabs .nav-link.active { background: var(--card-bg); color: var(--accent-color); border-color: rgba(255,255,255,0.1) rgba(255,255,255,0.1) var(--card-bg); }
-    .nav-tabs { border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .nav-tabs { border-bottom: 1px solid rgba(255,255,255,0.1); flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; -ms-overflow-style: none; }
+    .nav-tabs::-webkit-scrollbar { height: 3px; }
+    .nav-tabs::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
     .tab-content { background: var(--card-bg); border: 1px solid rgba(255,255,255,0.1); border-top: none; border-radius: 0 0 1rem 1rem; padding: 1.5rem; }
     .form-control, .form-select { background: #0f172a; border-color: rgba(255,255,255,0.15); color: var(--text-main); }
     .form-control:focus, .form-select:focus { background: #0f172a; border-color: var(--accent-color); color: var(--text-main); box-shadow: none; }
@@ -35,6 +37,11 @@
         </button>
     </li>
     <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-integracoes">
+            <i class="fas fa-plug me-1"></i> Integrações
+        </button>
+    </li>
+    <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-unidades">
             <i class="fas fa-sitemap me-1"></i> Unidades / Líderes
         </button>
@@ -46,7 +53,7 @@
     </li>
     <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-escalas">
-            <i class="fas fa-cloud-download-alt me-1"></i> Importar Escalas Secullum
+            <i class="fas fa-cloud-download-alt me-1"></i> Importar Escalas
         </button>
     </li>
     <li class="nav-item">
@@ -57,12 +64,7 @@
     </li>
     <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-salarios">
-            <i class="fas fa-dollar-sign me-1"></i> Salários / Benefícios
-        </button>
-    </li>
-    <li class="nav-item">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-integracoes">
-            <i class="fas fa-plug me-1"></i> Integrações
+            <i class="fas fa-dollar-sign me-1"></i> Salários
         </button>
     </li>
     <li class="nav-item">
@@ -72,7 +74,7 @@
     </li>
     <li class="nav-item">
         <a class="nav-link" href="/config/espelho">
-            <i class="fas fa-calendar-alt me-1"></i> Espelho de Ponto
+            <i class="fas fa-calendar-alt me-1"></i> Espelho
         </a>
     </li>
 </ul>
@@ -858,7 +860,7 @@ function abrirEdicao(id, nome, email, nivel, ativo) {
 (function() {
     const hash = window.location.hash;
     if (hash) {
-        const tabMap = {'#usuarios':'tab-usuarios','#unidades':'tab-unidades','#whatsapp':'tab-whatsapp','#escalas':'tab-escalas','#tab-sync':'tab-sync','#sync':'tab-sync','#salarios':'tab-salarios'};
+        const tabMap = {'#usuarios':'tab-usuarios','#unidades':'tab-unidades','#whatsapp':'tab-whatsapp','#escalas':'tab-escalas','#tab-sync':'tab-sync','#sync':'tab-sync','#salarios':'tab-salarios','#tab-integracoes':'tab-integracoes','#integracoes':'tab-integracoes'};
         const target = tabMap[hash];
         if (target) {
             document.querySelector(`[data-bs-target="#${target}"]`).click();
