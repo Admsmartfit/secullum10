@@ -90,6 +90,18 @@ def index():
     cfg_exp = Configuracao.query.filter_by(chave='experiencia_dias').first()
     experiencia_dias = int(cfg_exp.valor) if cfg_exp and cfg_exp.valor else 45
 
+    from services.config_service import get_setting
+    integ_cfg = {
+        'secullum_email':    get_setting('secullum_email',    'SECULLUM_EMAIL',    ''),
+        'secullum_password': get_setting('secullum_password', 'SECULLUM_PASSWORD', ''),
+        'secullum_banco':    get_setting('secullum_banco',    'SECULLUM_BANCO',    ''),
+        'megaapi_host':      get_setting('megaapi_host',      'MEGAAPI_HOST',      'apistart01.megaapi.com.br'),
+        'megaapi_instance':  get_setting('megaapi_instance',  'MEGAAPI_INSTANCE',  ''),
+        'megaapi_token':     get_setting('megaapi_token',     'MEGAAPI_TOKEN',     ''),
+        'megaapi_secret':    get_setting('megaapi_secret',    'MEGAAPI_SECRET',    ''),
+        'gestor_celular':    get_setting('gestor_celular',    'GESTOR_CELULAR',    ''),
+    }
+
     return render_template(
         'config/index.html',
         usuarios=usuarios,
@@ -99,12 +111,13 @@ def index():
         todos_func=todos_func,
         hoje=hoje.strftime('%Y-%m-%d'),
         fim30=(hoje + timedelta(days=30)).strftime('%Y-%m-%d'),
-        megaapi_token=bool(os.getenv('MEGAAPI_TOKEN')),
-        megaapi_instance=bool(os.getenv('MEGAAPI_INSTANCE')),
+        megaapi_token=bool(integ_cfg['megaapi_token']),
+        megaapi_instance=bool(integ_cfg['megaapi_instance']),
         sync_cfg=sync_cfg,
         funcoes_sal=funcoes_sal,
         salarios_map=salarios_map,
         experiencia_dias=experiencia_dias,
+        integ_cfg=integ_cfg,
     )
 
 
@@ -280,12 +293,8 @@ def escalas_preview():
     if not func_ids_req:
         return jsonify({'error': 'Nenhum funcionário selecionado.'}), 400
 
-    from secullum_api import SecullumAPI
-    api = SecullumAPI(
-        os.getenv('SECULLUM_EMAIL'),
-        os.getenv('SECULLUM_PASSWORD'),
-        os.getenv('SECULLUM_BANCO'),
-    )
+    from services.config_service import get_secullum_api
+    api = get_secullum_api()
 
     # 1. Busca todos os horários (uma chamada)
     horarios_raw = api.listar_horarios()
@@ -514,15 +523,11 @@ def verificar_incons_executar():
     ontem_str = ontem.strftime('%Y-%m-%d')
 
     try:
-        from secullum_api import SecullumAPI
+        from services.config_service import get_secullum_api
         from services.sync_service import parse_date, sync_batidas
         from models import Batida, Funcionario
 
-        api = SecullumAPI(
-            os.getenv('SECULLUM_EMAIL'),
-            os.getenv('SECULLUM_PASSWORD'),
-            os.getenv('SECULLUM_BANCO'),
-        )
+        api = get_secullum_api()
         registros_api = api.buscar_batidas(ontem_str, ontem_str)
         if registros_api is None:
             flash('Falha ao conectar com a API Secullum.', 'danger')
@@ -583,3 +588,29 @@ def verificar_incons_executar():
         flash(f'Erro ao verificar: {e}', 'danger')
 
     return redirect(url_for('config_hub.index') + '#tab-sync')
+
+
+# ── Integrações (credenciais via DB) ──────────────────────────────────────────
+
+@config_hub_bp.route('/integracoes/salvar', methods=['POST'])
+@login_required
+@_somente_gestor
+def integracoes_salvar():
+    """Salva credenciais de integração no banco (sem precisar editar .env)."""
+    campos = [
+        ('secullum_email',    'SECULLUM_EMAIL'),
+        ('secullum_password', 'SECULLUM_PASSWORD'),
+        ('secullum_banco',    'SECULLUM_BANCO'),
+        ('megaapi_host',      'MEGAAPI_HOST'),
+        ('megaapi_instance',  'MEGAAPI_INSTANCE'),
+        ('megaapi_token',     'MEGAAPI_TOKEN'),
+        ('megaapi_secret',    'MEGAAPI_SECRET'),
+        ('gestor_celular',    'GESTOR_CELULAR'),
+    ]
+    for chave_db, form_field in campos:
+        valor = request.form.get(form_field, '').strip()
+        if valor:
+            _salvar_cfg(chave_db, valor)
+    db.session.commit()
+    flash('Credenciais de integração salvas com sucesso.', 'success')
+    return redirect(url_for('config_hub.index') + '#tab-integracoes')

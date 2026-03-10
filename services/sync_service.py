@@ -2,8 +2,7 @@ import json
 from datetime import datetime, date, timedelta
 from extensions import db
 from models import Funcionario, Batida, Configuracao
-from secullum_api import SecullumAPI
-import os
+
 
 _CHAVE_ULTIMA_SYNC = 'ultima_sync_batidas'
 
@@ -30,11 +29,8 @@ def set_ultima_sync_batidas(dt: datetime):
 
 
 def get_api():
-    return SecullumAPI(
-        os.getenv('SECULLUM_EMAIL'),
-        os.getenv('SECULLUM_PASSWORD'),
-        os.getenv('SECULLUM_BANCO'),
-    )
+    from services.config_service import get_secullum_api
+    return get_secullum_api()
 
 
 def parse_date(date_str):

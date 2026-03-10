@@ -7,8 +7,13 @@ from models import WhatsappLog, Funcionario, AlocacaoDiaria, UnidadeLider, Batid
 
 whatsapp_bp = Blueprint('whatsapp', __name__, url_prefix='/whatsapp')
 
-MEGAAPI_SECRET = os.getenv('MEGAAPI_SECRET', '')
-GESTOR_CELULAR = os.getenv('GESTOR_CELULAR', '')
+def _megaapi_secret():
+    from services.config_service import get_setting
+    return get_setting('megaapi_secret', 'MEGAAPI_SECRET', '')
+
+def _gestor_celular():
+    from services.config_service import get_gestor_celular
+    return get_gestor_celular()
 
 
 def _bot_msg(chave: str, vars: dict = None) -> str:
@@ -30,14 +35,15 @@ def _celular_lider(func: 'Funcionario') -> str:
         ul = UnidadeLider.query.filter_by(departamento=func.departamento).first()
         if ul and ul.celular_lider:
             return ul.celular_lider
-    return GESTOR_CELULAR
+    return _gestor_celular()
 
 
 def _validar_hmac(payload_bytes: bytes, signature: str) -> bool:
     """Valida assinatura HMAC-SHA256 do webhook Mega-API (RF4.1)."""
-    if not MEGAAPI_SECRET:
+    secret = _megaapi_secret()
+    if not secret:
         return True  # em dev, aceitar sem validação
-    expected = hmac.new(MEGAAPI_SECRET.encode(), payload_bytes, hashlib.sha256).hexdigest()
+    expected = hmac.new(secret.encode(), payload_bytes, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature or '')
 
 

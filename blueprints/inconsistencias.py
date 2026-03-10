@@ -381,11 +381,8 @@ def comparar():
     func_id = request.args.get('func_id', '').strip() or None
 
     # 1. Buscar do Secullum (sem filtro de hora – dados completos do dia)
-    api = SecullumAPI(
-        os.getenv('SECULLUM_EMAIL'),
-        os.getenv('SECULLUM_PASSWORD'),
-        os.getenv('SECULLUM_BANCO'),
-    )
+    from services.config_service import get_secullum_api
+    api = get_secullum_api()
     registros_api = api.buscar_batidas(
         data_inicio.strftime('%Y-%m-%d'),
         data_fim.strftime('%Y-%m-%d'),

@@ -61,6 +61,11 @@
         </button>
     </li>
     <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-integracoes">
+            <i class="fas fa-plug me-1"></i> Integrações
+        </button>
+    </li>
+    <li class="nav-item">
         <a class="nav-link" href="/config/funcionarios">
             <i class="fas fa-id-card me-1"></i> Funcionários
         </a>
@@ -737,6 +742,92 @@
     </div>
 
 </div>
+
+    <!-- ══ TAB INTEGRAÇÕES ═══════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-integracoes">
+        <h5 class="mb-4"><i class="fas fa-plug me-2 text-accent"></i>Credenciais de Integração</h5>
+        <p class="text-muted small mb-4">
+            Configurações salvas aqui têm prioridade sobre o arquivo <code>.env</code>.
+            Campos em branco mantêm o valor atual (do banco ou do .env).
+        </p>
+
+        <form method="POST" action="/config/integracoes/salvar">
+            <div class="row g-4">
+
+                <!-- Secullum API -->
+                <div class="col-12">
+                    <div class="card" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08)">
+                        <div class="card-body">
+                            <h6 class="mb-3"><i class="fas fa-fingerprint me-2 text-accent"></i>API Secullum (Ponto)</h6>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label small">E-mail</label>
+                                    <input type="email" name="SECULLUM_EMAIL" class="form-control"
+                                           value="{{ integ_cfg.secullum_email }}" placeholder="usuario@empresa.com">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small">Senha</label>
+                                    <input type="password" name="SECULLUM_PASSWORD" class="form-control"
+                                           value="{{ integ_cfg.secullum_password }}" placeholder="••••••••">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small">ID do Banco (secullumidbancoselecionado)</label>
+                                    <input type="text" name="SECULLUM_BANCO" class="form-control"
+                                           value="{{ integ_cfg.secullum_banco }}" placeholder="ex: 73365">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MegaAPI / WhatsApp -->
+                <div class="col-12">
+                    <div class="card" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08)">
+                        <div class="card-body">
+                            <h6 class="mb-3"><i class="fab fa-whatsapp me-2" style="color:#25d366"></i>MegaAPI / WhatsApp</h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small">Host</label>
+                                    <input type="text" name="MEGAAPI_HOST" class="form-control"
+                                           value="{{ integ_cfg.megaapi_host }}" placeholder="apistart01.megaapi.com.br">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">Instance</label>
+                                    <input type="text" name="MEGAAPI_INSTANCE" class="form-control"
+                                           value="{{ integ_cfg.megaapi_instance }}" placeholder="megastart-XXXXXXX">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">Token</label>
+                                    <input type="text" name="MEGAAPI_TOKEN" class="form-control"
+                                           value="{{ integ_cfg.megaapi_token }}" placeholder="Token de autenticação">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">Secret (HMAC webhook)</label>
+                                    <input type="text" name="MEGAAPI_SECRET" class="form-control"
+                                           value="{{ integ_cfg.megaapi_secret }}" placeholder="UUID do secret">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">Celular do Gestor (com DDI, sem +)</label>
+                                    <input type="text" name="GESTOR_CELULAR" class="form-control"
+                                           value="{{ integ_cfg.gestor_celular }}" placeholder="5527988010899">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i> Salvar Integrações
+                </button>
+                <a href="/config/whatsapp/testar" class="btn btn-outline-success"
+                   onclick="event.preventDefault(); document.getElementById('frmTesteWpp').submit()">
+                    <i class="fab fa-whatsapp me-1"></i> Testar WhatsApp
+                </a>
+            </div>
+        </form>
+    </div>
 
 <!-- Toast feedback salários -->
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index:9999">

@@ -13,25 +13,25 @@ Authorization: Bearer {MEGAAPI_TOKEN}
 """
 import base64
 import json as _json
-import os
 import requests
 from datetime import datetime
 from extensions import db
 from models import WhatsappLog
 
 
-MEGAAPI_HOST     = os.getenv('MEGAAPI_HOST', 'apistart01.megaapi.com.br')
-MEGAAPI_INSTANCE = os.getenv('MEGAAPI_INSTANCE', '')
-MEGAAPI_TOKEN    = os.getenv('MEGAAPI_TOKEN', '')
+def _megaapi():
+    from services.config_service import get_megaapi_config
+    return get_megaapi_config()
 
 
 def _base_url() -> str:
-    return f'https://{MEGAAPI_HOST}/rest/sendMessage/{MEGAAPI_INSTANCE}'
+    cfg = _megaapi()
+    return f'https://{cfg["host"]}/rest/sendMessage/{cfg["instance"]}'
 
 
 def _headers() -> dict:
     return {
-        'Authorization': f'Bearer {MEGAAPI_TOKEN}',
+        'Authorization': f'Bearer {_megaapi()["token"]}',
         'Content-Type': 'application/json',
     }
 
@@ -47,7 +47,8 @@ def _fone(celular: str) -> str:
 
 
 def _configured() -> bool:
-    return bool(MEGAAPI_TOKEN and MEGAAPI_INSTANCE)
+    cfg = _megaapi()
+    return bool(cfg['token'] and cfg['instance'])
 
 
 def enviar_texto(celular: str, mensagem: str, func_id: str = None, 

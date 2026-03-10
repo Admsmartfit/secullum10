@@ -13,7 +13,9 @@ from datetime import datetime, date, timedelta
 from extensions import db
 from models import NotificationRule, AlocacaoDiaria, Batida, Funcionario, WhatsappLog, NotificacaoFila
 
-GESTOR_CELULAR = os.getenv('GESTOR_CELULAR', '')
+def _get_gestor_celular():
+    from services.config_service import get_gestor_celular
+    return get_gestor_celular()
 
 # Cooldown padrão: não reenviar o mesmo tipo de alerta para o mesmo funcionário
 # dentro de N horas (evita spam a cada ciclo de sync).
@@ -95,7 +97,7 @@ def _celular_gestor(func) -> str:
         ul = UnidadeLider.query.filter_by(departamento=func.departamento).first()
         if ul and ul.celular_lider:
             return ul.celular_lider
-    return GESTOR_CELULAR
+    return _get_gestor_celular()
 
 
 def _combine(d: date, t) -> datetime:
@@ -237,10 +239,10 @@ def _enviar_relatorio(regra: NotificationRule, texto: str) -> int:
     """Envia o texto do relatório para gestor e/ou RH."""
     from services.whatsapp_bot import enviar_texto
     enviados = 0
-    if regra.dest_manager and GESTOR_CELULAR:
-        if enviar_texto(celular=GESTOR_CELULAR, mensagem=texto, tipo='relatorio'):
+    if regra.dest_manager and _get_gestor_celular():
+        if enviar_texto(celular=_get_gestor_celular(), mensagem=texto, tipo='relatorio'):
             enviados += 1
-    if regra.dest_rh and GESTOR_CELULAR:
+    if regra.dest_rh and _get_gestor_celular():
         pass  # reutiliza o mesmo número global quando não há celular separado
     return enviados
 
@@ -399,14 +401,14 @@ def _enviar(regra: NotificationRule, func, minutos: int, aloc, data_ref: date, e
                 ):
                     enviados += 1
 
-    if regra.dest_rh and GESTOR_CELULAR:
+    if regra.dest_rh and _get_gestor_celular():
         msg = _render(regra.template_manager or '', func, minutos, aloc, data_ref, extra=extra)
         if msg:
             if fora and not regra.send_immediately:
-                _enfileirar(regra, GESTOR_CELULAR, msg, func.id, aloc, tipo_msg,
+                _enfileirar(regra, _get_gestor_celular(), msg, func.id, aloc, tipo_msg,
                            tipo_regra=regra.condition_type, data_ref=data_ref)
                 enviados += 1
-            elif enviar_texto(celular=GESTOR_CELULAR, mensagem=msg,
+            elif enviar_texto(celular=_get_gestor_celular(), mensagem=msg,
                               func_id=func.id, tipo='regra',
                               tipo_regra=regra.condition_type, data_ref=data_ref):
                 enviados += 1

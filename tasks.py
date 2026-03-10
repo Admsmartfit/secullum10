@@ -297,15 +297,11 @@ def register_tasks(celery):
         # ── Comparar batidas locais vs API Secullum ────────────────────────────
         import os
         try:
-            from secullum_api import SecullumAPI
+            from services.config_service import get_secullum_api
             from services.sync_service import parse_date
             from models import Batida, Funcionario
 
-            api = SecullumAPI(
-                os.getenv('SECULLUM_EMAIL'),
-                os.getenv('SECULLUM_PASSWORD'),
-                os.getenv('SECULLUM_BANCO'),
-            )
+            api = get_secullum_api()
             registros_api = api.buscar_batidas(ontem_str, ontem_str)
             if registros_api is None:
                 msg = 'Falha ao conectar com a API Secullum.'
