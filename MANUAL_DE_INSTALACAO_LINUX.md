@@ -11,21 +11,33 @@ Este manual cobre a instalação do **Secullum10** no seu servidor Linux local u
 
 ## 1. Instalando o Docker e o Secullum10 (Modo Automático via Script)
 
-Para facilitar, eu criei o script `install_secullum.sh`. Você pode transferir a pasta inteira do Secullum10 para o servidor Linux, ou baixar do repositório no Github:
+Para facilitar, utilize o script `install_secullum.sh`. Este script possui módulos de **escolha inteligente** e ajuda a configurar automaticamente os bancos de dados.
 
 ```bash
 # 1. Entre no servidor via SSH ou terminal local
-# 2. Quando clonar a pasta ou transferir os arquivos para o servidor, entre na pasta:
+# 2. Entre na pasta do projeto:
 cd /caminho/para/secullum10
 
 # 3. Dê permissão de execução no script
 chmod +x install_secullum.sh
 
-# 4. Execute a instalação
+# 4. Execute a instalação (pode requerer sudo)
 sudo ./install_secullum.sh
 ```
 
-O script vai se certificar de que o Docker está instalado, construirá as imagens e subirá a aplicação (Web + Trabalhador Celery + Redis).
+**Durante a instalação, você será questionado qual tipo deseja:**
+1. **Instalação de Teste / Local (Com banco de dados embarcado):** O próprio instalador sobe um contêiner PostgreSQL exclusivo para a aplicação. Escolha essa opção caso queira uma instalação definitiva rápida e sem depender de banco de dados externo da infraestrutura.
+2. **Instalação Definitiva Externa:** A aplicação não utilizará um banco via Docker. Você deve fornecer as credenciais e o IP de um banco de dados PostgreSQL existente na sua rede local. (NÃO USE LOCALHOST, pois se refere ao próprio docker).
+
+O script inicializa a aplicação (Web + Trabalhador Celery + Redis + DB, se aplicável).
+
+## 1.1 Desinstalação Total do Sistema
+
+Caso tenha tentado instalar e queira recomeçar, criamos um módulo de *desinstalação total*. Ele remove os contêineres e limpa os bancos de dados criados:
+```bash
+chmod +x desinstalar.sh
+sudo ./desinstalar.sh
+```
 
 ## 2. Instalação Manual (Passo a Passo)
 
@@ -42,9 +54,14 @@ Se preferir não usar o script:
    *(Abra o .env usando o comando `nano .env` se precisar alterar a conexão do banco ou variáveis)*
 
 3. Levante todos os serviços utilizando Docker Compose:
-   ```bash
-   docker-compose up -d --build
-   ```
+   - Para modo com seu próprio banco de dados:
+     ```bash
+     docker-compose up -d --build
+     ```
+   - Para modo com o banco de dados interno ativado:
+     ```bash
+     docker-compose -f docker-compose.yml -f docker-compose-db.yml up -d --build
+     ```
 
 ## 3. Configurando o Tunnelamento do Cloudflare (Para Porta 5020)
 

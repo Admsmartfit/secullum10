@@ -12,6 +12,12 @@ echo "  [1] MODO DE TESTE (Logs visiveis na tela, encerra ao fechar o terminal)"
 echo "  [2] MODO PERMANENTE (Roda em segundo plano, sempre online, reinicia automaticamente)"
 echo "  [3] DESLIGAR (Para completamente o sistema)"
 echo ""
+
+DB_ARGS="-f docker-compose.yml"
+if grep -q "@db:5432" .env 2>/dev/null; then
+    DB_ARGS="-f docker-compose.yml -f docker-compose-db.yml"
+fi
+
 read -p "Escolha uma opcao (1, 2 ou 3): " opcao
 
 case $opcao in
@@ -24,12 +30,12 @@ case $opcao in
     echo " Aperte CTRL+C a qualquer momento para parar.    "
     echo "================================================="
     echo ""
-    sudo docker-compose up
+    sudo docker-compose $DB_ARGS up
     ;;
   2)
     echo ""
     echo "[+] Iniciando em MODO PERMANENTE (Segundo Plano)..."
-    sudo docker-compose up -d
+    sudo docker-compose $DB_ARGS up -d
     echo ""
     echo "[✓] Sistema esta online e rodando em segundo plano!"
     echo "Ele vai religar sozinho mesmo se o servidor Linux reiniciar."
@@ -41,7 +47,7 @@ case $opcao in
   3)
     echo ""
     echo "[-] Parando todos os servicos Secullum10..."
-    sudo docker-compose down
+    sudo docker-compose $DB_ARGS down
     echo "[✓] Sistema desligado com sucesso."
     ;;
   *)

@@ -26,38 +26,51 @@ else
     echo "[✓] docker-compose ja esta instalado."
 fi
 
-# 2. Configuracoes preliminares do arquivo .env
-if [ ! -f ".env" ]; then
-    echo "[+] Arquivo .env nao encontrado. Criando um modelo basico."
-    echo "SECRET_KEY=sua_chave_secreta_super_segura" > .env
-    echo "FLASK_ENV=production" >> .env
-    echo "REDIS_URL=redis://redis:6379/0" >> .env
-    echo "DATABASE_URL=postgresql://postgres:postgres@SEU_IP_AQUI:5432/secullum10" >> .env
-    echo "" >> .env
-    
-    echo "⚠️  ATENCAO: Foi gerado um arquivo .env basico."
-    echo "============================================================"
-    echo " SE O SEU BANCO DE DADOS POSTGRES ESTA NESTE SERVIDOR LINUX:"
-    echo " Mude 'SEU_IP_AQUI' no arquivo .env para o IP real do servidor "
-    echo " (ex: 192.168.0.100). NUNCA USE 'localhost' AQUI DENTRO DO DOCKER!"
-    echo "============================================================"
-fi
+# 2. Configurações preliminares do arquivo .env não são feitas aqui (é interativo)
 
-# 3. Permissoes de pastas locais (Uploads e Banco local caso use SQLite)
-echo "[+] Configurando diretorios necessarios..."
+# 3. Permissões de pastas locais
+echo "[+] Configurando diretórios necessários..."
 mkdir -p instance
 mkdir -p uploads/prontuario
 chmod -R 777 instance
 chmod -R 777 uploads
 
-# 4. Compilando as Imagens Docker (Build)
+# 4. Modo de Banco de Dados
 echo "================================================="
-echo " Construindo as imagens Docker (Aguarde...)      "
+echo " Escolha o tipo de banco de dados para a preparação:"
+echo " 1) Banco de Dados Interno (Local/Docker)"
+echo " 2) Banco de Dados Externo (Você já possui um Postgres)"
 echo "================================================="
-sudo docker-compose build
+read -p "Digite 1 ou 2: " tipo_inst
+
+if [ "$tipo_inst" == "1" ]; then
+    echo "Configurando Banco de Dados Interno para build..."
+    echo "SECRET_KEY=sua_chave_secreta_super_segura" > .env
+    echo "FLASK_ENV=production" >> .env
+    echo "REDIS_URL=redis://redis:6379/0" >> .env
+    echo "DATABASE_URL=postgresql://secullum_user:secullum_pass@db:5432/secullum10" >> .env
+    echo "================================================="
+    echo " Construindo as imagens Docker (Aguarde...)      "
+    echo "================================================="
+    sudo docker-compose -f docker-compose.yml -f docker-compose-db.yml build
+else
+    echo "Configurando Banco de Dados Externo para build..."
+    echo "SECRET_KEY=sua_chave_secreta_super_segura" > .env
+    echo "FLASK_ENV=production" >> .env
+    echo "REDIS_URL=redis://redis:6379/0" >> .env
+    read -p "Digite a sua DATABASE_URL (ex: postgresql://user:pass@192.168.0.10:5432/db): " user_db
+    if [ -z "$user_db" ]; then
+        user_db="postgresql://postgres:postgres@SEU_IP_AQUI:5432/secullum10"
+    fi
+    echo "DATABASE_URL=$user_db" >> .env
+    echo "================================================="
+    echo " Construindo as imagens Docker (Aguarde...)      "
+    echo "================================================="
+    sudo docker-compose build
+fi
 
 echo "================================================="
 echo " [✓] Instalacao e Preparacao concluidas!         "
 echo " O sistema AINDA NAO ESTA RODANDO.               "
-echo " Para ligar o sistema, use o arquivo executar.sh "
+echo " Para ligar o sistema, use o docker-compose up   "
 echo "================================================="

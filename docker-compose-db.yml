@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  web:
+    depends_on:
+      - db
+
+  celery_worker:
+    depends_on:
+      - db
+
+  celery_beat:
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15-alpine
+    container_name: secullum10_db
+    environment:
+      POSTGRES_USER: secullum_user
+      POSTGRES_PASSWORD: secullum_pass
+      POSTGRES_DB: secullum10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

@@ -26,20 +26,7 @@ else
     echo "[✓] docker-compose já está instalado."
 fi
 
-# 2. Configurações preliminares
-if [ ! -f ".env" ]; then
-    echo "[+] Arquivo .env não encontrado. Copiando do ambiente atual."
-    # Se ele estiver trazendo tudo no zip, env já estará lá.
-    if [ -f "config.py" ]; then
-        echo "SECRET_KEY=sua_chave_secreta_super_segura" >> .env
-        echo "FLASK_ENV=production" >> .env
-        echo "REDIS_URL=redis://redis:6379/0" >> .env
-        echo "DATABASE_URL=postgresql://secullum_user:secullum_pass@localhost:5432/secullum10" >> .env
-        echo "" >> .env
-        echo "⚠️  ATENÇÃO: Foi gerado um arquivo .env basico."
-        echo "Por favor, configure as chaves como banco de dados e senhas no arquivo .env posteriormente."
-    fi
-fi
+# 2. Configurações preliminares não são feitas aqui (agora é interativo)
 
 # 3. Permissões de pastas
 echo "[+] Configurando diretórios de uploads..."
@@ -50,15 +37,44 @@ chmod -R 777 uploads
 
 # 4. Compilação e Build
 echo "============================================="
-echo " Subindo as instâncias Docker do sistema..."
+echo " Escolha o tipo de instalação:"
+echo " 1) Instalação de Teste/Local (com Banco de Dados Interno do Docker)"
+echo " 2) Instalação Definitiva (conectar a um Postgres Externo na sua rede)"
 echo "============================================="
+read -p "Digite 1 ou 2: " tipo_inst
 
-sudo docker-compose up -d --build
+if [ "$tipo_inst" == "1" ]; then
+    echo "Configurando Banco de Dados Interno..."
+    echo "SECRET_KEY=sua_chave_secreta_super_segura" > .env
+    echo "FLASK_ENV=production" >> .env
+    echo "REDIS_URL=redis://redis:6379/0" >> .env
+    echo "DATABASE_URL=postgresql://secullum_user:secullum_pass@db:5432/secullum10" >> .env
+    echo "============================================="
+    echo " Subindo os contêineres com DB interno..."
+    echo "============================================="
+    sudo docker-compose -f docker-compose.yml -f docker-compose-db.yml up -d --build
+else
+    echo "Configurando Banco de Dados Externo..."
+    echo "SECRET_KEY=sua_chave_secreta_super_segura" > .env
+    echo "FLASK_ENV=production" >> .env
+    echo "REDIS_URL=redis://redis:6379/0" >> .env
+    read -p "Digite a sua DATABASE_URL (ex: postgresql://user:pass@192.168.0.10:5432/db): " user_db
+    if [ -z "$user_db" ]; then
+        user_db="postgresql://postgres:postgres@SEU_IP_AQUI:5432/secullum10"
+    fi
+    echo "DATABASE_URL=$user_db" >> .env
+    echo "============================================="
+    echo " Subindo os contêineres conectando no banco externo..."
+    echo "============================================="
+    sudo docker-compose up -d --build
+fi
 
 echo "============================================="
 echo " [✓] Serviço instalado com SUCESSO! 😊"
 echo " Aplicação rodando no Background (Linux) na porta 5020."
-echo " - Acesse (via localhost): http://localhost:5020"
+echo " - Acesse (via localhost se no servidor): http://localhost:5020"
+echo " - Ou via IP: http://SEU_IP:5020"
 echo ""
 echo " Consulte o MANUAL_DE_INSTALACAO_LINUX.md para vincular no Cloudflare Tunnel!"
+echo " Use desinstalar.sh caso precise remover tudo limpo."
 echo "============================================="
