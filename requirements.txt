@@ -14,3 +14,4 @@ psycopg2-binary
 APScheduler
 gunicorn
 sqlalchemy
+werkzeug>=2.3,<4.0

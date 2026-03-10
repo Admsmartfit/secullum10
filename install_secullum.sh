@@ -84,8 +84,20 @@ for i in $(seq 1 30); do
     sleep 3
 done
 
+echo "[+] Aguardando container web iniciar (até 60s)..."
+for i in $(seq 1 20); do
+    STATUS=$(sudo docker inspect --format='{{.State.Status}}' secullum10_web 2>/dev/null)
+    if [ "$STATUS" == "running" ]; then
+        echo "[✓] Container web está rodando."
+        break
+    fi
+    echo "  ... aguardando web ($i/20) - status: $STATUS"
+    sleep 3
+done
+sleep 5  # aguarda gunicorn/Flask inicializar dentro do container
+
 echo "[+] Criando usuário administrador padrão (admin@admin.com)..."
-sudo docker exec secullum10_web python -c "
+ADMIN_OUTPUT=$(sudo docker exec secullum10_web python -c "
 from app import create_app
 from extensions import db
 from models import Usuario
@@ -98,8 +110,18 @@ with app.app_context():
     u.set_senha('admin123')
     u.nivel_acesso = 'gestor'
     db.session.commit()
-    print('[✓] Usuário admin@admin.com criado/atualizado com senha admin123')
-"
+    print('OK')
+" 2>&1)
+
+if echo "$ADMIN_OUTPUT" | grep -q "OK"; then
+    echo "[✓] Usuário admin@admin.com criado/atualizado com senha admin123"
+else
+    echo "[!] AVISO: Falha ao criar usuário admin. Saída:"
+    echo "$ADMIN_OUTPUT"
+    echo ""
+    echo "    Tente manualmente após a instalação:"
+    echo "    sudo docker exec secullum10_web python create_admin.py"
+fi
 
 echo "============================================="
 echo " [✓] Serviço instalado com SUCESSO! 😊"
