@@ -69,12 +69,45 @@ else
     sudo docker-compose up -d --build
 fi
 
+# 5. Aguarda o banco de dados ficar pronto e cria usuário admin
+echo "============================================="
+echo " Aguardando banco de dados ficar pronto..."
+echo "============================================="
+
+CONTAINER_DB="secullum10_db"
+for i in $(seq 1 30); do
+    if sudo docker exec "$CONTAINER_DB" pg_isready -U secullum_user -d secullum10 -q 2>/dev/null; then
+        echo "[✓] Banco de dados pronto."
+        break
+    fi
+    echo "  ... aguardando ($i/30)"
+    sleep 3
+done
+
+echo "[+] Criando usuário administrador padrão (admin@admin.com)..."
+sudo docker exec secullum10_web python -c "
+from app import create_app
+from extensions import db
+from models import Usuario
+app = create_app()
+with app.app_context():
+    u = Usuario.query.filter_by(email='admin@admin.com').first()
+    if not u:
+        u = Usuario(nome='Administrador', email='admin@admin.com', nivel_acesso='gestor')
+        db.session.add(u)
+    u.set_senha('admin123')
+    u.nivel_acesso = 'gestor'
+    db.session.commit()
+    print('[✓] Usuário admin@admin.com criado/atualizado com senha admin123')
+"
+
 echo "============================================="
 echo " [✓] Serviço instalado com SUCESSO! 😊"
 echo " Aplicação rodando no Background (Linux) na porta 5020."
 echo " - Acesse (via localhost se no servidor): http://localhost:5020"
 echo " - Ou via IP: http://SEU_IP:5020"
 echo ""
-echo " Consulte o MANUAL_DE_INSTALACAO_LINUX.md para vincular no Cloudflare Tunnel!"
+echo " Login padrão: admin@admin.com / admin123 (ALTERE APÓS O PRIMEIRO ACESSO!)
+ Consulte o MANUAL_DE_INSTALACAO_LINUX.md para vincular no Cloudflare Tunnel!"
 echo " Use desinstalar.sh caso precise remover tudo limpo."
 echo "============================================="
