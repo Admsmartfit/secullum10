@@ -83,6 +83,78 @@
 {% endblock %}
 
 {% block content %}
+{# ── Macro: card de regra (reusável nas duas abas) ─────────────────────────── #}
+{% macro _render_card(r) %}
+<div class="rule-card {% if not r.ativo %}inactive{% endif %}">
+    <div class="d-flex align-items-start justify-content-between gap-3">
+        <div class="flex-grow-1">
+            <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                <h6 class="mb-0 fw-semibold">{{ r.nome }}</h6>
+                {% if r.ativo %}
+                <span class="badge bg-success-subtle text-success" style="font-size:0.65rem;">Ativa</span>
+                {% else %}
+                <span class="badge bg-secondary-subtle text-secondary" style="font-size:0.65rem;">Pausada</span>
+                {% endif %}
+                <span class="badge badge-cat-{{ r.categoria or 'alerta' }}" style="font-size:0.65rem;">
+                    {{ categorias.get(r.categoria or 'alerta', r.categoria) }}
+                </span>
+            </div>
+            <div class="d-flex flex-wrap gap-1 mb-2">
+                <span class="badge badge-trigger" style="font-size:0.7rem;">
+                    <i class="fas fa-bolt me-1"></i>{{ trigger_labels.get(r.trigger_type, r.trigger_type) }}
+                </span>
+                <span class="badge badge-condition" style="font-size:0.7rem;">
+                    <i class="fas fa-filter me-1"></i>{{ condition_labels.get(r.condition_type, r.condition_type) }}
+                    {% if r.threshold_minutes and r.condition_type not in ['ABSENCE','INTERJORNADA','ESCALA_ENVIO','INCONSISTENCY_REPORT','DESCANSO_DOMINGO_F','PRE_CHECKIN','DAILY_ABSENCE'] %}
+                    (+{{ r.threshold_minutes }}min)
+                    {% endif %}
+                </span>
+                {% if r.dest_employee %}<span class="badge" style="background:#dbeafe;color:#1d4ed8;font-size:0.7rem;"><i class="fas fa-user me-1"></i>Funcionário</span>{% endif %}
+                {% if r.dest_manager  %}<span class="badge" style="background:#ede9fe;color:#6d28d9;font-size:0.7rem;"><i class="fas fa-user-tie me-1"></i>Gestor</span>{% endif %}
+                {% if r.dest_rh       %}<span class="badge" style="background:#ffedd5;color:#c2410c;font-size:0.7rem;"><i class="fas fa-building me-1"></i>RH</span>{% endif %}
+            </div>
+            <div class="small text-muted d-flex flex-wrap gap-3">
+                {% if r.ultima_execucao %}
+                <span><i class="fas fa-clock me-1"></i>{{ r.ultima_execucao.strftime('%d/%m %H:%M') }}</span>
+                <span class="text-success fw-semibold"><i class="fas fa-paper-plane me-1"></i>{{ r.mensagens_enviadas }} enviadas</span>
+                {% else %}
+                <span>Nunca executada</span>
+                {% endif %}
+                {% if r.only_working_hours %}
+                <span><i class="fas fa-moon me-1"></i>Respeita expediente</span>
+                {% endif %}
+                {% if r.send_immediately %}
+                <span class="text-danger"><i class="fas fa-bolt me-1"></i>Envio 24h</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="d-flex gap-1 flex-shrink-0">
+            <button class="btn btn-sm btn-outline-secondary" title="Executar agora"
+                    onclick="executarRegra({{ r.id }}, '{{ r.nome|e }}')"
+                    data-rid="{{ r.id }}">
+                <i class="fas fa-play"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" title="Editar"
+                    data-bs-toggle="modal" data-bs-target="#modalRegra"
+                    onclick="abrirEditar(this)"
+                    data-rule='{{ {'id':r.id,'nome':r.nome,'ativo':r.ativo,'categoria':r.categoria or 'alerta','trigger_type':r.trigger_type,'trigger_hour':r.trigger_hour,'trigger_weekday':r.trigger_weekday,'condition_type':r.condition_type,'threshold_minutes':r.threshold_minutes,'dest_employee':r.dest_employee,'dest_manager':r.dest_manager,'dest_rh':r.dest_rh,'template_manager':r.template_manager or '','template_employee':r.template_employee or '','template_manager_tipo':(r.template_manager_tipo or 'texto') if r.template_manager_tipo is defined else 'texto','template_manager_interativo':(r.template_manager_interativo or '') if r.template_manager_interativo is defined else '','template_employee_tipo':(r.template_employee_tipo or 'texto') if r.template_employee_tipo is defined else 'texto','template_employee_interativo':(r.template_employee_interativo or '') if r.template_employee_interativo is defined else '','only_working_hours':r.only_working_hours,'send_immediately':r.send_immediately}|tojson }}'>
+                <i class="fas fa-edit"></i>
+            </button>
+            <button class="btn btn-sm {% if r.ativo %}btn-warning{% else %}btn-outline-success{% endif %}"
+                    title="{% if r.ativo %}Pausar{% else %}Ativar{% endif %}"
+                    onclick="toggleRegra({{ r.id }}, this)">
+                <i class="fas {% if r.ativo %}fa-pause{% else %}fa-play{% endif %}"></i>
+            </button>
+            <form method="POST" action="{{ url_for('notificacoes.excluir', rid=r.id) }}"
+                  class="d-inline" onsubmit="return confirm('Excluir regra?')">
+                <button class="btn btn-sm btn-outline-danger" title="Excluir">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endmacro %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         <h1 class="h3 mb-0 fw-bold">Regras de Notificação</h1>
@@ -187,114 +259,405 @@
 
     <!-- ── Tab 3: Respostas do Robô ──────────────────────────────────────────── -->
     <div class="tab-pane fade" id="tab-chatbot" role="tabpanel">
-        <div class="mb-3">
-            <p class="text-muted small mb-2">
-                Personalize as mensagens automáticas enviadas pelo robô. Use as variáveis abaixo clicando nelas para inserir no campo focado:
-            </p>
-            <div class="mb-3">
-                {% for v in ['{{nome}}', '{{data}}', '{{mensagem}}'] %}
-                <span class="var-chip" onclick="insertBotVar('{{ v }}', event)">{{ v }}</span>
-                {% endfor %}
-            </div>
-        </div>
-        <form method="POST" action="{{ url_for('notificacoes.chatbot_salvar') }}">
-            <div class="d-flex flex-column gap-3">
-                {% for chave in bot_msg_labels %}
-                <div class="bot-msg-card">
-                    <label class="form-label small fw-semibold mb-1" for="bot_{{ chave }}">
-                        {{ bot_msg_labels[chave] }}
-                    </label>
-                    <textarea
-                        name="{{ chave }}"
-                        id="bot_{{ chave }}"
-                        class="form-control form-control-sm bot-textarea"
-                        rows="2">{{ bot_cfg.get(chave, bot_msg_defaults.get(chave, '')) }}</textarea>
-                </div>
-                {% endfor %}
-            </div>
-            <div class="d-flex justify-content-end mt-3">
-                <button type="submit" class="btn btn-primary btn-sm px-4">
-                    <i class="fas fa-save me-1"></i>Salvar Configurações do Robô
+
+        {# ── Sub-tabs ─────────────────────────────────────────────────────────── #}
+        <ul class="nav nav-pills nav-sm mb-3 gap-1" id="chatbotSubTabs" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active py-1 px-3 small" data-bs-toggle="pill"
+                        data-bs-target="#subtab-msgs" type="button">
+                    <i class="fas fa-comment me-1"></i>Mensagens do Sistema
                 </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link py-1 px-3 small" data-bs-toggle="pill"
+                        data-bs-target="#subtab-keywords" type="button">
+                    <i class="fas fa-key me-1"></i>Palavras-chave
+                    <span class="badge bg-secondary ms-1" style="font-size:.65rem;">{{ keyword_rules|length }}</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link py-1 px-3 small" data-bs-toggle="pill"
+                        data-bs-target="#subtab-menu" type="button">
+                    <i class="fas fa-list me-1"></i>Menu Interativo
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+
+            {# ── Sub-tab 1: Mensagens do Sistema ──────────────────────────────── #}
+            <div class="tab-pane fade show active" id="subtab-msgs">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <p class="text-muted small mb-0">
+                        Mensagens disparadas automaticamente pelo robô em resposta a eventos do sistema.
+                    </p>
+                    <button class="btn btn-primary btn-sm px-3 ms-3 flex-shrink-0"
+                            data-bs-toggle="modal" data-bs-target="#modalSysMsg"
+                            onclick="abrirSysMsgNova()">
+                        <i class="fas fa-plus me-1"></i>Nova Mensagem
+                    </button>
+                </div>
+
+                <div class="d-flex flex-column gap-2">
+                    {# ── Predefinidas ─────────────────────────────────────────────── #}
+                    {% for chave, label in bot_msg_labels.items() %}
+                    <div class="bot-msg-card d-flex align-items-start gap-3">
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold small mb-1">{{ label }}</div>
+                            <p class="small text-muted mb-0" style="white-space:pre-wrap;">{{ bot_cfg.get(chave, bot_msg_defaults.get(chave,'')) }}</p>
+                        </div>
+                        <div class="d-flex gap-1 flex-shrink-0">
+                            <span class="badge bg-secondary-subtle text-secondary align-self-start" style="font-size:.6rem;">sistema</span>
+                            <button class="btn btn-sm btn-outline-secondary" title="Editar"
+                                    data-bs-toggle="modal" data-bs-target="#modalSysMsg"
+                                    onclick="abrirSysMsgEditar('{{ chave|e }}', {{ label|tojson }}, {{ bot_cfg.get(chave, bot_msg_defaults.get(chave,''))|tojson }}, false)">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                    {# ── Customizadas ─────────────────────────────────────────────── #}
+                    {% for cm in custom_msgs %}
+                    <div class="bot-msg-card d-flex align-items-start gap-3">
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold small mb-1">
+                                {{ cm.label }}
+                                <code class="ms-1" style="font-size:.65rem;background:#f1f5f9;padding:1px 6px;border-radius:3px;">&#123;&#123;{{ cm.chave }}&#125;&#125;</code>
+                            </div>
+                            <p class="small text-muted mb-0" style="white-space:pre-wrap;">{{ cm.valor }}</p>
+                        </div>
+                        <div class="d-flex gap-1 flex-shrink-0">
+                            <span class="badge bg-success-subtle text-success align-self-start" style="font-size:.6rem;">custom</span>
+                            <button class="btn btn-sm btn-outline-secondary" title="Editar"
+                                    data-bs-toggle="modal" data-bs-target="#modalSysMsg"
+                                    onclick="abrirSysMsgEditar('{{ cm.chave|e }}', {{ cm.label|tojson }}, {{ cm.valor|tojson }}, true)">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <form method="POST" action="{{ url_for('notificacoes.chatbot_msg_excluir') }}"
+                                  class="d-inline" onsubmit="return confirm('Excluir esta mensagem?')">
+                                <input type="hidden" name="chave" value="{{ cm.chave }}">
+                                <button class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                {% if not custom_msgs and not bot_msg_labels %}
+                <div class="card p-4 text-center text-muted mt-2">
+                    <i class="fas fa-comment-slash fa-2x mb-2 opacity-25"></i>
+                    <p class="small mb-0">Nenhuma mensagem configurada.</p>
+                </div>
+                {% endif %}
             </div>
-        </form>
-    </div>
+
+            {# ── Sub-tab 2: Palavras-chave ─────────────────────────────────────── #}
+            <div class="tab-pane fade" id="subtab-keywords">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <p class="text-muted small mb-0">
+                        Quando o funcionário digitar exatamente a palavra-chave, o robô responde com a mensagem configurada.<br>
+                        <strong>Verificadas antes de qualquer outra lógica</strong> (SIM/NÃO, menu, etc.).
+                    </p>
+                    <button class="btn btn-primary btn-sm px-3 ms-3 flex-shrink-0"
+                            data-bs-toggle="modal" data-bs-target="#modalKeyword"
+                            onclick="abrirKeywordNova()">
+                        <i class="fas fa-plus me-1"></i>Nova Palavra-chave
+                    </button>
+                </div>
+
+                {% if keyword_rules %}
+                <div class="d-flex flex-column gap-2">
+                    {% for kw in keyword_rules %}
+                    <div class="bot-msg-card d-flex align-items-start gap-3 {% if not kw.ativo %}opacity-50{% endif %}">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                                <code class="small" style="background:#f1f5f9;padding:2px 8px;border-radius:4px;">{{ kw.keyword }}</code>
+                                {% if kw.ativo %}
+                                <span class="badge bg-success-subtle text-success" style="font-size:.65rem;">Ativa</span>
+                                {% else %}
+                                <span class="badge bg-secondary-subtle text-secondary" style="font-size:.65rem;">Pausada</span>
+                                {% endif %}
+                                {% if kw.apenas_funcionario %}
+                                <span class="badge" style="background:#dbeafe;color:#1d4ed8;font-size:.65rem;">Só funcionário</span>
+                                {% else %}
+                                <span class="badge" style="background:#ede9fe;color:#6d28d9;font-size:.65rem;">+ Gestor</span>
+                                {% endif %}
+                            </div>
+                            <p class="small text-muted mb-0" style="white-space:pre-wrap;">{{ kw.resposta }}</p>
+                        </div>
+                        <div class="d-flex gap-1 flex-shrink-0">
+                            <button class="btn btn-sm btn-outline-secondary" title="Editar"
+                                    data-bs-toggle="modal" data-bs-target="#modalKeyword"
+                                    onclick="abrirKeywordEditar(this)"
+                                    data-kw="{{ {'id':kw.id,'keyword':kw.keyword,'resposta':kw.resposta,'apenas_funcionario':kw.apenas_funcionario,'tipo_msg':(kw.tipo_msg or 'texto') if kw.tipo_msg is defined else 'texto','interativo_json':(kw.interativo_json or '') if kw.interativo_json is defined else ''}|tojson|e }}">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm {% if kw.ativo %}btn-warning{% else %}btn-outline-success{% endif %}"
+                                    onclick="toggleKeyword({{ kw.id }}, this)">
+                                <i class="fas {% if kw.ativo %}fa-pause{% else %}fa-play{% endif %}"></i>
+                            </button>
+                            <form method="POST" action="{{ url_for('notificacoes.keyword_excluir', kid=kw.id) }}"
+                                  class="d-inline" onsubmit="return confirm('Excluir palavra-chave?')">
+                                <button class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="card p-4 text-center text-muted">
+                    <i class="fas fa-key fa-2x mb-2 opacity-25"></i>
+                    <p class="small mb-2">Nenhuma palavra-chave configurada.</p>
+                    <button class="btn btn-sm btn-primary mx-auto" style="width:fit-content;"
+                            data-bs-toggle="modal" data-bs-target="#modalKeyword"
+                            onclick="abrirKeywordNova()">
+                        <i class="fas fa-plus me-1"></i>Criar primeira palavra-chave
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+
+            {# ── Sub-tab 3: Menu Interativo ────────────────────────────────────── #}
+            <div class="tab-pane fade" id="subtab-menu">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <p class="text-muted small mb-0">
+                        Opções enviadas quando o funcionário digita <code>oi</code>, <code>menu</code> etc.
+                        Edite o título e a descrição exibidos no WhatsApp.
+                    </p>
+                    <button class="btn btn-primary btn-sm px-3 ms-3 flex-shrink-0"
+                            data-bs-toggle="modal" data-bs-target="#modalKeyword"
+                            onclick="abrirKeywordNovaTipoMenu()">
+                        <i class="fas fa-plus me-1"></i>Nova Opção (via Palavra-chave)
+                    </button>
+                </div>
+
+                <div class="d-flex flex-column gap-2">
+                    {% for item in menu_itens %}
+                    <div class="bot-msg-card d-flex align-items-center gap-3">
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold small">{{ item.titulo }}</div>
+                            <div class="text-muted" style="font-size:.8rem;">{{ item.desc }}</div>
+                        </div>
+                        <div class="d-flex gap-1 flex-shrink-0 align-items-center">
+                            <span class="badge bg-success-subtle text-success" style="font-size:.65rem;">Ativa</span>
+                            <button class="btn btn-sm btn-outline-secondary" title="Editar texto"
+                                    data-bs-toggle="modal" data-bs-target="#modalMenuEdit"
+                                    onclick="abrirMenuEditar('{{ item.id|e }}', {{ item.titulo|tojson }}, {{ item.desc|tojson }})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="alert alert-info small mt-3 mb-0 py-2">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Para adicionar uma opção completamente nova com resposta automática, clique em
+                    <strong>Nova Opção</strong> — ela aparecerá como resposta de palavra-chave e
+                    também no menu quando o funcionário digitar <code>menu</code>.
+                </div>
+            </div>
+
+        </div>{# /tab-content sub #}
+    </div>{# /tab-chatbot #}
 
 </div><!-- /tab-content -->
 
 
-{# ── Macro: card de regra (reusável nas duas abas) ─────────────────────────── #}
-{% macro _render_card(r) %}
-<div class="rule-card {% if not r.ativo %}inactive{% endif %}">
-    <div class="d-flex align-items-start justify-content-between gap-3">
-        <div class="flex-grow-1">
-            <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-                <h6 class="mb-0 fw-semibold">{{ r.nome }}</h6>
-                {% if r.ativo %}
-                <span class="badge bg-success-subtle text-success" style="font-size:0.65rem;">Ativa</span>
-                {% else %}
-                <span class="badge bg-secondary-subtle text-secondary" style="font-size:0.65rem;">Pausada</span>
-                {% endif %}
-                <span class="badge badge-cat-{{ r.categoria or 'alerta' }}" style="font-size:0.65rem;">
-                    {{ categorias.get(r.categoria or 'alerta', r.categoria) }}
-                </span>
+
+
+<!-- ── Modal: Mensagem do Sistema (criar / editar) ───────────────────────────── -->
+<div class="modal fade" id="modalSysMsg" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-3">
+                <h6 class="modal-title fw-bold" id="modalSysMsgTitle">Editar Mensagem</h6>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="d-flex flex-wrap gap-1 mb-2">
-                <span class="badge badge-trigger" style="font-size:0.7rem;">
-                    <i class="fas fa-bolt me-1"></i>{{ trigger_labels.get(r.trigger_type, r.trigger_type) }}
-                </span>
-                <span class="badge badge-condition" style="font-size:0.7rem;">
-                    <i class="fas fa-filter me-1"></i>{{ condition_labels.get(r.condition_type, r.condition_type) }}
-                    {% if r.threshold_minutes and r.condition_type not in ['ABSENCE','INTERJORNADA','ESCALA_ENVIO','INCONSISTENCY_REPORT','DESCANSO_DOMINGO_F','PRE_CHECKIN','DAILY_ABSENCE'] %}
-                    (+{{ r.threshold_minutes }}min)
-                    {% endif %}
-                </span>
-                {% if r.dest_employee %}<span class="badge" style="background:#dbeafe;color:#1d4ed8;font-size:0.7rem;"><i class="fas fa-user me-1"></i>Funcionário</span>{% endif %}
-                {% if r.dest_manager  %}<span class="badge" style="background:#ede9fe;color:#6d28d9;font-size:0.7rem;"><i class="fas fa-user-tie me-1"></i>Gestor</span>{% endif %}
-                {% if r.dest_rh       %}<span class="badge" style="background:#ffedd5;color:#c2410c;font-size:0.7rem;"><i class="fas fa-building me-1"></i>RH</span>{% endif %}
-            </div>
-            <div class="small text-muted d-flex flex-wrap gap-3">
-                {% if r.ultima_execucao %}
-                <span><i class="fas fa-clock me-1"></i>{{ r.ultima_execucao.strftime('%d/%m %H:%M') }}</span>
-                <span class="text-success fw-semibold"><i class="fas fa-paper-plane me-1"></i>{{ r.mensagens_enviadas }} enviadas</span>
-                {% else %}
-                <span>Nunca executada</span>
-                {% endif %}
-                {% if r.only_working_hours %}
-                <span><i class="fas fa-moon me-1"></i>Respeita expediente</span>
-                {% endif %}
-                {% if r.send_immediately %}
-                <span class="text-danger"><i class="fas fa-bolt me-1"></i>Envio 24h</span>
-                {% endif %}
-            </div>
-        </div>
-        <div class="d-flex gap-1 flex-shrink-0">
-            <button class="btn btn-sm btn-outline-secondary" title="Executar agora"
-                    onclick="executarRegra({{ r.id }}, '{{ r.nome|e }}')"
-                    data-rid="{{ r.id }}">
-                <i class="fas fa-play"></i>
-            </button>
-            <button class="btn btn-sm btn-outline-secondary" title="Editar"
-                    data-bs-toggle="modal" data-bs-target="#modalRegra"
-                    onclick="abrirEditar({{ {'id':r.id,'nome':r.nome,'ativo':r.ativo,'categoria':r.categoria or 'alerta','trigger_type':r.trigger_type,'trigger_hour':r.trigger_hour,'trigger_weekday':r.trigger_weekday,'condition_type':r.condition_type,'threshold_minutes':r.threshold_minutes,'dest_employee':r.dest_employee,'dest_manager':r.dest_manager,'dest_rh':r.dest_rh,'template_manager':r.template_manager or '','template_employee':r.template_employee or '','only_working_hours':r.only_working_hours,'send_immediately':r.send_immediately}|tojson }})">
-                <i class="fas fa-edit"></i>
-            </button>
-            <button class="btn btn-sm {% if r.ativo %}btn-warning{% else %}btn-outline-success{% endif %}"
-                    title="{% if r.ativo %}Pausar{% else %}Ativar{% endif %}"
-                    onclick="toggleRegra({{ r.id }}, this)">
-                <i class="fas {% if r.ativo %}fa-pause{% else %}fa-play{% endif %}"></i>
-            </button>
-            <form method="POST" action="{{ url_for('notificacoes.excluir', rid=r.id) }}"
-                  class="d-inline" onsubmit="return confirm('Excluir regra?')">
-                <button class="btn btn-sm btn-outline-danger" title="Excluir">
-                    <i class="fas fa-trash"></i>
-                </button>
+            <form id="formSysMsg" method="POST">
+                <input type="hidden" name="chave" id="inputSysMsgChave">
+                <div class="modal-body d-flex flex-column gap-3">
+                    {# Campo de label — só visível ao criar nova customizada #}
+                    <div id="divSysMsgLabel" style="display:none;">
+                        <label class="form-label small fw-semibold">Rótulo (nome visível)</label>
+                        <input type="text" name="label" id="inputSysMsgLabel"
+                               class="form-control form-control-sm"
+                               placeholder="Ex: Resposta sobre Férias">
+                    </div>
+                    {# Campo de chave — só visível ao criar nova customizada #}
+                    <div id="divSysMsgChaveInput" style="display:none;">
+                        <label class="form-label small fw-semibold">Chave (identificador)</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text text-muted" style="font-size:.75rem;">bot_custom_</span>
+                            <input type="text" name="chave_sufixo" id="inputSysMsgChaveSufixo"
+                                   class="form-control form-control-sm"
+                                   placeholder="ferias" pattern="[a-z0-9_]+"
+                                   oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,'')">
+                        </div>
+                        <div class="form-text small">Use em templates como <code>&#123;&#123;bot_custom_ferias&#125;&#125;</code></div>
+                    </div>
+                    <div>
+                        <label class="form-label small fw-semibold mb-1" id="labelSysMsgTexto">Mensagem</label>
+                        <div class="mb-1">
+                            {% for v in ['{{nome}}', '{{data}}', '{{mensagem}}', '{{turno}}'] %}
+                            <span class="var-chip" onclick="insertSysMsgVar('{{ v }}', event)">{{ v }}</span>
+                            {% endfor %}
+                        </div>
+                        <textarea name="valor" id="inputSysMsgValor"
+                                  class="form-control form-control-sm sysmsg-textarea" rows="3"
+                                  required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="fas fa-save me-1"></i>Salvar
+                    </button>
+                </div>
             </form>
         </div>
     </div>
 </div>
-{% endmacro %}
 
+<!-- ── Modal: Editar item do Menu Interativo ─────────────────────────────────── -->
+<div class="modal fade" id="modalMenuEdit" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-3">
+                <h6 class="modal-title fw-bold">Editar Opção do Menu</h6>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formMenuEdit" method="POST" action="{{ url_for('notificacoes.chatbot_msg_salvar') }}">
+                <input type="hidden" name="chave" id="inputMenuChave">
+                <input type="hidden" name="chave2" id="inputMenuChave2">
+                <div class="modal-body d-flex flex-column gap-3">
+                    <div>
+                        <label class="form-label small fw-semibold">Título (exibido no botão do WhatsApp)</label>
+                        <input type="text" name="valor" id="inputMenuTitulo"
+                               class="form-control form-control-sm" required maxlength="24">
+                        <div class="form-text small">Máx. 24 caracteres (limitação do WhatsApp).</div>
+                    </div>
+                    <div>
+                        <label class="form-label small fw-semibold">Descrição (subtítulo)</label>
+                        <input type="text" name="valor2" id="inputMenuDesc"
+                               class="form-control form-control-sm" maxlength="72">
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-sm btn-primary" id="btnMenuEditSalvar">
+                        <i class="fas fa-save me-1"></i>Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal: Palavra-chave ──────────────────────────────────────────────────── -->
+<div class="modal fade" id="modalKeyword" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-3">
+                <h6 class="modal-title fw-bold" id="modalKeywordTitle">Nova Palavra-chave</h6>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formKeyword" method="POST" action="{{ url_for('notificacoes.keyword_nova') }}">
+                <div class="modal-body d-flex flex-column gap-3">
+                    <div>
+                        <label class="form-label small fw-semibold">Palavra-chave</label>
+                        <input type="text" name="keyword" id="inputKw" class="form-control form-control-sm"
+                               placeholder="Ex: FERIAS, HOLERITE, VALE" required
+                               style="text-transform:uppercase;"
+                               oninput="this.value=this.value.toUpperCase()">
+                        <div class="form-text small">Case-insensitive. O funcionário deve digitar exatamente esta palavra.</div>
+                    </div>
+                    <div>
+                        <label class="form-label small fw-semibold">Resposta do Robô</label>
+                        <div class="mb-1">
+                            {% for v in ['{{nome}}'] %}
+                            <span class="var-chip" onclick="insertKwVar('{{ v }}', event)">{{ v }}</span>
+                            {% endfor %}
+                        </div>
+                        <textarea name="resposta" id="inputKwResposta" class="form-control form-control-sm kw-textarea"
+                                  rows="3" placeholder="Mensagem enviada ao funcionário..." required></textarea>
+                    </div>
+                    <!-- Tipo de mensagem interativa -->
+                    <div>
+                        <label class="form-label small fw-semibold mb-1">Tipo de Resposta</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_interativo_kw"
+                                       id="tipoKwTexto" value="texto" checked
+                                       onchange="atualizarEditorInterativo('kw')">
+                                <label class="form-check-label small" for="tipoKwTexto">
+                                    <i class="fas fa-align-left me-1"></i>Texto
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_interativo_kw"
+                                       id="tipoKwBotoes" value="botoes"
+                                       onchange="atualizarEditorInterativo('kw')">
+                                <label class="form-check-label small" for="tipoKwBotoes">
+                                    <i class="fas fa-grip-horizontal me-1"></i>Botões
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_interativo_kw"
+                                       id="tipoKwLista" value="lista"
+                                       onchange="atualizarEditorInterativo('kw')">
+                                <label class="form-check-label small" for="tipoKwLista">
+                                    <i class="fas fa-list me-1"></i>Lista
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Builder de botões -->
+                    <div id="builderBotoes_kw" class="border rounded p-2" style="display:none;background:#f8fafc;">
+                        <div class="small text-muted mb-2">Botões (máx. 3) — o funcionário toca para responder</div>
+                        <div id="listaBotoes_kw"></div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm mt-1"
+                                onclick="addBotao('kw')">
+                            <i class="fas fa-plus me-1"></i>Adicionar Botão
+                        </button>
+                    </div>
+                    <!-- Builder de lista -->
+                    <div id="builderLista_kw" class="border rounded p-2" style="display:none;background:#f8fafc;">
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold mb-1">Texto do Botão do Menu</label>
+                            <input type="text" id="listaTitulo_kw" class="form-control form-control-sm"
+                                   placeholder="Ex: Ver opções" maxlength="20">
+                        </div>
+                        <div class="small text-muted mb-1">Opções do menu</div>
+                        <div id="listaOpcoes_kw"></div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm mt-1"
+                                onclick="addOpcaoLista('kw')">
+                            <i class="fas fa-plus me-1"></i>Adicionar Opção
+                        </button>
+                    </div>
+                    <!-- Hidden fields -->
+                    <input type="hidden" name="tipo_msg" id="inputKwTipoMsg" value="texto">
+                    <input type="hidden" name="interativo_json" id="inputKwInterativoJson">
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="apenas_funcionario"
+                               id="chkKwApenasFuncionario" checked>
+                        <label class="form-check-label small" for="chkKwApenasFuncionario">
+                            Enviar apenas ao funcionário (não encaminhar ao gestor)
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-sm btn-primary"
+                            onclick="serializarParaForm('kw', 'inputKwTipoMsg', 'inputKwInterativoJson')">
+                        <i class="fas fa-save me-1"></i>Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <!-- ── Modal criar / editar regra ───────────────────────────────────────────── -->
 <div class="modal fade" id="modalRegra" tabindex="-1">
@@ -322,7 +685,6 @@
                                 {% for k, v in categorias.items() %}
                                 <option value="{{ k }}">{{ v }}</option>
                                 {% endfor %}
-                                <option value="automacao">Automação</option>
                             </select>
                         </div>
                         <div class="col-md-3 d-flex align-items-end pb-1">
@@ -472,6 +834,30 @@
                                         <textarea name="template_manager" id="txaManager"
                                                   class="form-control form-control-sm" rows="2"
                                                   placeholder="Mensagem enviada ao gestor/RH..."></textarea>
+                                        <!-- Interativo: Gestor -->
+                                        <div class="d-flex gap-3 mt-2">
+                                            {% for v, lbl in [('texto','Texto'),('botoes','Botões'),('lista','Lista')] %}
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="tipo_interativo_mgr"
+                                                       id="tipoMgr{{ v }}" value="{{ v }}"
+                                                       {% if v == 'texto' %}checked{% endif %}
+                                                       onchange="atualizarEditorInterativo('mgr')">
+                                                <label class="form-check-label small" for="tipoMgr{{ v }}">{{ lbl }}</label>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                        <div id="builderBotoes_mgr" class="border rounded p-2 mt-1" style="display:none;background:#f8fafc;">
+                                            <div class="small text-muted mb-1">Botões (máx. 3)</div>
+                                            <div id="listaBotoes_mgr"></div>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addBotao('mgr')"><i class="fas fa-plus me-1"></i>Botão</button>
+                                        </div>
+                                        <div id="builderLista_mgr" class="border rounded p-2 mt-1" style="display:none;background:#f8fafc;">
+                                            <input type="text" id="listaTitulo_mgr" class="form-control form-control-sm mb-2" placeholder="Texto do botão do menu" maxlength="20">
+                                            <div id="listaOpcoes_mgr"></div>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addOpcaoLista('mgr')"><i class="fas fa-plus me-1"></i>Opção</button>
+                                        </div>
+                                        <input type="hidden" name="template_manager_tipo" id="inputMgrTipoMsg" value="texto">
+                                        <input type="hidden" name="template_manager_interativo" id="inputMgrInterativoJson">
                                     </div>
                                     <div id="divTemplateEmployee" style="display:none;">
                                         <label class="form-label small fw-semibold">
@@ -480,6 +866,30 @@
                                         <textarea name="template_employee" id="txaEmployee"
                                                   class="form-control form-control-sm" rows="2"
                                                   placeholder="Mensagem enviada ao próprio funcionário..."></textarea>
+                                        <!-- Interativo: Funcionário -->
+                                        <div class="d-flex gap-3 mt-2">
+                                            {% for v, lbl in [('texto','Texto'),('botoes','Botões'),('lista','Lista')] %}
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="tipo_interativo_emp"
+                                                       id="tipoEmp{{ v }}" value="{{ v }}"
+                                                       {% if v == 'texto' %}checked{% endif %}
+                                                       onchange="atualizarEditorInterativo('emp')">
+                                                <label class="form-check-label small" for="tipoEmp{{ v }}">{{ lbl }}</label>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                        <div id="builderBotoes_emp" class="border rounded p-2 mt-1" style="display:none;background:#f8fafc;">
+                                            <div class="small text-muted mb-1">Botões (máx. 3)</div>
+                                            <div id="listaBotoes_emp"></div>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addBotao('emp')"><i class="fas fa-plus me-1"></i>Botão</button>
+                                        </div>
+                                        <div id="builderLista_emp" class="border rounded p-2 mt-1" style="display:none;background:#f8fafc;">
+                                            <input type="text" id="listaTitulo_emp" class="form-control form-control-sm mb-2" placeholder="Texto do botão do menu" maxlength="20">
+                                            <div id="listaOpcoes_emp"></div>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addOpcaoLista('emp')"><i class="fas fa-plus me-1"></i>Opção</button>
+                                        </div>
+                                        <input type="hidden" name="template_employee_tipo" id="inputEmpTipoMsg" value="texto">
+                                        <input type="hidden" name="template_employee_interativo" id="inputEmpInterativoJson">
                                     </div>
                                 </div>
                             </div>
@@ -520,7 +930,8 @@
                 <div class="modal-footer py-2" style="flex-shrink:0;">
                     <button type="button" class="btn btn-sm btn-outline-secondary"
                             data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-sm btn-primary">
+                    <button type="submit" class="btn btn-sm btn-primary"
+                            onclick="serializarParaForm('mgr','inputMgrTipoMsg','inputMgrInterativoJson'); serializarParaForm('emp','inputEmpTipoMsg','inputEmpInterativoJson')">
                         <i class="fas fa-save me-1"></i>Salvar Regra
                     </button>
                 </div>
@@ -554,6 +965,8 @@ function abrirNovaRegra(triggerOrCat) {
         document.getElementById('selCategoria').value = triggerOrCat;
     }
 
+    carregarEditorInterativo('mgr', 'texto', '');
+    carregarEditorInterativo('emp', 'texto', '');
     updateTriggerFields();
     updateConditionFields();
     updateTemplateVisibility();
@@ -561,7 +974,8 @@ function abrirNovaRegra(triggerOrCat) {
 }
 
 // ── Editar regra ─────────────────────────────────────────────────────────────
-function abrirEditar(r) {
+function abrirEditar(btn) {
+    const r = JSON.parse(btn.dataset.rule);
     document.getElementById('modalRegraTitle').textContent = 'Editar Regra';
     document.getElementById('formRegra').action = `/notificacoes/${r.id}/editar`;
     document.getElementById('inputRid').value           = r.id;
@@ -580,6 +994,8 @@ function abrirEditar(r) {
     document.getElementById('txaEmployee').value        = r.template_employee || '';
     document.getElementById('chkWorkingHours').checked  = r.only_working_hours;
     document.getElementById('chkSendImm').checked       = r.send_immediately;
+    carregarEditorInterativo('mgr', r.template_manager_tipo || 'texto', r.template_manager_interativo || '');
+    carregarEditorInterativo('emp', r.template_employee_tipo || 'texto', r.template_employee_interativo || '');
     updateTriggerFields();
     updateConditionFields();
     updateTemplateVisibility();
@@ -685,6 +1101,235 @@ function executarRegra(rid, nome) {
             alert('Erro ao executar.');
             if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play"></i>'; }
         });
+}
+
+// ── SysMsg modal ─────────────────────────────────────────────────────────────
+let _lastSysMsgTa = null;
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.sysmsg-textarea').forEach(
+        ta => ta.addEventListener('focus', () => { _lastSysMsgTa = ta; })
+    );
+});
+function insertSysMsgVar(v, e) {
+    e.preventDefault();
+    const ta = _lastSysMsgTa || document.getElementById('inputSysMsgValor');
+    if (!ta) return;
+    const s = ta.selectionStart, end = ta.selectionEnd;
+    ta.value = ta.value.slice(0, s) + v + ta.value.slice(end);
+    ta.selectionStart = ta.selectionEnd = s + v.length;
+    ta.focus();
+}
+function abrirSysMsgEditar(chave, label, valor, isCustom) {
+    document.getElementById('modalSysMsgTitle').textContent = 'Editar Mensagem';
+    document.getElementById('formSysMsg').action = '{{ url_for("notificacoes.chatbot_msg_salvar") }}';
+    document.getElementById('inputSysMsgChave').value = chave;
+    document.getElementById('inputSysMsgValor').value = valor;
+    document.getElementById('labelSysMsgTexto').textContent = label;
+    document.getElementById('divSysMsgLabel').style.display = 'none';
+    document.getElementById('divSysMsgChaveInput').style.display = 'none';
+}
+function abrirSysMsgNova() {
+    document.getElementById('modalSysMsgTitle').textContent = 'Nova Mensagem do Sistema';
+    document.getElementById('formSysMsg').action = '{{ url_for("notificacoes.chatbot_msg_nova") }}';
+    document.getElementById('inputSysMsgChave').value = '';
+    document.getElementById('inputSysMsgValor').value = '';
+    document.getElementById('inputSysMsgLabel').value = '';
+    document.getElementById('inputSysMsgChaveSufixo').value = '';
+    document.getElementById('labelSysMsgTexto').textContent = 'Mensagem';
+    document.getElementById('divSysMsgLabel').style.display = '';
+    document.getElementById('divSysMsgChaveInput').style.display = '';
+    // Ao submeter form nova, precisa unir prefixo + sufixo em campo 'chave'
+    document.getElementById('formSysMsg').onsubmit = function() {
+        const suf = document.getElementById('inputSysMsgChaveSufixo').value.trim();
+        document.getElementById('inputSysMsgChave').value = 'bot_custom_' + suf;
+        return true;
+    };
+}
+
+// ── MenuEdit modal ───────────────────────────────────────────────────────────
+function abrirMenuEditar(btnId, titulo, desc) {
+    document.getElementById('inputMenuChave').value  = btnId + '__titulo';
+    document.getElementById('inputMenuChave2').value = btnId + '__desc';
+    document.getElementById('inputMenuTitulo').value = titulo;
+    document.getElementById('inputMenuDesc').value   = desc;
+    // O form salva só titulo; desc é salvo via segundo submit assíncrono
+    document.getElementById('formMenuEdit').onsubmit = function(e) {
+        e.preventDefault();
+        const chave1  = document.getElementById('inputMenuChave').value;
+        const chave2  = document.getElementById('inputMenuChave2').value;
+        const titulo  = document.getElementById('inputMenuTitulo').value;
+        const descVal = document.getElementById('inputMenuDesc').value;
+        const btn = document.getElementById('btnMenuEditSalvar');
+        btn.disabled = true;
+        Promise.all([
+            fetch('{{ url_for("notificacoes.chatbot_msg_salvar") }}', {
+                method: 'POST',
+                headers: {'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},
+                body: new URLSearchParams({chave: chave1, valor: titulo}),
+            }),
+            fetch('{{ url_for("notificacoes.chatbot_msg_salvar") }}', {
+                method: 'POST',
+                headers: {'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},
+                body: new URLSearchParams({chave: chave2, valor: descVal}),
+            }),
+        ]).then(() => { location.reload(); })
+          .catch(() => { btn.disabled = false; alert('Erro ao salvar.'); });
+    };
+}
+function abrirKeywordNovaTipoMenu() {
+    abrirKeywordNova();
+    // Pré-preenche a nota de que essa keyword também aparece no menu
+    setTimeout(() => {
+        const ta = document.getElementById('inputKwResposta');
+        if (ta && !ta.value) ta.placeholder = 'Esta resposta aparecerá quando o funcionário selecionar esta opção no menu.';
+    }, 100);
+}
+
+// ── Keyword modal ─────────────────────────────────────────────────────────────
+let _lastKwTextarea = null;
+document.querySelectorAll('.kw-textarea').forEach(
+    ta => ta.addEventListener('focus', () => { _lastKwTextarea = ta; })
+);
+function insertKwVar(v, e) {
+    e.preventDefault();
+    const ta = _lastKwTextarea || document.getElementById('inputKwResposta');
+    if (!ta) return;
+    const s = ta.selectionStart, end = ta.selectionEnd;
+    ta.value = ta.value.slice(0, s) + v + ta.value.slice(end);
+    ta.selectionStart = ta.selectionEnd = s + v.length;
+    ta.focus();
+}
+function abrirKeywordNova() {
+    document.getElementById('modalKeywordTitle').textContent = 'Nova Palavra-chave';
+    document.getElementById('formKeyword').action = '{{ url_for("notificacoes.keyword_nova") }}';
+    document.getElementById('inputKw').value = '';
+    document.getElementById('inputKwResposta').value = '';
+    document.getElementById('chkKwApenasFuncionario').checked = true;
+    carregarEditorInterativo('kw', 'texto', '');
+}
+function abrirKeywordEditar(btn) {
+    const d = JSON.parse(btn.dataset.kw);
+    document.getElementById('modalKeywordTitle').textContent = 'Editar Palavra-chave';
+    document.getElementById('formKeyword').action = `/notificacoes/keyword/${d.id}/editar`;
+    document.getElementById('inputKw').value = d.keyword;
+    document.getElementById('inputKwResposta').value = d.resposta;
+    document.getElementById('chkKwApenasFuncionario').checked = d.apenas_funcionario;
+    carregarEditorInterativo('kw', d.tipo_msg || 'texto', d.interativo_json || '');
+}
+function toggleKeyword(kid, btn) {
+    fetch(`/notificacoes/keyword/${kid}/toggle`, { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { if (d.ok) location.reload(); });
+}
+
+// ── Editor de Mensagem Interativa ─────────────────────────────────────────────
+function atualizarEditorInterativo(prefix) {
+    const sel = document.querySelector(`input[name="tipo_interativo_${prefix}"]:checked`);
+    const tipo = sel ? sel.value : 'texto';
+    const bb = document.getElementById(`builderBotoes_${prefix}`);
+    const bl = document.getElementById(`builderLista_${prefix}`);
+    if (bb) bb.style.display = tipo === 'botoes' ? '' : 'none';
+    if (bl) bl.style.display = tipo === 'lista'  ? '' : 'none';
+}
+
+function addBotao(prefix) {
+    const container = document.getElementById(`listaBotoes_${prefix}`);
+    const idx = container.children.length;
+    if (idx >= 3) return;
+    const row = document.createElement('div');
+    row.className = 'd-flex gap-2 mb-1 align-items-center';
+    row.innerHTML = `<input type="text" class="form-control form-control-sm botao-title"
+                            placeholder="Texto do botão (máx. 20 chars)" maxlength="20">
+                     <input type="text" class="form-control form-control-sm botao-id" style="width:110px;"
+                            placeholder="ID (sem espaços)" value="btn_${idx+1}">
+                     <button type="button" class="btn btn-sm btn-outline-danger"
+                             onclick="this.closest('div').remove()">
+                         <i class="fas fa-times"></i>
+                     </button>`;
+    container.appendChild(row);
+}
+
+function addOpcaoLista(prefix) {
+    const container = document.getElementById(`listaOpcoes_${prefix}`);
+    const idx = container.children.length;
+    const row = document.createElement('div');
+    row.className = 'd-flex gap-2 mb-1 align-items-center';
+    row.innerHTML = `<input type="text" class="form-control form-control-sm opcao-title"
+                            placeholder="Título da opção (máx. 24 chars)" maxlength="24">
+                     <input type="text" class="form-control form-control-sm opcao-desc"
+                            placeholder="Descrição (opcional)" maxlength="72">
+                     <input type="text" class="form-control form-control-sm opcao-id" style="width:90px;"
+                            placeholder="ID" value="op_${idx+1}">
+                     <button type="button" class="btn btn-sm btn-outline-danger"
+                             onclick="this.closest('div').remove()">
+                         <i class="fas fa-times"></i>
+                     </button>`;
+    container.appendChild(row);
+}
+
+function serializarParaForm(prefix, tipoFieldId, jsonFieldId) {
+    const sel = document.querySelector(`input[name="tipo_interativo_${prefix}"]:checked`);
+    const tipo = sel ? sel.value : 'texto';
+    document.getElementById(tipoFieldId).value = tipo;
+
+    let json = '';
+    if (tipo === 'botoes') {
+        const rows = document.querySelectorAll(`#listaBotoes_${prefix} > div`);
+        const botoes = Array.from(rows).map(r => ({
+            id:    r.querySelector('.botao-id').value.trim() || `btn_${Math.random().toString(36).slice(2,6)}`,
+            title: r.querySelector('.botao-title').value.trim(),
+        })).filter(b => b.title);
+        if (botoes.length) json = JSON.stringify({botoes});
+    } else if (tipo === 'lista') {
+        const titulo_botao = (document.getElementById(`listaTitulo_${prefix}`) || {}).value || 'Ver opções';
+        const rows = document.querySelectorAll(`#listaOpcoes_${prefix} > div`);
+        const opcoes = Array.from(rows).map(r => ({
+            id:          r.querySelector('.opcao-id').value.trim() || `op_${Math.random().toString(36).slice(2,6)}`,
+            title:       r.querySelector('.opcao-title').value.trim(),
+            description: r.querySelector('.opcao-desc').value.trim(),
+        })).filter(o => o.title);
+        if (opcoes.length) json = JSON.stringify({titulo_botao, secoes: [{title: 'Opções', rows: opcoes}]});
+    }
+    document.getElementById(jsonFieldId).value = json;
+}
+
+function carregarEditorInterativo(prefix, tipoMsg, interativoJson) {
+    // Seleciona o radio correto
+    const radio = document.getElementById(`tipo${prefix.charAt(0).toUpperCase()+prefix.slice(1)}${tipoMsg}`) ||
+                  document.querySelector(`input[name="tipo_interativo_${prefix}"][value="${tipoMsg}"]`);
+    if (radio) { radio.checked = true; atualizarEditorInterativo(prefix); }
+
+    // Limpa builders existentes
+    const bb = document.getElementById(`listaBotoes_${prefix}`);
+    const bo = document.getElementById(`listaOpcoes_${prefix}`);
+    if (bb) bb.innerHTML = '';
+    if (bo) bo.innerHTML = '';
+
+    if (!interativoJson) return;
+    try {
+        const dados = JSON.parse(interativoJson);
+        if (tipoMsg === 'botoes' && dados.botoes) {
+            dados.botoes.forEach(b => {
+                addBotao(prefix);
+                const rows = document.querySelectorAll(`#listaBotoes_${prefix} > div`);
+                const last = rows[rows.length - 1];
+                last.querySelector('.botao-title').value = b.title || '';
+                last.querySelector('.botao-id').value    = b.id    || '';
+            });
+        } else if (tipoMsg === 'lista') {
+            const tit = document.getElementById(`listaTitulo_${prefix}`);
+            if (tit) tit.value = dados.titulo_botao || '';
+            const opcoes = (dados.secoes || []).flatMap(s => s.rows || []);
+            opcoes.forEach(o => {
+                addOpcaoLista(prefix);
+                const rows = document.querySelectorAll(`#listaOpcoes_${prefix} > div`);
+                const last = rows[rows.length - 1];
+                last.querySelector('.opcao-title').value = o.title       || '';
+                last.querySelector('.opcao-desc').value  = o.description || '';
+                last.querySelector('.opcao-id').value    = o.id          || '';
+            });
+        }
+    } catch(e) { /* JSON inválido — ignora */ }
 }
 
 // ── Activate chatbot tab via hash ─────────────────────────────────────────────

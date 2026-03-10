@@ -12,6 +12,7 @@ Endpoint REST correto (obtido via /docs/swagger.json):
 Authorization: Bearer {MEGAAPI_TOKEN}
 """
 import base64
+import json as _json
 import os
 import requests
 from datetime import datetime
@@ -96,6 +97,181 @@ def enviar_texto(celular: str, mensagem: str, func_id: str = None,
         log.status = f'erro: {str(e)[:80]}'
         db.session.commit()
         return False
+
+
+def enviar_botoes(celular: str, texto: str, botoes: list,
+                  func_id: str = None, tipo: str = 'saida') -> bool:
+    """Envia mensagem com botões interativos via Mega-API.
+
+    botoes: lista de dicts {"id": "btn_sim", "title": "👍 Sim, confirmo"}
+    Máximo 3 botões por limitação do WhatsApp.
+
+    Fallback automático: se a API recusar (ex: conta não suporta), envia
+    texto simples numerado.
+    """
+    fone = _fone(celular)
+    log = WhatsappLog(
+        funcionario_id=func_id,
+        tipo=tipo,
+        mensagem=texto,
+        celular=fone,
+        status='enviado',
+        criado_em=datetime.utcnow(),
+    )
+    db.session.add(log)
+
+    if not _configured():
+        log.status = 'sem_config'
+        db.session.commit()
+        return False
+
+    try:
+        payload = {
+            'messageData': {
+                'to': fone,
+                'title': texto,
+                'buttons': [
+                    {'buttonId': b['id'], 'buttonText': {'displayText': b['title']}, 'type': 1}
+                    for b in botoes
+                ],
+                'headerType': 1,
+            }
+        }
+        resp = requests.post(
+            f'{_base_url()}/buttons',
+            json=payload,
+            headers=_headers(),
+            timeout=10,
+        )
+        ok = resp.status_code in (200, 201)
+        if ok:
+            log.status = 'enviado'
+            db.session.commit()
+            return True
+
+        # Fallback: envia como texto numerado
+        opcoes = '\n'.join(f'{i+1}. {b["title"]}' for i, b in enumerate(botoes))
+        fallback = f'{texto}\n\n{opcoes}'
+        log.mensagem = f'[fallback texto] {fallback}'
+        log.status = 'fallback_texto'
+        db.session.commit()
+        return enviar_texto(celular, fallback, func_id=func_id, tipo=tipo)
+    except Exception as e:
+        log.status = f'erro: {str(e)[:80]}'
+        db.session.commit()
+        return False
+
+
+def enviar_menu_lista(celular: str, texto: str, titulo_botao: str,
+                      secoes: list, func_id: str = None, tipo: str = 'saida') -> bool:
+    """Envia List Message (menu) via Mega-API — ideal para > 3 opções.
+
+    secoes: lista de dicts:
+      {"title": "Seção", "rows": [{"id": "op1", "title": "Opção 1", "description": "..."}]}
+
+    Fallback: envia texto numerado com todas as opções.
+    """
+    fone = _fone(celular)
+    todas_opcoes = [r for s in secoes for r in s.get('rows', [])]
+    log = WhatsappLog(
+        funcionario_id=func_id,
+        tipo=tipo,
+        mensagem=texto,
+        celular=fone,
+        status='enviado',
+        criado_em=datetime.utcnow(),
+    )
+    db.session.add(log)
+
+    if not _configured():
+        log.status = 'sem_config'
+        db.session.commit()
+        return False
+
+    try:
+        payload = {
+            'messageData': {
+                'to': fone,
+                'text': texto,
+                'buttonText': titulo_botao,
+                'sections': secoes,
+            }
+        }
+        resp = requests.post(
+            f'{_base_url()}/listMessage',
+            json=payload,
+            headers=_headers(),
+            timeout=10,
+        )
+        ok = resp.status_code in (200, 201)
+        if ok:
+            log.status = 'enviado'
+            db.session.commit()
+            return True
+
+        # Fallback: texto numerado
+        opcoes = '\n'.join(f'{i+1}. {r["title"]}' for i, r in enumerate(todas_opcoes))
+        fallback = f'{texto}\n\n{opcoes}\n\n_(Digite o número da opção)_'
+        log.mensagem = f'[fallback texto] {fallback}'
+        log.status = 'fallback_texto'
+        db.session.commit()
+        return enviar_texto(celular, fallback, func_id=func_id, tipo=tipo)
+    except Exception as e:
+        log.status = f'erro: {str(e)[:80]}'
+        db.session.commit()
+        return False
+
+
+def enviar_msg(celular: str, texto: str,
+               tipo_msg: str = 'texto',
+               interativo_json: str = None,
+               func_id: str = None,
+               tipo: str = 'saida',
+               tipo_regra: str = None,
+               data_ref=None) -> bool:
+    """Dispatcher unificado: envia texto, botões ou lista dependendo de tipo_msg.
+
+    interativo_json (str): JSON serializado com estrutura:
+      Botões: {"botoes": [{"id": "btn_1", "title": "Opção 1"}, ...]}
+      Lista:  {"titulo_botao": "Ver opções",
+               "secoes": [{"title": "Seção", "rows": [{"id": "r1", "title": "Item", "description": "..."}]}]}
+    """
+    if tipo_msg == 'botoes' and interativo_json:
+        try:
+            dados = _json.loads(interativo_json)
+            botoes = dados.get('botoes', [])
+            if botoes:
+                return enviar_botoes(celular, texto, botoes, func_id=func_id, tipo=tipo)
+        except Exception:
+            pass  # fallback para texto
+
+    elif tipo_msg == 'lista' and interativo_json:
+        try:
+            dados = _json.loads(interativo_json)
+            titulo_botao = dados.get('titulo_botao', 'Ver opções')
+            secoes = dados.get('secoes', [])
+            if secoes:
+                return enviar_menu_lista(celular, texto, titulo_botao, secoes,
+                                         func_id=func_id, tipo=tipo)
+        except Exception:
+            pass  # fallback para texto
+
+    return enviar_texto(celular, texto, func_id=func_id, tipo=tipo,
+                        tipo_regra=tipo_regra, data_ref=data_ref)
+
+
+def baixar_midia(url: str) -> bytes | None:
+    """Baixa mídia (imagem/PDF) de uma URL da Mega-API.
+    Retorna bytes ou None em caso de falha.
+    """
+    try:
+        headers = _headers() if MEGAAPI_HOST in url else {}
+        resp = requests.get(url, headers=headers, timeout=30)
+        if resp.status_code == 200:
+            return resp.content
+    except Exception:
+        pass
+    return None
 
 
 def enviar_documento(celular: str, pdf_bytes: bytes, filename: str,

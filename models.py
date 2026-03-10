@@ -357,6 +357,11 @@ class NotificationRule(db.Model):
     # Message templates (support variables: {name} {full_name} {minutes} {turno} {inicio} {fim} {data})
     template_manager  = db.Column(db.Text, nullable=True)
     template_employee = db.Column(db.Text, nullable=True)
+    # Tipo de mensagem interativa por destinatário: texto | botoes | lista
+    template_employee_tipo = db.Column(db.String(20), default='texto', nullable=True)
+    template_employee_interativo = db.Column(db.Text, nullable=True)
+    template_manager_tipo  = db.Column(db.String(20), default='texto', nullable=True)
+    template_manager_interativo  = db.Column(db.Text, nullable=True)
 
     # Constraints
     only_working_hours = db.Column(db.Boolean, default=True)
@@ -565,6 +570,48 @@ class NotificacaoFila(db.Model):
 
     def __repr__(self):
         return f'<NotificacaoFila {self.id} [{self.status}] enviar_apos={self.enviar_apos}>'
+
+
+class BotKeywordRule(db.Model):
+    """Regra de resposta automática baseada em palavra-chave.
+    O robô verifica estas regras antes de qualquer outra lógica.
+    """
+    __tablename__ = 'bot_keyword_rules'
+    id = db.Column(db.Integer, primary_key=True)
+    # Palavra-chave ou frase (case-insensitive)
+    keyword = db.Column(db.String(100), nullable=False)
+    # Texto principal da resposta; suporta {{nome}}, {{data}}, {{turno}}
+    resposta = db.Column(db.Text, nullable=False)
+    # Tipo de mensagem: texto | botoes | lista
+    tipo_msg = db.Column(db.String(20), default='texto', nullable=False)
+    # JSON com botões ou seções (quando tipo_msg != 'texto')
+    interativo_json = db.Column(db.Text, nullable=True)
+    # Se True, a resposta só é enviada para o funcionário (não encaminha ao gestor)
+    apenas_funcionario = db.Column(db.Boolean, default=True)
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<BotKeywordRule "{self.keyword}">'
+
+
+class ChatState(db.Model):
+    """Máquina de estados da conversa WhatsApp por funcionário.
+    Permite ao bot saber "o que estava perguntando" quando chega uma resposta.
+    """
+    __tablename__ = 'chat_states'
+    id = db.Column(db.Integer, primary_key=True)
+    funcionario_id = db.Column(db.String(50), db.ForeignKey('funcionarios.id'), nullable=False, unique=True)
+    # Estado atual: IDLE | AGUARDANDO_ATESTADO | AGUARDANDO_MINUTOS_ATRASO | AGUARDANDO_AUSENCIA
+    estado = db.Column(db.String(50), default='IDLE', nullable=False)
+    # JSON livre para guardar contexto (ex: {"turno_id": 5, "data": "2025-06-01"})
+    contexto = db.Column(db.Text, nullable=True)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    funcionario = db.relationship('Funcionario', backref=db.backref('chat_state', uselist=False))
+
+    def __repr__(self):
+        return f'<ChatState {self.funcionario_id} [{self.estado}]>'
 
 
 class TabelaSalarial(db.Model):

@@ -1,9 +1,9 @@
-import hmac, hashlib, os
+import hmac, hashlib, os, json
 from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required
 from extensions import db
-from models import WhatsappLog, Funcionario, AlocacaoDiaria, UnidadeLider, Batida, NotificacaoFila
+from models import WhatsappLog, Funcionario, AlocacaoDiaria, UnidadeLider, Batida, NotificacaoFila, ChatState
 
 whatsapp_bp = Blueprint('whatsapp', __name__, url_prefix='/whatsapp')
 
@@ -65,39 +65,77 @@ def webhook():
     return jsonify({'ok': True}), 200
 
 
+def _get_or_create_state(func_id: str) -> 'ChatState':
+    """Retorna ou cria o ChatState do funcionário."""
+    state = ChatState.query.filter_by(funcionario_id=func_id).first()
+    if not state:
+        state = ChatState(funcionario_id=func_id, estado='IDLE')
+        db.session.add(state)
+    return state
+
+
+def _set_state(func_id: str, estado: str, contexto: dict = None):
+    state = _get_or_create_state(func_id)
+    state.estado = estado
+    state.contexto = json.dumps(contexto or {})
+    state.atualizado_em = datetime.utcnow()
+    db.session.commit()
+
+
+def _enviar_menu_principal(func: 'Funcionario'):
+    """Envia o Menu Principal como List Message."""
+    from services.whatsapp_bot import enviar_menu_lista
+    nome = func.nome.split()[0]
+    enviar_menu_lista(
+        celular=func.celular,
+        texto=f'Olá, *{nome}*! 👋 Como posso ajudar?',
+        titulo_botao='Ver opções',
+        secoes=[{
+            'title': 'Autoatendimento',
+            'rows': [
+                {'id': 'menu_escala',   'title': '📅 Minha Escala',    'description': 'Ver turnos dos próximos 7 dias'},
+                {'id': 'menu_atraso',   'title': '⏰ Informar Atraso', 'description': 'Avisar que vai atrasar'},
+                {'id': 'menu_ausencia', 'title': '🚨 Informar Ausência','description': 'Confirmar falta hoje'},
+                {'id': 'menu_atestado', 'title': '🩺 Enviar Atestado', 'description': 'Foto ou PDF do atestado'},
+                {'id': 'menu_rh',       'title': '👤 Falar com RH',    'description': 'Encaminhar para atendimento humano'},
+            ],
+        }],
+        func_id=func.id,
+        tipo='menu_principal',
+    )
+
+
 def _processar_mensagem(data: dict):
-    """RF4.3 – Processa mensagem de texto ou áudio recebida.
-    - SIM: confirma check-in prévio na alocação do dia
-    - NÃO/NAO: salva como ausência justificada
-    - Áudio: transcreve via Whisper e reprocessa como texto
-    - Texto livre: salva e notifica gestor
+    """Processa mensagem inbound da Mega-API.
+
+    Cenários suportados:
+    1. Interactive reply (button_reply / list_reply) — clique num botão ou lista
+    2. Mídia (image/document) — atestado médico quando estado == AGUARDANDO_ATESTADO
+    3. Áudio — transcreve via Whisper e reprocessa como texto
+    4. Texto:
+       a. Saudações ("oi", "menu"…) → Menu Principal
+       b. Estado AGUARDANDO_MINUTOS_ATRASO → número de minutos
+       c. SIM/NÃO (botão de check-in prévio)
+       d. Justificativa automática de batida inconsistente
+       e. Texto livre → transbordo ao gestor
     """
-    from services.whatsapp_bot import enviar_texto
+    from services.whatsapp_bot import enviar_texto, enviar_botoes, baixar_midia
 
     celular = data.get('from', '').replace('@s.whatsapp.net', '')
-    tipo_msg = data.get('type', 'text')  # text | audio | ptt
+    tipo_msg = data.get('type', 'text')  # text | audio | ptt | image | document | interactive
 
-    # ── Transcrição de áudio (RF4.3) ──────────────────────────────────────────
-    if tipo_msg in ('audio', 'ptt'):
-        texto = _transcrever_audio(data)
-        if not texto:
-            return
-    else:
-        texto = (data.get('body') or data.get('text') or '').strip()
-
-    if not celular or not texto:
-        return
-
-    # ── Identificar funcionário pelo celular ──────────────────────────────────
+    # ── Identificar funcionário ───────────────────────────────────────────────
     digits = ''.join(c for c in celular if c.isdigit())[-11:]
     func = Funcionario.query.filter(
         Funcionario.celular.like(f'%{digits[-8:]}%')
     ).first()
 
+    # ── Log de entrada ────────────────────────────────────────────────────────
+    log_mensagem = data.get('body') or data.get('text') or tipo_msg
     log = WhatsappLog(
         funcionario_id=func.id if func else None,
         tipo='entrada',
-        mensagem=texto,
+        mensagem=str(log_mensagem)[:500],
         celular=celular,
         status='recebido',
         criado_em=datetime.utcnow(),
@@ -105,13 +143,134 @@ def _processar_mensagem(data: dict):
     db.session.add(log)
     db.session.commit()
 
-    if not func:
+    if not func or not celular:
+        return
+
+    state = _get_or_create_state(func.id)
+    estado_atual = state.estado or 'IDLE'
+    ctx = json.loads(state.contexto or '{}')
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # 1. Interactive reply (button_reply ou list_reply)
+    # ══════════════════════════════════════════════════════════════════════════
+    interactive = data.get('interactive') or data.get('buttonResponse') or {}
+    btn_id = (
+        (interactive.get('button_reply') or {}).get('id')
+        or (interactive.get('list_reply') or {}).get('id')
+        or interactive.get('selectedButtonId')
+        or interactive.get('selectedRowId')
+        or ''
+    )
+
+    if btn_id:
+        _processar_interactive(func, btn_id, estado_atual, ctx)
+        return
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # 2. Mídia (imagem / documento) → Atestado
+    # ══════════════════════════════════════════════════════════════════════════
+    if tipo_msg in ('image', 'document'):
+        if estado_atual == 'AGUARDANDO_ATESTADO':
+            _processar_atestado(func, data)
+        else:
+            # Mídia fora de contexto → transbordo
+            lider_cel = _celular_lider(func)
+            if lider_cel:
+                enviar_texto(
+                    celular=lider_cel,
+                    mensagem=f'📎 *{func.nome}* enviou uma mídia ({tipo_msg}). Verifique pelo painel.',
+                    func_id=func.id,
+                    tipo='transbordo_midia',
+                )
+        return
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # 3. Áudio → transcreve
+    # ══════════════════════════════════════════════════════════════════════════
+    if tipo_msg in ('audio', 'ptt'):
+        texto = _transcrever_audio(data)
+        if not texto:
+            return
+    else:
+        texto = (data.get('body') or data.get('text') or '').strip()
+
+    if not texto:
         return
 
     resposta_upper = texto.upper().strip()
 
-    # ── RF4.5: SIM → confirma check-in prévio ─────────────────────────────────
-    if resposta_upper in ('SIM', 'S', '1'):
+    # ══════════════════════════════════════════════════════════════════════════
+    # 4a. Estado AGUARDANDO_MINUTOS_ATRASO → recebe número
+    # ══════════════════════════════════════════════════════════════════════════
+    if estado_atual == 'AGUARDANDO_MINUTOS_ATRASO':
+        try:
+            minutos = int(''.join(c for c in texto if c.isdigit()))
+        except (ValueError, TypeError):
+            minutos = None
+        if minutos and 1 <= minutos <= 480:
+            lider_cel = _celular_lider(func)
+            if lider_cel:
+                enviar_texto(
+                    celular=lider_cel,
+                    mensagem=f'⏰ *{func.nome}* avisou que vai atrasar *{minutos} min* hoje.',
+                    func_id=func.id,
+                    tipo='aviso_atraso',
+                )
+            enviar_texto(
+                celular=func.celular,
+                mensagem=f'Certo, {func.nome.split()[0]}! Aviso de *{minutos} min* de atraso enviado ao seu gestor. ✅',
+                func_id=func.id,
+                tipo='aviso_atraso_confirmado',
+            )
+            _set_state(func.id, 'IDLE')
+        else:
+            enviar_texto(
+                celular=func.celular,
+                mensagem='Por favor, informe apenas o número de minutos (ex: "30").',
+                func_id=func.id,
+                tipo='bot_instrucao',
+            )
+        return
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # 4b. Palavras-chave personalizadas (banco de dados) — verificadas antes do menu
+    # ══════════════════════════════════════════════════════════════════════════
+    from models import BotKeywordRule
+    from services.whatsapp_bot import enviar_msg as _enviar_msg
+    for kw_rule in BotKeywordRule.query.filter_by(ativo=True).all():
+        if resposta_upper == kw_rule.keyword.upper().strip():
+            resp_kw = kw_rule.resposta.replace('{{nome}}', func.nome.split()[0])
+            _enviar_msg(
+                celular=func.celular, texto=resp_kw,
+                tipo_msg=getattr(kw_rule, 'tipo_msg', None) or 'texto',
+                interativo_json=getattr(kw_rule, 'interativo_json', None),
+                func_id=func.id, tipo='keyword_rule',
+            )
+            if not kw_rule.apenas_funcionario:
+                lider_cel = _celular_lider(func)
+                if lider_cel:
+                    enviar_texto(celular=lider_cel,
+                                 mensagem=f'[{kw_rule.keyword}] {func.nome}: {resp_kw}',
+                                 func_id=func.id, tipo='keyword_rule')
+            _set_state(func.id, 'IDLE')
+            return
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # 4c. Saudações → Menu Principal
+    # ══════════════════════════════════════════════════════════════════════════
+    _SAUDACOES = {'OI', 'OLÁ', 'OLA', 'MENU', 'OPCOES', 'OPÇÕES', 'AJUDA', 'HELP', 'START', 'INICIO', 'INÍCIO', 'OIE', 'EI'}
+    if resposta_upper in _SAUDACOES or resposta_upper.startswith('MENU'):
+        _set_state(func.id, 'IDLE')
+        _enviar_menu_principal(func)
+        return
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # 4c. SIM/NÃO (check-in prévio via texto — fallback de botão)
+    # ══════════════════════════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════════════
+    # 4d. SIM/NÃO (check-in prévio via texto — fallback de botão)
+    # ══════════════════════════════════════════════════════════════════════════
+    if resposta_upper in ('SIM', 'S', '1', 'BTN_SIM', 'CHECKIN_SIM'):
         hoje = date.today()
         aloc = AlocacaoDiaria.query.filter_by(funcionario_id=func.id, data=hoje).first()
         if aloc and not aloc.pre_checkin:
@@ -123,10 +282,10 @@ def _processar_mensagem(data: dict):
             func_id=func.id,
             tipo='checkin_confirmado',
         )
+        _set_state(func.id, 'IDLE')
         return
 
-    # ── NÃO → registra ausência justificada e notifica líder da unidade ────────
-    if resposta_upper in ('NÃO', 'NAO', 'N', '0'):
+    if resposta_upper in ('NÃO', 'NAO', 'N', '0', 'BTN_NAO', 'CHECKIN_NAO'):
         lider_cel = _celular_lider(func)
         if lider_cel:
             enviar_texto(
@@ -141,15 +300,14 @@ def _processar_mensagem(data: dict):
             func_id=func.id,
             tipo='ausencia_confirmada',
         )
+        _set_state(func.id, 'IDLE')
         return
 
-    # ── Texto livre → Justificativa Automática (RF02) ou Encaminha ao Líder ────
-    import re
-    # Se não for SIM/NÃO e tiver pelo menos 3 palavras, ou for explicitamente uma justificativa
-    # Vamos procurar uma batida inconsistente nos últimos 2 dias
+    # ══════════════════════════════════════════════════════════════════════════
+    # 4d. Justificativa automática de batida inconsistente
+    # ══════════════════════════════════════════════════════════════════════════
     hoje = date.today()
     ontem = hoje - timedelta(days=1)
-    
     ultima_inc = (
         Batida.query
         .filter(Batida.funcionario_id == func.id)
@@ -158,20 +316,15 @@ def _processar_mensagem(data: dict):
         .order_by(Batida.data.desc(), Batida.hora.desc())
         .first()
     )
-    
     if ultima_inc:
-        # Salva justificativa
         prefixo = f"[WhatsApp {datetime.now().strftime('%d/%m %H:%M')}] "
         nova_just = f"{prefixo}{texto}"
         if ultima_inc.justificativa:
             ultima_inc.justificativa = f"{ultima_inc.justificativa}\n{nova_just}"
         else:
             ultima_inc.justificativa = nova_just
-        
         ultima_inc.justificada_via = 'Bot'
         db.session.commit()
-        
-        # Confirma para o funcionário
         enviar_texto(
             celular=func.celular,
             mensagem=_bot_msg('bot_msg_justificativa_func', {
@@ -179,10 +332,8 @@ def _processar_mensagem(data: dict):
                 'data': ultima_inc.data.strftime('%d/%m'),
             }),
             func_id=func.id,
-            tipo='justificativa_automatica'
+            tipo='justificativa_automatica',
         )
-
-        # Notifica o líder (opcional, mas bom pra compliance)
         lider_cel = _celular_lider(func)
         if lider_cel:
             enviar_texto(
@@ -192,11 +343,13 @@ def _processar_mensagem(data: dict):
                     'mensagem': texto,
                 }),
                 func_id=func.id,
-                tipo='notificacao_gestor_justificativa'
+                tipo='notificacao_gestor_justificativa',
             )
         return
 
-    # Caso não encontre inconsistência, apenas encaminha ao líder como texto livre
+    # ══════════════════════════════════════════════════════════════════════════
+    # 4e. Texto livre → transbordo ao gestor
+    # ══════════════════════════════════════════════════════════════════════════
     lider_cel = _celular_lider(func)
     if lider_cel:
         enviar_texto(
@@ -207,6 +360,188 @@ def _processar_mensagem(data: dict):
             }),
             func_id=func.id,
             tipo='notificacao_gestor',
+        )
+
+
+def _processar_interactive(func: 'Funcionario', btn_id: str, _estado: str, _ctx: dict):
+    """Processa clique em botão ou seleção de lista."""
+    from services.whatsapp_bot import enviar_texto, enviar_botoes
+    from services.notification_processor import _montar_escala
+
+    nome = func.nome.split()[0]
+
+    if btn_id == 'menu_escala':
+        escala = _montar_escala(func, date.today())
+        enviar_texto(
+            celular=func.celular,
+            mensagem=f'📅 *Sua escala — próximos 7 dias:*\n\n{escala}',
+            func_id=func.id,
+            tipo='escala_solicitada',
+        )
+        _set_state(func.id, 'IDLE')
+
+    elif btn_id == 'menu_atraso':
+        enviar_texto(
+            celular=func.celular,
+            mensagem='⏰ Quantos minutos você vai atrasar? (Ex: *30*)',
+            func_id=func.id,
+            tipo='bot_instrucao',
+        )
+        _set_state(func.id, 'AGUARDANDO_MINUTOS_ATRASO')
+
+    elif btn_id == 'menu_ausencia':
+        lider_cel = _celular_lider(func)
+        if lider_cel:
+            enviar_texto(
+                celular=lider_cel,
+                mensagem=_bot_msg('bot_msg_nao_lider', {'nome': func.nome}),
+                func_id=func.id,
+                tipo='ausencia_confirmada',
+            )
+        enviar_texto(
+            celular=func.celular,
+            mensagem=_bot_msg('bot_msg_nao_func', {'nome': nome}),
+            func_id=func.id,
+            tipo='ausencia_confirmada',
+        )
+        _set_state(func.id, 'IDLE')
+
+    elif btn_id == 'menu_atestado':
+        enviar_texto(
+            celular=func.celular,
+            mensagem='🩺 Por favor, envie agora a *foto ou PDF* do seu atestado médico.',
+            func_id=func.id,
+            tipo='bot_instrucao',
+        )
+        _set_state(func.id, 'AGUARDANDO_ATESTADO')
+
+    elif btn_id == 'menu_rh':
+        enviar_texto(
+            celular=func.celular,
+            mensagem='👤 Transferindo para atendimento humano... O RH/Gestor entrará em contato em breve.',
+            func_id=func.id,
+            tipo='transbordo_rh',
+        )
+        lider_cel = _celular_lider(func)
+        if lider_cel:
+            enviar_texto(
+                celular=lider_cel,
+                mensagem=f'💬 *{func.nome}* solicitou falar com o RH/Gestor via WhatsApp.',
+                func_id=func.id,
+                tipo='transbordo_rh',
+            )
+        _set_state(func.id, 'IDLE')
+
+    # Botões de check-in prévio (PRE_CHECKIN)
+    elif btn_id in ('checkin_sim', 'btn_sim'):
+        hoje = date.today()
+        aloc = AlocacaoDiaria.query.filter_by(funcionario_id=func.id, data=hoje).first()
+        if aloc and not aloc.pre_checkin:
+            aloc.pre_checkin = True
+            db.session.commit()
+        enviar_texto(
+            celular=func.celular,
+            mensagem=_bot_msg('bot_msg_sim_func', {'nome': nome}),
+            func_id=func.id,
+            tipo='checkin_confirmado',
+        )
+        _set_state(func.id, 'IDLE')
+
+    elif btn_id in ('checkin_nao', 'btn_nao'):
+        lider_cel = _celular_lider(func)
+        if lider_cel:
+            enviar_texto(
+                celular=lider_cel,
+                mensagem=_bot_msg('bot_msg_nao_lider', {'nome': func.nome}),
+                func_id=func.id,
+                tipo='ausencia_confirmada',
+            )
+        enviar_texto(
+            celular=func.celular,
+            mensagem=_bot_msg('bot_msg_nao_func', {'nome': nome}),
+            func_id=func.id,
+            tipo='ausencia_confirmada',
+        )
+        _set_state(func.id, 'IDLE')
+
+    else:
+        # ID desconhecido → reapresenta menu
+        _enviar_menu_principal(func)
+
+
+def _processar_atestado(func: 'Funcionario', data: dict):
+    """Baixa e salva o atestado enviado pelo funcionário."""
+    from services.whatsapp_bot import enviar_texto, baixar_midia
+
+    media_url = (
+        data.get('mediaUrl') or data.get('url')
+        or (data.get('media') or {}).get('url', '')
+    )
+    tipo_msg = data.get('type', 'image')
+
+    if not media_url:
+        enviar_texto(
+            celular=func.celular,
+            mensagem='Não consegui receber o arquivo. Tente novamente ou envie pelo painel.',
+            func_id=func.id,
+            tipo='bot_erro',
+        )
+        return
+
+    conteudo = baixar_midia(media_url)
+    if not conteudo:
+        enviar_texto(
+            celular=func.celular,
+            mensagem='Falha ao baixar o arquivo. Por favor, tente novamente.',
+            func_id=func.id,
+            tipo='bot_erro',
+        )
+        return
+
+    # Salva no disco e registra em ProntuarioDoc
+    from models import ProntuarioDoc
+    import uuid, pathlib
+    from flask import current_app
+
+    ext = 'pdf' if tipo_msg == 'document' else 'jpg'
+    nome_arquivo = f'atestado_{func.id}_{date.today().isoformat()}_{uuid.uuid4().hex[:6]}.{ext}'
+    pasta = pathlib.Path(current_app.root_path) / 'storage' / 'prontuario' / func.id
+    pasta.mkdir(parents=True, exist_ok=True)
+    caminho = pasta / nome_arquivo
+    caminho.write_bytes(conteudo)
+
+    doc = ProntuarioDoc(
+        funcionario_id=func.id,
+        tipo='Atestado Médico',
+        nome_arquivo=nome_arquivo,
+        arquivo_path=str(caminho),
+    )
+    db.session.add(doc)
+    _set_state(func.id, 'IDLE')
+    db.session.commit()
+
+    # Confirma ao funcionário
+    enviar_texto(
+        celular=func.celular,
+        mensagem=_bot_msg('bot_msg_atestado_func', {
+            'nome': func.nome.split()[0],
+            'data': date.today().strftime('%d/%m/%Y'),
+        }),
+        func_id=func.id,
+        tipo='atestado_recebido',
+    )
+
+    # Notifica líder
+    lider_cel = _celular_lider(func)
+    if lider_cel:
+        enviar_texto(
+            celular=lider_cel,
+            mensagem=_bot_msg('bot_msg_atestado_lider', {
+                'nome': func.nome,
+                'data': date.today().strftime('%d/%m/%Y'),
+            }),
+            func_id=func.id,
+            tipo='atestado_lider',
         )
 
 

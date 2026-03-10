@@ -344,7 +344,7 @@ def _checar_pre_checkin(func, data_ref: date) -> bool:
 # ── Envio (com cooldown + Direito à Desconexão) ────────────────────────────────
 
 def _enviar(regra: NotificationRule, func, minutos: int, aloc, data_ref: date, extra: dict = None) -> int:
-    from services.whatsapp_bot import enviar_texto
+    from services.whatsapp_bot import enviar_texto, enviar_botoes, enviar_msg
     enviados = 0
     fora = regra.only_working_hours and _fora_do_expediente(aloc)
 
@@ -357,9 +357,28 @@ def _enviar(regra: NotificationRule, func, minutos: int, aloc, data_ref: date, e
                 _enfileirar(regra, func.celular, msg, func.id, aloc, tipo_msg,
                            tipo_regra=regra.condition_type, data_ref=data_ref)
                 enviados += 1
-            elif enviar_texto(celular=func.celular, mensagem=msg,
-                              func_id=func.id, tipo='regra',
-                              tipo_regra=regra.condition_type, data_ref=data_ref):
+            elif regra.condition_type == 'PRE_CHECKIN' and not getattr(regra, 'template_employee_tipo', None):
+                # Usa botões interativos padrão para check-in prévio
+                import json as _j
+                default_interativo = _j.dumps({'botoes': [
+                    {'id': 'checkin_sim', 'title': '👍 Sim, confirmo'},
+                    {'id': 'checkin_nao', 'title': '👎 Não poderei ir'},
+                ]})
+                ok = enviar_msg(
+                    celular=func.celular, texto=msg,
+                    tipo_msg='botoes', interativo_json=default_interativo,
+                    func_id=func.id, tipo='regra',
+                    tipo_regra=regra.condition_type, data_ref=data_ref,
+                )
+                if ok:
+                    enviados += 1
+            elif enviar_msg(
+                celular=func.celular, texto=msg,
+                tipo_msg=getattr(regra, 'template_employee_tipo', None) or 'texto',
+                interativo_json=getattr(regra, 'template_employee_interativo', None),
+                func_id=func.id, tipo='regra',
+                tipo_regra=regra.condition_type, data_ref=data_ref,
+            ):
                 enviados += 1
 
     if regra.dest_manager:
@@ -371,9 +390,13 @@ def _enviar(regra: NotificationRule, func, minutos: int, aloc, data_ref: date, e
                     _enfileirar(regra, cel, msg, func.id, aloc, tipo_msg,
                                tipo_regra=regra.condition_type, data_ref=data_ref)
                     enviados += 1
-                elif enviar_texto(celular=cel, mensagem=msg,
-                                  func_id=func.id, tipo='regra',
-                                  tipo_regra=regra.condition_type, data_ref=data_ref):
+                elif enviar_msg(
+                    celular=cel, texto=msg,
+                    tipo_msg=getattr(regra, 'template_manager_tipo', None) or 'texto',
+                    interativo_json=getattr(regra, 'template_manager_interativo', None),
+                    func_id=func.id, tipo='regra',
+                    tipo_regra=regra.condition_type, data_ref=data_ref,
+                ):
                     enviados += 1
 
     if regra.dest_rh and GESTOR_CELULAR:
