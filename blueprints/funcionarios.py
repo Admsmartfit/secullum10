@@ -5,7 +5,7 @@ from extensions import db
 from models import Funcionario, Turno
 from services.score_service import calcular_scores_bulk
 
-funcionarios_bp = Blueprint('funcionarios', __name__)
+funcionarios_bp = Blueprint('funcionarios', __name__, url_prefix='/config')
 
 
 @funcionarios_bp.route('/funcionarios')

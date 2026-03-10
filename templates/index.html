@@ -82,7 +82,7 @@
         <div class="card">
             <div class="d-flex justify-content-between align-items-center px-4 pt-4 pb-2">
                 <h6 class="mb-0 fw-semibold">Atividade de Hoje</h6>
-                <a href="/espelho" class="btn btn-sm btn-outline-light">Ver espelho completo</a>
+                <a href="/config/espelho" class="btn btn-sm btn-outline-light">Ver espelho completo</a>
             </div>
             <div class="px-4 pb-4">
                 {% if batidas %}
@@ -125,9 +125,6 @@
         <!-- Ações rápidas -->
         <div class="card p-4">
             <h6 class="fw-semibold mb-3">Ações Rápidas</h6>
-            <button class="btn btn-primary w-100 mb-2" data-bs-toggle="modal" data-bs-target="#syncModal">
-                <i class="fas fa-sync me-2"></i>Sincronizar Tudo
-            </button>
             <a class="btn btn-outline-light w-100 mb-2" href="/relatorios">
                 <i class="fas fa-file-pdf me-2"></i>Relatório do Dia
             </a>
@@ -166,76 +163,5 @@
     </div>
 </div>
 
-<!-- Sync Modal -->
-<div class="modal fade" id="syncModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content bg-secondary text-white border-0">
-            <div class="modal-header border-0">
-                <h5 class="modal-title" id="syncModalLabel">Sincronização em andamento</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"
-                    id="syncCloseBtn"></button>
-            </div>
-            <div class="modal-body text-center py-4">
-                <div id="syncLoading">
-                    <div class="spinner-border text-info mb-3" role="status" style="width: 3rem; height: 3rem;">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="mb-0">Buscando dados da API Secullum. Isso pode levar alguns segundos.</p>
-                    <small class="text-muted">Aguardando resposta do servidor...</small>
-                </div>
-                <div id="syncResult" style="display: none;">
-                    <div class="mb-3">
-                        <i id="syncIcon" class="fas fa-check-circle fa-3x text-success"></i>
-                    </div>
-                    <h5 id="syncTitle">Sucesso!</h5>
-                    <p id="syncMessage"></p>
-                    <button class="btn btn-primary mt-3" onclick="window.location.reload()">Atualizar Dashboard</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-{% block extra_js %}
-<script>
-    document.getElementById('syncModal').addEventListener('shown.bs.modal', function () {
-        const loadingDiv = document.getElementById('syncLoading');
-        const resultDiv = document.getElementById('syncResult');
-        const icon = document.getElementById('syncIcon');
-        const title = document.getElementById('syncTitle');
-        const message = document.getElementById('syncMessage');
-        const modalTitle = document.getElementById('syncModalLabel');
-
-        // Reset status
-        loadingDiv.style.display = 'block';
-        resultDiv.style.display = 'none';
-        modalTitle.innerText = 'Sincronização em andamento';
-
-        fetch('/api/sync')
-            .then(response => response.json())
-            .then(data => {
-                loadingDiv.style.display = 'none';
-                resultDiv.style.display = 'block';
-                modalTitle.innerText = 'Sincronização finalizada';
-
-                if (data.success) {
-                    icon.className = 'fas fa-check-circle fa-3x text-success';
-                    title.innerText = 'Sincronização concluída';
-                } else {
-                    icon.className = 'fas fa-exclamation-circle fa-3x text-danger';
-                    title.innerText = 'Falha na sincronização';
-                }
-                message.innerText = data.message;
-            })
-            .catch(error => {
-                loadingDiv.style.display = 'none';
-                resultDiv.style.display = 'block';
-                modalTitle.innerText = 'Erro crítico';
-                icon.className = 'fas fa-bug fa-3x text-warning';
-                title.innerText = 'Erro na requisição';
-                message.innerText = 'Não foi possível conectar ao servidor: ' + error;
-            });
-    });
-</script>
-{% endblock %}
+{% block extra_js %}{% endblock %}
 {% endblock %}

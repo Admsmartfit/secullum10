@@ -3,6 +3,11 @@
 {% block title %}Funcionários - Secullum Hub{% endblock %}
 
 {% block content %}
+<div class="d-flex align-items-center gap-2 mb-3 text-muted small">
+    <a href="/config/" class="text-muted text-decoration-none"><i class="fas fa-cog me-1"></i>Configurações</a>
+    <span>/</span>
+    <span>Funcionários</span>
+</div>
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 mb-0 font-weight-bold">Gestão de Funcionários</h1>
     <a href="/sync" class="btn btn-primary"><i class="fas fa-sync me-2"></i>Sincronizar Lista</a>
@@ -188,7 +193,7 @@
                 </div>
 
                 <div class="col-12 mt-2">
-                    <a href="/espelho?funcionario_id=${id}" class="btn btn-primary btn-sm me-2">
+                    <a href="/config/espelho?funcionario_id=${id}" class="btn btn-primary btn-sm me-2">
                         <i class="fas fa-calendar-alt me-1"></i>Espelho de Ponto
                     </a>
                     <a href="/escalas/calendario" class="btn btn-outline-primary btn-sm">

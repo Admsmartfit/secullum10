@@ -2,7 +2,7 @@
 Módulo de Configuração do Sistema.
 Gerencia: usuários, líderes de unidade, teste WhatsApp, importação de escalas Secullum.
 """
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
 from extensions import db
@@ -70,6 +70,11 @@ def index():
         'completa_janela_horas':  _cfg('sync_completa_janela_horas', '12'),
         'rapida_ultimo_run':      _cfg('sync_rapida_ultimo_run', ''),
         'completa_ultimo_run':    _cfg('sync_completa_ultimo_run', ''),
+        # Verificação de inconsistências (DB vs Secullum)
+        'verificar_incons_ativo':           _cfg('verificar_incons_ativo', '0') == '1',
+        'verificar_incons_hora':            _cfg('verificar_incons_hora', '01:00'),
+        'verificar_incons_ultimo_run':      _cfg('verificar_incons_ultimo_run', ''),
+        'verificar_incons_ultimo_resultado': _cfg('verificar_incons_ultimo_resultado', ''),
     }
 
     from models import TabelaSalarial
@@ -468,4 +473,113 @@ def sync_batidas_executar():
         db.session.commit()
 
     flash(f'Sync {"concluído" if ok else "com erro"}: {msg}', 'success' if ok else 'danger')
+    return redirect(url_for('config_hub.index') + '#tab-sync')
+
+
+# ── Verificação de Inconsistências (DB vs Secullum) ───────────────────────────
+
+@config_hub_bp.route('/verificar-inconsistencias/salvar', methods=['POST'])
+@login_required
+@_somente_gestor
+def verificar_incons_salvar():
+    """Salva configuração da verificação automática de inconsistências."""
+    ativo = '1' if request.form.get('verificar_incons_ativo') else '0'
+    hora  = request.form.get('verificar_incons_hora', '01:00').strip()
+
+    # Valida formato HH:MM
+    try:
+        h, m = hora.split(':')
+        assert 0 <= int(h) <= 23 and 0 <= int(m) <= 59
+    except (ValueError, AssertionError):
+        flash('Horário inválido. Use o formato HH:MM.', 'danger')
+        return redirect(url_for('config_hub.index') + '#tab-sync')
+
+    _salvar_cfg('verificar_incons_ativo', ativo)
+    _salvar_cfg('verificar_incons_hora',  hora)
+    db.session.commit()
+
+    flash('Configuração de verificação de inconsistências salva.', 'success')
+    return redirect(url_for('config_hub.index') + '#tab-sync')
+
+
+@config_hub_bp.route('/verificar-inconsistencias/executar', methods=['POST'])
+@login_required
+@_somente_gestor
+def verificar_incons_executar():
+    """Executa manualmente a verificação DB vs Secullum para o dia anterior."""
+    import os
+    from datetime import date, timedelta
+
+    ontem = (date.today() - timedelta(days=1))
+    ontem_str = ontem.strftime('%Y-%m-%d')
+
+    try:
+        from secullum_api import SecullumAPI
+        from services.sync_service import parse_date, sync_batidas
+        from models import Batida, Funcionario
+
+        api = SecullumAPI(
+            os.getenv('SECULLUM_EMAIL'),
+            os.getenv('SECULLUM_PASSWORD'),
+            os.getenv('SECULLUM_BANCO'),
+        )
+        registros_api = api.buscar_batidas(ontem_str, ontem_str)
+        if registros_api is None:
+            flash('Falha ao conectar com a API Secullum.', 'danger')
+            return redirect(url_for('config_hub.index') + '#tab-sync')
+
+        _MARCACOES_ESPECIAIS = {
+            'ATESTAD', 'ATESTADO', 'FOLGA', 'FALTA', 'FERIAS',
+            'NEUTRO', 'DSRFOL', 'DSRFALTA', 'COMPENSAR',
+        }
+        sec_map = {}
+        for reg in registros_api:
+            fid = str(reg.get('FuncionarioId'))
+            d = parse_date(reg.get('Data'))
+            if not d:
+                continue
+            horas = []
+            for i in range(1, 6):
+                for campo in [f'Entrada{i}', f'Saida{i}']:
+                    hora_val = (reg.get(campo) or '').strip()
+                    if hora_val and hora_val.upper() not in _MARCACOES_ESPECIAIS and hora_val not in ('00:00', '00:00:00'):
+                        partes = hora_val.split(':')
+                        if len(partes) >= 2:
+                            horas.append(hora_val)
+            if horas:
+                sec_map[(fid, d)] = horas
+
+        batidas_locais = (
+            Batida.query
+            .join(Funcionario, Batida.funcionario_id == Funcionario.id)
+            .filter(Funcionario.ativo == True, Batida.data == ontem)
+            .all()
+        )
+        local_map = {}
+        for b in batidas_locais:
+            local_map.setdefault((b.funcionario_id, b.data), []).append(b)
+
+        n_div = sum(
+            1 for key in set(sec_map.keys()) | set(local_map.keys())
+            if len(sec_map.get(key, [])) != len(local_map.get(key, []))
+        )
+
+        if n_div == 0:
+            resultado = f'Nenhuma divergência encontrada para {ontem_str}.'
+            _salvar_cfg('verificar_incons_ultimo_resultado', resultado)
+            _salvar_cfg('verificar_incons_ultimo_run', datetime.now().isoformat())
+            db.session.commit()
+            flash(resultado, 'success')
+            return redirect(url_for('config_hub.index') + '#tab-sync')
+
+        ok, msg = sync_batidas(ontem_str, ontem_str)
+        resultado = f'{n_div} divergência(s) em {ontem_str} → re-sync: {msg}'
+        _salvar_cfg('verificar_incons_ultimo_resultado', resultado)
+        _salvar_cfg('verificar_incons_ultimo_run', datetime.now().isoformat())
+        db.session.commit()
+        flash(resultado, 'success' if ok else 'danger')
+
+    except Exception as e:
+        flash(f'Erro ao verificar: {e}', 'danger')
+
     return redirect(url_for('config_hub.index') + '#tab-sync')

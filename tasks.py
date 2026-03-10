@@ -254,4 +254,124 @@ def register_tasks(celery):
         logger.info(f'[sync_completa] {msg}')
         return {'ok': ok, 'msg': msg}
 
+    # ── Verificação diária: DB vs Secullum (dia anterior) ─────────────────────
+
+    @celery.task(name='tasks.verificar_inconsistencias_dia_anterior')
+    def verificar_inconsistencias_dia_anterior():
+        """
+        Verifica se as batidas do dia anterior diferem entre o banco local
+        e o Secullum. Se houver divergências, re-sincroniza o dia todo.
+        Roda a cada minuto mas self-limita pelo horário configurado.
+        """
+        if _get_cfg('verificar_incons_ativo', '0') != '1':
+            return {'skipped': True, 'reason': 'desativado'}
+
+        hora_cfg = _get_cfg('verificar_incons_hora', '01:00')
+        agora = datetime.now()
+        hora_agora = agora.strftime('%H:%M')
+
+        # Só executa quando o horário atual está dentro de uma janela de 5 min
+        try:
+            h, m = [int(x) for x in hora_cfg.split(':')]
+            from datetime import time as dtime
+            alvo_min = h * 60 + m
+            atual_min = agora.hour * 60 + agora.minute
+            if not (0 <= atual_min - alvo_min < 5):
+                return {'skipped': True, 'reason': 'fora do horario', 'hora_cfg': hora_cfg, 'hora_agora': hora_agora}
+        except (ValueError, AttributeError):
+            return {'skipped': True, 'reason': 'hora_cfg invalida'}
+
+        # Evita rodar mais de uma vez por dia
+        ultimo_run = _get_cfg('verificar_incons_ultimo_run', '')
+        hoje_str = agora.strftime('%Y-%m-%d')
+        if ultimo_run.startswith(hoje_str):
+            return {'skipped': True, 'reason': 'ja executou hoje'}
+
+        _set_cfg('verificar_incons_ultimo_run', agora.isoformat())
+
+        ontem = (agora.date() - timedelta(days=1))
+        ontem_str = ontem.strftime('%Y-%m-%d')
+
+        logger.info(f'[verificar_incons] Verificando divergências para {ontem_str}...')
+
+        # ── Comparar batidas locais vs API Secullum ────────────────────────────
+        import os
+        try:
+            from secullum_api import SecullumAPI
+            from services.sync_service import parse_date
+            from models import Batida, Funcionario
+
+            api = SecullumAPI(
+                os.getenv('SECULLUM_EMAIL'),
+                os.getenv('SECULLUM_PASSWORD'),
+                os.getenv('SECULLUM_BANCO'),
+            )
+            registros_api = api.buscar_batidas(ontem_str, ontem_str)
+            if registros_api is None:
+                msg = 'Falha ao conectar com a API Secullum.'
+                _set_cfg('verificar_incons_ultimo_resultado', f'ERRO: {msg}')
+                logger.error(f'[verificar_incons] {msg}')
+                return {'ok': False, 'msg': msg}
+
+            _MARCACOES_ESPECIAIS = {
+                'ATESTAD', 'ATESTADO', 'FOLGA', 'FALTA', 'FERIAS',
+                'NEUTRO', 'DSRFOL', 'DSRFALTA', 'COMPENSAR',
+            }
+
+            sec_map = {}
+            for reg in registros_api:
+                fid = str(reg.get('FuncionarioId'))
+                d = parse_date(reg.get('Data'))
+                if not d:
+                    continue
+                horas = []
+                for i in range(1, 6):
+                    for campo in [f'Entrada{i}', f'Saida{i}']:
+                        hora = (reg.get(campo) or '').strip()
+                        if hora and hora.upper() not in _MARCACOES_ESPECIAIS and hora not in ('00:00', '00:00:00'):
+                            partes = hora.split(':')
+                            if len(partes) >= 2:
+                                horas.append(f'{partes[0]}:{partes[1]}')
+                if horas:
+                    sec_map[(fid, d)] = horas
+
+            from extensions import db
+            batidas_locais = (
+                Batida.query
+                .join(Funcionario, Batida.funcionario_id == Funcionario.id)
+                .filter(Funcionario.ativo == True, Batida.data == ontem)
+                .all()
+            )
+            local_map = {}
+            for b in batidas_locais:
+                local_map.setdefault((b.funcionario_id, b.data), []).append(b)
+
+            divergencias = [
+                (fid, dia)
+                for (fid, dia) in set(sec_map.keys()) | set(local_map.keys())
+                if len(sec_map.get((fid, dia), [])) != len(local_map.get((fid, dia), []))
+            ]
+
+            n_div = len(divergencias)
+            logger.info(f'[verificar_incons] {n_div} divergência(s) encontrada(s) para {ontem_str}.')
+
+            if n_div == 0:
+                resultado = f'OK – nenhuma divergência em {ontem_str}.'
+                _set_cfg('verificar_incons_ultimo_resultado', resultado)
+                return {'ok': True, 'divergencias': 0, 'msg': resultado}
+
+            # ── Re-sincroniza o dia completo ───────────────────────────────────
+            from services.sync_service import sync_batidas as _sync_batidas
+            ok_sync, msg_sync = _sync_batidas(ontem_str, ontem_str)
+            resultado = f'{n_div} divergência(s) em {ontem_str} → re-sync: {msg_sync}'
+            _set_cfg('verificar_incons_ultimo_resultado', resultado)
+            logger.info(f'[verificar_incons] {resultado}')
+            return {'ok': ok_sync, 'divergencias': n_div, 'msg': resultado}
+
+        except Exception as e:
+            msg = f'Erro inesperado: {e}'
+            _set_cfg('verificar_incons_ultimo_resultado', f'ERRO: {msg}')
+            logger.error(f'[verificar_incons] {msg}')
+            return {'ok': False, 'msg': msg}
+
     return sync_secullum

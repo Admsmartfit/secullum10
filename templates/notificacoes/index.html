@@ -390,7 +390,7 @@
                             <button class="btn btn-sm btn-outline-secondary" title="Editar"
                                     data-bs-toggle="modal" data-bs-target="#modalKeyword"
                                     onclick="abrirKeywordEditar(this)"
-                                    data-kw="{{ {'id':kw.id,'keyword':kw.keyword,'resposta':kw.resposta,'apenas_funcionario':kw.apenas_funcionario,'tipo_msg':(kw.tipo_msg or 'texto') if kw.tipo_msg is defined else 'texto','interativo_json':(kw.interativo_json or '') if kw.interativo_json is defined else ''}|tojson|e }}">
+                                    data-kw='{{ {'id':kw.id,'keyword':kw.keyword,'resposta':kw.resposta,'apenas_funcionario':kw.apenas_funcionario,'tipo_msg':(kw.tipo_msg or 'texto') if kw.tipo_msg is defined else 'texto','interativo_json':(kw.interativo_json or '') if kw.interativo_json is defined else ''}|tojson }}'>
                                 <i class="fas fa-edit"></i>
                             </button>
                             <button class="btn btn-sm {% if kw.ativo %}btn-warning{% else %}btn-outline-success{% endif %}"

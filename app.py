@@ -104,6 +104,10 @@ def create_app():
             'task': 'tasks.processar_fila_notificacoes',
             'schedule': crontab(minute=10),  # :10 de cada hora — despacha fila de desconexão
         },
+        'verificar-inconsistencias-dia-anterior': {
+            'task': 'tasks.verificar_inconsistencias_dia_anterior',
+            'schedule': crontab(minute='*'),  # verifica a cada minuto, self-limita pelo horário configurado
+        },
     }
     celery.conf.timezone = 'America/Sao_Paulo'
     app.extensions['celery'] = celery

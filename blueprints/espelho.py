@@ -5,7 +5,7 @@ from flask import Blueprint, render_template, request, send_file, jsonify, flash
 from flask_login import login_required
 from models import Batida, Funcionario
 
-espelho_bp = Blueprint('espelho', __name__)
+espelho_bp = Blueprint('espelho', __name__, url_prefix='/config')
 
 
 @espelho_bp.route('/espelho')

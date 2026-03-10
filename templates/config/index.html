@@ -60,6 +60,16 @@
             <i class="fas fa-dollar-sign me-1"></i> Salários / Benefícios
         </button>
     </li>
+    <li class="nav-item">
+        <a class="nav-link" href="/config/funcionarios">
+            <i class="fas fa-id-card me-1"></i> Funcionários
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="/config/espelho">
+            <i class="fas fa-calendar-alt me-1"></i> Espelho de Ponto
+        </a>
+    </li>
 </ul>
 
 <div class="tab-content" id="configTabContent">
@@ -506,6 +516,68 @@
             O sync roda <strong>automaticamente junto com o servidor Flask</strong> — não precisa de Celery.
             O scheduler verifica a cada 1 min (rápida) e a cada 5 min (completa) se o intervalo configurado foi atingido.
         </div>
+
+        <!-- ══ Verificação Diária: DB vs Secullum ════════════════════════════ -->
+        <hr class="my-4">
+        <h6 class="fw-bold mb-1">
+            <i class="fas fa-search text-warning me-2"></i>Verificação Diária: Banco de Dados vs Secullum
+        </h6>
+        <p class="text-muted small mb-3">
+            Compara automaticamente as batidas do <strong>dia anterior</strong> entre o banco local e a API Secullum
+            no horário configurado. Se houver divergências, re-sincroniza o dia inteiro.
+        </p>
+
+        <form method="POST" action="{{ url_for('config_hub.verificar_incons_salvar') }}">
+        <div class="card p-4 mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0">
+                    <i class="fas fa-balance-scale text-info me-2"></i>Comparação DB vs Secullum
+                </h6>
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" name="verificar_incons_ativo"
+                           id="verificar_incons_ativo" value="1"
+                           {{ 'checked' if sync_cfg.verificar_incons_ativo }}>
+                    <label class="form-check-label small" for="verificar_incons_ativo">Ativo</label>
+                </div>
+            </div>
+            <div class="row g-3 align-items-end">
+                <div class="col-sm-4">
+                    <label class="form-label small fw-bold">HORÁRIO DE EXECUÇÃO</label>
+                    <input type="time" name="verificar_incons_hora"
+                           class="form-control form-control-sm"
+                           value="{{ sync_cfg.verificar_incons_hora }}" required>
+                    <div class="form-text">Executa 1× por dia neste horário.</div>
+                </div>
+                <div class="col-sm-8">
+                    <div class="small text-muted">
+                        {% if sync_cfg.verificar_incons_ultimo_run %}
+                        <i class="fas fa-clock me-1"></i>
+                        Última execução: <strong>{{ sync_cfg.verificar_incons_ultimo_run[:19].replace('T',' ') }}</strong><br>
+                        {% endif %}
+                        {% if sync_cfg.verificar_incons_ultimo_resultado %}
+                        <i class="fas fa-info-circle me-1"></i>
+                        Resultado: <span class="{{ 'text-danger' if 'ERRO' in sync_cfg.verificar_incons_ultimo_resultado else 'text-success' }}">
+                            {{ sync_cfg.verificar_incons_ultimo_resultado }}
+                        </span>
+                        {% endif %}
+                        {% if not sync_cfg.verificar_incons_ultimo_run %}
+                        <i class="fas fa-clock me-1"></i>Ainda não executado.
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm me-2">
+            <i class="fas fa-save me-1"></i>Salvar
+        </button>
+        </form>
+
+        <form method="POST" action="{{ url_for('config_hub.verificar_incons_executar') }}" class="d-inline">
+            <button class="btn btn-outline-warning btn-sm"
+                    onclick="return confirm('Executar verificação para o dia anterior agora?')">
+                <i class="fas fa-play me-1"></i>Executar agora (dia anterior)
+            </button>
+        </form>
     </div>
 
 

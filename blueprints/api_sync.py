@@ -46,6 +46,22 @@ def api_sync_bat():
     return jsonify({'success': success, 'message': message})
 
 
+# Redirects de compatibilidade (URLs antigas → novas)
+@api_sync_bp.route('/funcionarios')
+@api_sync_bp.route('/funcionarios/<path:rest>')
+def redirect_funcionarios(rest=''):
+    target = url_for('funcionarios.funcionarios') if not rest else f'/config/funcionarios/{rest}'
+    return redirect(target, 301)
+
+
+@api_sync_bp.route('/espelho')
+@api_sync_bp.route('/espelho/<path:rest>')
+def redirect_espelho(rest=''):
+    from flask import request as _req
+    target = url_for('espelho.espelho', **_req.args) if not rest else f'/config/espelho/{rest}'
+    return redirect(target, 301)
+
+
 @api_sync_bp.route('/sync-horarios')
 @login_required
 def sync_horarios_route():
