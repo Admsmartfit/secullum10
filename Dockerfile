@@ -13,6 +13,9 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     gcc \
     curl \
+    libreoffice-writer \
+    libreoffice-calc \
+    libreoffice-java-common \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python requirements
