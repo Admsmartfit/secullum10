@@ -266,7 +266,7 @@ def baixar_midia(url: str) -> bytes | None:
     Retorna bytes ou None em caso de falha.
     """
     try:
-        headers = _headers() if MEGAAPI_HOST in url else {}
+        headers = _headers() if _megaapi()['host'] in url else {}
         resp = requests.get(url, headers=headers, timeout=30)
         if resp.status_code == 200:
             return resp.content

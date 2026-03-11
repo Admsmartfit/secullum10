@@ -556,6 +556,7 @@ def _transcrever_audio(data: dict) -> str:
     Retorna texto transcrito ou '' se falhar ou não configurado.
     """
     import requests as req_lib
+    import os
     openai_key = os.getenv('OPENAI_API_KEY', '')
     if not openai_key:
         return ''
