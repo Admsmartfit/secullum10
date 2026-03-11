@@ -1,4 +1,3 @@
-
 flask
 flask-sqlalchemy
 flask-login
@@ -15,3 +14,6 @@ APScheduler
 gunicorn
 sqlalchemy
 werkzeug>=2.3,<4.0
+docxtpl
+num2words
+docx2pdf
