@@ -191,9 +191,11 @@ def _fora_do_expediente(aloc) -> bool:
 
 def _gerar_relatorio_inconsistencias(data_ref: date) -> str:
     """Monta texto resumido GLOBAL das inconsistências do dia data_ref."""
-    batidas_inc = (
+    from blueprints.inconsistencias import _analisar_dia
+
+    batidas = (
         Batida.query
-        .filter_by(data=data_ref, inconsistente=True)
+        .filter_by(data=data_ref)
         .join(Funcionario, Batida.funcionario_id == Funcionario.id)
         .filter(Funcionario.ativo == True)
         .all()
@@ -206,21 +208,29 @@ def _gerar_relatorio_inconsistencias(data_ref: date) -> str:
         .filter(Funcionario.ativo == True)
         .all()
     )
+    
+    batidas_por_fid = {}
+    for b in batidas:
+        batidas_por_fid.setdefault(b.funcionario_id, []).append(b)
+
+    por_func = {}
+    for fid, lista in batidas_por_fid.items():
+        if lista:
+            func = lista[0].funcionario
+            probs = _analisar_dia(func, data_ref, lista)
+            if probs:
+                for p in probs:
+                    por_func.setdefault(func.nome, set()).add(p['tipo'])
+
     ausentes = []
     for aloc in alocacoes:
-        if aloc.funcionario and Batida.query.filter_by(
-            funcionario_id=aloc.funcionario_id, data=data_ref
-        ).count() == 0:
+        if aloc.funcionario and aloc.funcionario_id not in batidas_por_fid:
             ausentes.append(aloc.funcionario.nome)
 
     linhas = [f'📋 Inconsistências — {data_ref.strftime("%d/%m/%Y")}']
 
-    if batidas_inc:
-        por_func = {}
-        for b in batidas_inc:
-            nome = b.funcionario.nome if b.funcionario else str(b.funcionario_id)
-            por_func.setdefault(nome, set()).add(b.tipo_inconsistencia or 'erro')
-        linhas.append(f'\n⚠️ Batidas inconsistentes ({len(batidas_inc)}):')
+    if por_func:
+        linhas.append(f'\n⚠️ Batidas inconsistentes ({len(por_func)}):')
         for nome in sorted(por_func):
             linhas.append(f'  • {nome}: {", ".join(sorted(por_func[nome]))}')
 
@@ -229,7 +239,7 @@ def _gerar_relatorio_inconsistencias(data_ref: date) -> str:
         for nome in sorted(ausentes):
             linhas.append(f'  • {nome}')
 
-    if not batidas_inc and not ausentes:
+    if not por_func and not ausentes:
         linhas.append('\n✅ Nenhuma inconsistência encontrada.')
 
     return '\n'.join(linhas)
@@ -240,10 +250,12 @@ def _gerar_relatorio_por_departamento(data_ref: date) -> dict:
     Retorna {departamento: texto_relatorio} apenas para departamentos
     que possuem inconsistências ou ausências no dia data_ref.
     """
+    from blueprints.inconsistencias import _analisar_dia
     from models import UnidadeLider
-    batidas_inc = (
+    
+    batidas = (
         Batida.query
-        .filter(Batida.data == data_ref, Batida.inconsistente == True)
+        .filter(Batida.data == data_ref)
         .join(Funcionario)
         .filter(Funcionario.ativo == True)
         .all()
@@ -255,22 +267,26 @@ def _gerar_relatorio_por_departamento(data_ref: date) -> dict:
         .filter(Funcionario.ativo == True)
         .all()
     )
-    # Mapeia departamento → problemas
+    
+    batidas_por_fid = {}
+    for b in batidas:
+        batidas_por_fid.setdefault(b.funcionario_id, []).append(b)
+
     por_dept = {}  # {dept: {'inconsistentes': {nome: tipos}, 'ausentes': [nome]}}
 
-    for b in batidas_inc:
-        func = b.funcionario
-        if not func:
-            continue
-        dept = func.departamento or 'Sem Departamento'
-        d = por_dept.setdefault(dept, {'inconsistentes': {}, 'ausentes': []})
-        d['inconsistentes'].setdefault(func.nome, set()).add(b.tipo_inconsistencia or 'erro')
+    for fid, lista in batidas_por_fid.items():
+        if lista:
+            func = lista[0].funcionario
+            dept = func.departamento or 'Sem Departamento'
+            probs = _analisar_dia(func, data_ref, lista)
+            if probs:
+                d = por_dept.setdefault(dept, {'inconsistentes': {}, 'ausentes': []})
+                for p in probs:
+                    d['inconsistentes'].setdefault(func.nome, set()).add(p['tipo'])
 
     for aloc in alocacoes:
         func = aloc.funcionario
-        if not func:
-            continue
-        if Batida.query.filter_by(funcionario_id=func.id, data=data_ref).count() == 0:
+        if func and func.id not in batidas_por_fid:
             dept = func.departamento or 'Sem Departamento'
             d = por_dept.setdefault(dept, {'inconsistentes': {}, 'ausentes': []})
             d['ausentes'].append(func.nome)

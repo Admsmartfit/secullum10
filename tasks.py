@@ -357,14 +357,58 @@ def register_tasks(celery):
             if n_div == 0:
                 resultado = f'OK – nenhuma divergência em {ontem_str}.'
                 _set_cfg('verificar_incons_ultimo_resultado', resultado)
+                
+                # ── Disparo do Relatório de Inconsistências (via WhatsApp) ─────────
+                try:
+                    from models import NotificationRule
+                    from services.notification_processor import _gerar_relatorio_inconsistencias, _enviar_relatorio
+                    regras = NotificationRule.query.filter_by(ativo=True, condition_type='INCONSISTENCY_REPORT').all()
+                    if regras:
+                        relatorio = _gerar_relatorio_inconsistencias(ontem)
+                        total_env = 0
+                        for r in regras:
+                            env = _enviar_relatorio(r, relatorio)
+                            if env > 0:
+                                r.mensagens_enviadas = (r.mensagens_enviadas or 0) + env
+                                r.ultima_execucao = agora
+                                total_env += env
+                        from extensions import db
+                        db.session.commit()
+                        if total_env > 0:
+                            logger.info(f'[verificar_incons] {total_env} mensagem(ns) de inconsistência enviada(s).')
+                except Exception as e:
+                    logger.error(f'[verificar_incons] Falha ao enviar relatório: {e}')
+                
                 return {'ok': True, 'divergencias': 0, 'msg': resultado}
 
-            # ── Re-sincroniza o dia completo ───────────────────────────────────
+            # ── Re-sincroniza o dia completo se houver divergências ──────────────────
             from services.sync_service import sync_batidas as _sync_batidas
             ok_sync, msg_sync = _sync_batidas(ontem_str, ontem_str)
             resultado = f'{n_div} divergência(s) em {ontem_str} → re-sync: {msg_sync}'
             _set_cfg('verificar_incons_ultimo_resultado', resultado)
             logger.info(f'[verificar_incons] {resultado}')
+            
+            # Repete o envio aqui também (após re-sync)
+            try:
+                from models import NotificationRule
+                from services.notification_processor import _gerar_relatorio_inconsistencias, _enviar_relatorio
+                regras = NotificationRule.query.filter_by(ativo=True, condition_type='INCONSISTENCY_REPORT').all()
+                if regras:
+                    relatorio = _gerar_relatorio_inconsistencias(ontem)
+                    total_env = 0
+                    for r in regras:
+                        env = _enviar_relatorio(r, relatorio)
+                        if env > 0:
+                            r.mensagens_enviadas = (r.mensagens_enviadas or 0) + env
+                            r.ultima_execucao = agora
+                            total_env += env
+                    from extensions import db
+                    db.session.commit()
+                    if total_env > 0:
+                        logger.info(f'[verificar_incons] {total_env} mensagem(ns) de inconsistência enviada(s) após re-sync.')
+            except Exception as e:
+                logger.error(f'[verificar_incons] Falha ao enviar relatório após re-sync: {e}')
+                
             return {'ok': ok_sync, 'divergencias': n_div, 'msg': resultado}
 
         except Exception as e:

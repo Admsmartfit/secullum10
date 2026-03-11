@@ -460,12 +460,15 @@ def sync_batidas_salvar():
 def sync_batidas_executar():
     """Executa manualmente o sync de batidas (incremental ou completo)."""
     tipo = request.form.get('tipo', 'rapida')
+    from zoneinfo import ZoneInfo
+    _tz = ZoneInfo('America/Sao_Paulo')
+    
     if tipo == 'completa':
         from tasks import _get_cfg
         from datetime import datetime, timedelta
         from services.sync_service import sync_batidas
         janela = int(_get_cfg('sync_completa_janela_horas', '12'))
-        agora = datetime.now()
+        agora = datetime.now(_tz)
         ok, msg = sync_batidas(
             (agora - timedelta(hours=janela)).strftime('%Y-%m-%d'),
             agora.strftime('%Y-%m-%d'),
@@ -478,7 +481,7 @@ def sync_batidas_executar():
         from services.sync_service import sync_batidas_incremental
         from datetime import datetime
         ok, msg = sync_batidas_incremental()
-        _salvar_cfg('sync_rapida_ultimo_run', datetime.now().isoformat())
+        _salvar_cfg('sync_rapida_ultimo_run', datetime.now(_tz).isoformat())
         db.session.commit()
 
     flash(f'Sync {"concluído" if ok else "com erro"}: {msg}', 'success' if ok else 'danger')
@@ -517,10 +520,27 @@ def verificar_incons_salvar():
 def verificar_incons_executar():
     """Executa manualmente a verificação DB vs Secullum para o dia anterior."""
     import os
-    from datetime import date, timedelta
+    from datetime import date, timedelta, datetime
+    from zoneinfo import ZoneInfo
+    
+    _tz_br = ZoneInfo('America/Sao_Paulo')
+    agora = datetime.now(_tz_br)
 
-    ontem = (date.today() - timedelta(days=1))
+    ontem = (agora.date() - timedelta(days=1))
     ontem_str = ontem.strftime('%Y-%m-%d')
+
+    def _disparar_relatorio():
+        from models import NotificationRule
+        from services.notification_processor import _gerar_relatorio_inconsistencias, _enviar_relatorio
+        regras = NotificationRule.query.filter_by(ativo=True, condition_type='INCONSISTENCY_REPORT').all()
+        if regras:
+            relatorio = _gerar_relatorio_inconsistencias(ontem)
+            for r in regras:
+                env = _enviar_relatorio(r, relatorio)
+                if env > 0:
+                    r.mensagens_enviadas = (r.mensagens_enviadas or 0) + env
+                    r.ultima_execucao = datetime.utcnow()
+            db.session.commit()
 
     try:
         from services.config_service import get_secullum_api
@@ -572,16 +592,22 @@ def verificar_incons_executar():
         if n_div == 0:
             resultado = f'Nenhuma divergência encontrada para {ontem_str}.'
             _salvar_cfg('verificar_incons_ultimo_resultado', resultado)
-            _salvar_cfg('verificar_incons_ultimo_run', datetime.now().isoformat())
+            _salvar_cfg('verificar_incons_ultimo_run', agora.isoformat())
             db.session.commit()
+            
+            _disparar_relatorio()
+            
             flash(resultado, 'success')
             return redirect(url_for('config_hub.index') + '#tab-sync')
 
         ok, msg = sync_batidas(ontem_str, ontem_str)
         resultado = f'{n_div} divergência(s) em {ontem_str} → re-sync: {msg}'
         _salvar_cfg('verificar_incons_ultimo_resultado', resultado)
-        _salvar_cfg('verificar_incons_ultimo_run', datetime.now().isoformat())
+        _salvar_cfg('verificar_incons_ultimo_run', agora.isoformat())
         db.session.commit()
+        
+        _disparar_relatorio()
+        
         flash(resultado, 'success' if ok else 'danger')
 
     except Exception as e:
