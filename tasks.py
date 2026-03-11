@@ -284,12 +284,14 @@ def register_tasks(celery):
         except (ValueError, AttributeError):
             return {'skipped': True, 'reason': 'hora_cfg invalida'}
 
-        # Evita rodar mais de uma vez por dia
-        ultimo_run = _get_cfg('verificar_incons_ultimo_run', '')
+        # Evita rodar repetidas vezes na mesma janela configurada de hoje
+        # Se o usuário mudar o horário no mesmo dia, ele vai executar novamente no novo horário
         hoje_str = agora.strftime('%Y-%m-%d')
-        if ultimo_run.startswith(hoje_str):
-            return {'skipped': True, 'reason': 'ja executou hoje'}
+        chk_val = f"{hoje_str}_{hora_cfg}"
+        if _get_cfg('verificar_incons_ultimo_auto_chk', '') == chk_val:
+            return {'skipped': True, 'reason': 'ja executou neste horario hoje'}
 
+        _set_cfg('verificar_incons_ultimo_auto_chk', chk_val)
         _set_cfg('verificar_incons_ultimo_run', agora.isoformat())
 
         ontem = (agora.date() - timedelta(days=1))

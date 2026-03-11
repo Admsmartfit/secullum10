@@ -94,6 +94,18 @@ def job_completa(app):
             logger.error(f'[sync_completa] Erro: {e}')
 
 
+def job_verificar_incons(app):
+    """Verificação Diária: DB vs Secullum — roda a cada minuto."""
+    with app.app_context():
+        # O self-limite já está dentro da função em tasks.py
+        try:
+            from tasks import verificar_inconsistencias_dia_anterior
+            # Em chamadas diretas com função decorada do Celery, pode-se simplesmente chamá-la.
+            verificar_inconsistencias_dia_anterior()
+        except Exception as e:
+            logger.error(f'[auto_sync] job_verificar_incons: Erro: {e}')
+
+
 def init_scheduler(app):
     """Inicializa o APScheduler e registra os jobs. Chame uma vez em create_app()."""
     global _scheduler
@@ -128,8 +140,18 @@ def init_scheduler(app):
         max_instances=1,
     )
 
+    _scheduler.add_job(
+        func=job_verificar_incons,
+        args=[app],
+        trigger=IntervalTrigger(minutes=1),
+        id='verificar_incons_diaria',
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+    )
+
     _scheduler.start()
-    logger.info('[auto_sync] APScheduler iniciado (sync_rapida: 1min, sync_completa: 5min)')
+    logger.info('[auto_sync] APScheduler iniciado (sync_rapida: 1min, sync_completa: 5min, verificar_incons: 1min)')
 
     # Garante shutdown limpo
     import atexit
