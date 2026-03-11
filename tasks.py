@@ -35,14 +35,8 @@ def _set_cfg(chave, valor):
 def register_tasks(celery):
 
     @celery.task(name='tasks.sync_secullum')
-    def sync_secullum():
-        from services.sync_service import sync_funcionarios, sync_batidas_incremental
-        logger.info('[CELERY] Sync Secullum...')
-        ok_f, msg_f = sync_funcionarios()
-        logger.info(f'Funcionarios: {msg_f}')
-        ok_b, msg_b = sync_batidas_incremental()
-        logger.info(f'Batidas: {msg_b}')
-        return {'funcionarios': msg_f, 'batidas': msg_b}
+    def task_sync_secullum():
+        return sync_secullum()
 
     @celery.task(name='tasks.bot_ausencia')
     def bot_ausencia():
@@ -253,144 +247,134 @@ def register_tasks(celery):
         hora_fim = agora.strftime('%H:%M')
         ok, msg = sync_batidas(data_inicio, data_fim, hora_inicio, hora_fim)
         logger.info(f'[sync_completa] {msg}')
-        return {'ok': ok, 'msg': msg}
+        return {'o    @celery.task(name='tasks.verificar_inconsistencias_dia_anterior')
+    def task_verificar_inconsistencias():
+        return verificar_inconsistencias_dia_anterior()
 
-    # ── Verificação diária: DB vs Secullum (dia anterior) ─────────────────────
+    return {
+        'sync_secullum': celery.tasks.get('tasks.sync_secullum'),
+        'verificar_incons': celery.tasks.get('tasks.verificar_inconsistencias_dia_anterior')
+    }
+tado', f'ERRO: {msg}')
+            logger.error(f'[verificar_incons] {msg}')
+            return {'ok': False, 'msg': msg}
 
-    @celery.task(name='tasks.verificar_inconsistencias_dia_anterior')
-    def verificar_inconsistencias_dia_anterior():
-        """
-        Verifica se as batidas do dia anterior diferem entre o banco local
-        e o Secullum. Se houver divergências, re-sincroniza o dia todo.
-        Roda a cada minuto mas self-limita pelo horário configurado.
-        """
-        if _get_cfg('verificar_incons_ativo', '0') != '1':
-            return {'skipped': True, 'reason': 'desativado'}
+    return {
+        'sync_secullum': celery.tasks.get('tasks.sync_secullum'),
+        'verificar_incons': celery.tasks.get('tasks.verificar_inconsistencias_dia_anterior')
+    }
 
-        hora_cfg = _get_cfg('verificar_incons_hora', '01:00')
-        from zoneinfo import ZoneInfo
-        _tz_br = ZoneInfo('America/Sao_Paulo')
-        agora = datetime.now(_tz_br)
-        hora_agora = agora.strftime('%H:%M')
 
-        # Só executa quando o horário atual está dentro de uma janela de 5 min
-        try:
-            h, m = [int(x) for x in hora_cfg.split(':')]
-            from datetime import time as dtime
-            alvo_min = h * 60 + m
-            atual_min = agora.hour * 60 + agora.minute
-            if not (0 <= atual_min - alvo_min < 5):
-                return {'skipped': True, 'reason': 'fora do horario', 'hora_cfg': hora_cfg, 'hora_agora': hora_agora}
-        except (ValueError, AttributeError):
-            return {'skipped': True, 'reason': 'hora_cfg invalida'}
+def sync_secullum():
+    from services.sync_service import sync_funcionarios, sync_batidas_incremental
+    logger.info('[CELERY] Sync Secullum...')
+    ok_f, msg_f = sync_funcionarios()
+    logger.info(f'Funcionarios: {msg_f}')
+    ok_b, msg_b = sync_batidas_incremental()
+    logger.info(f'Batidas: {msg_b}')
+    return {'funcionarios': msg_f, 'batidas': msg_b}
 
-        # Evita rodar repetidas vezes na mesma janela configurada de hoje
-        # Se o usuário mudar o horário no mesmo dia, ele vai executar novamente no novo horário
-        hoje_str = agora.strftime('%Y-%m-%d')
-        chk_val = f"{hoje_str}_{hora_cfg}"
-        if _get_cfg('verificar_incons_ultimo_auto_chk', '') == chk_val:
-            return {'skipped': True, 'reason': 'ja executou neste horario hoje'}
 
-        _set_cfg('verificar_incons_ultimo_auto_chk', chk_val)
-        _set_cfg('verificar_incons_ultimo_run', agora.isoformat())
+def verificar_inconsistencias_dia_anterior():
+    """
+    Verifica se as batidas do dia anterior diferem entre o banco local
+    e o Secullum. Se houver divergências, re-sincroniza o dia todo.
+    Roda a cada minuto mas self-limita pelo horário configurado.
+    """
+    if _get_cfg('verificar_incons_ativo', '0') != '1':
+        return {'skipped': True, 'reason': 'desativado'}
 
-        ontem = (agora.date() - timedelta(days=1))
-        ontem_str = ontem.strftime('%Y-%m-%d')
+    hora_cfg = _get_cfg('verificar_incons_hora', '01:00')
+    from zoneinfo import ZoneInfo
+    _tz_br = ZoneInfo('America/Sao_Paulo')
+    agora = datetime.now(_tz_br)
+    hora_agora = agora.strftime('%H:%M')
 
-        logger.info(f'[verificar_incons] Verificando divergências para {ontem_str}...')
+    # Só executa quando o horário atual está dentro de uma janela de 5 min
+    try:
+        h, m = [int(x) for x in hora_cfg.split(':')]
+        alvo_min = h * 60 + m
+        atual_min = agora.hour * 60 + agora.minute
+        if not (0 <= atual_min - alvo_min < 5):
+            return {'skipped': True, 'reason': 'fora do horario', 'hora_cfg': hora_cfg, 'hora_agora': hora_agora}
+    except (ValueError, AttributeError):
+        return {'skipped': True, 'reason': 'hora_cfg invalida'}
 
-        # ── Comparar batidas locais vs API Secullum ────────────────────────────
-        import os
-        try:
-            from services.config_service import get_secullum_api
-            from services.sync_service import parse_date
-            from models import Batida, Funcionario
+    # Evita rodar repetidas vezes na mesma janela configurada de hoje
+    # Se o usuário mudar o horário no mesmo dia, ele vai executar novamente no novo horário
+    hoje_str = agora.strftime('%Y-%m-%d')
+    chk_val = f"{hoje_str}_{hora_cfg}"
+    if _get_cfg('verificar_incons_ultimo_auto_chk', '') == chk_val:
+        return {'skipped': True, 'reason': 'ja executou neste horario hoje'}
 
-            api = get_secullum_api()
-            registros_api = api.buscar_batidas(ontem_str, ontem_str)
-            if registros_api is None:
-                msg = 'Falha ao conectar com a API Secullum.'
-                _set_cfg('verificar_incons_ultimo_resultado', f'ERRO: {msg}')
-                logger.error(f'[verificar_incons] {msg}')
-                return {'ok': False, 'msg': msg}
+    _set_cfg('verificar_incons_ultimo_auto_chk', chk_val)
+    _set_cfg('verificar_incons_ultimo_run', agora.isoformat())
 
-            _MARCACOES_ESPECIAIS = {
-                'ATESTAD', 'ATESTADO', 'FOLGA', 'FALTA', 'FERIAS',
-                'NEUTRO', 'DSRFOL', 'DSRFALTA', 'COMPENSAR',
-            }
+    ontem = (agora.date() - timedelta(days=1))
+    ontem_str = ontem.strftime('%Y-%m-%d')
 
-            sec_map = {}
-            for reg in registros_api:
-                fid = str(reg.get('FuncionarioId'))
-                d = parse_date(reg.get('Data'))
-                if not d:
-                    continue
-                horas = []
-                for i in range(1, 6):
-                    for campo in [f'Entrada{i}', f'Saida{i}']:
-                        hora = (reg.get(campo) or '').strip()
-                        if hora and hora.upper() not in _MARCACOES_ESPECIAIS and hora not in ('00:00', '00:00:00'):
-                            partes = hora.split(':')
-                            if len(partes) >= 2:
-                                horas.append(f'{partes[0]}:{partes[1]}')
-                if horas:
-                    sec_map[(fid, d)] = horas
+    logger.info(f'[verificar_incons] Verificando divergências para {ontem_str}...')
 
-            from extensions import db
-            batidas_locais = (
-                Batida.query
-                .join(Funcionario, Batida.funcionario_id == Funcionario.id)
-                .filter(Funcionario.ativo == True, Batida.data == ontem)
-                .all()
-            )
-            local_map = {}
-            for b in batidas_locais:
-                local_map.setdefault((b.funcionario_id, b.data), []).append(b)
+    try:
+        from services.config_service import get_secullum_api
+        from services.sync_service import parse_date
+        from models import Batida, Funcionario
 
-            divergencias = [
-                (fid, dia)
-                for (fid, dia) in set(sec_map.keys()) | set(local_map.keys())
-                if len(sec_map.get((fid, dia), [])) != len(local_map.get((fid, dia), []))
-            ]
+        api = get_secullum_api()
+        registros_api = api.buscar_batidas(ontem_str, ontem_str)
+        if registros_api is None:
+            msg = 'Falha ao conectar com a API Secullum.'
+            _set_cfg('verificar_incons_ultimo_resultado', f'ERRO: {msg}')
+            logger.error(f'[verificar_incons] {msg}')
+            return {'ok': False, 'msg': msg}
 
-            n_div = len(divergencias)
-            logger.info(f'[verificar_incons] {n_div} divergência(s) encontrada(s) para {ontem_str}.')
+        _MARCACOES_ESPECIAIS = {
+            'ATESTAD', 'ATESTADO', 'FOLGA', 'FALTA', 'FERIAS',
+            'NEUTRO', 'DSRFOL', 'DSRFALTA', 'COMPENSAR',
+        }
 
-            if n_div == 0:
-                resultado = f'OK – nenhuma divergência em {ontem_str}.'
-                _set_cfg('verificar_incons_ultimo_resultado', resultado)
-                
-                # ── Disparo do Relatório de Inconsistências (via WhatsApp) ─────────
-                try:
-                    from models import NotificationRule
-                    from services.notification_processor import _gerar_relatorio_inconsistencias, _enviar_relatorio
-                    regras = NotificationRule.query.filter_by(ativo=True, condition_type='INCONSISTENCY_REPORT').all()
-                    if regras:
-                        relatorio = _gerar_relatorio_inconsistencias(ontem)
-                        total_env = 0
-                        for r in regras:
-                            env = _enviar_relatorio(r, relatorio)
-                            if env > 0:
-                                r.mensagens_enviadas = (r.mensagens_enviadas or 0) + env
-                                r.ultima_execucao = agora
-                                total_env += env
-                        from extensions import db
-                        db.session.commit()
-                        if total_env > 0:
-                            logger.info(f'[verificar_incons] {total_env} mensagem(ns) de inconsistência enviada(s).')
-                except Exception as e:
-                    logger.error(f'[verificar_incons] Falha ao enviar relatório: {e}')
-                
-                return {'ok': True, 'divergencias': 0, 'msg': resultado}
+        sec_map = {}
+        for reg in registros_api:
+            fid = str(reg.get('FuncionarioId'))
+            d = parse_date(reg.get('Data'))
+            if not d:
+                continue
+            horas = []
+            for i in range(1, 6):
+                for campo in [f'Entrada{i}', f'Saida{i}']:
+                    hora = (reg.get(campo) or '').strip()
+                    if hora and hora.upper() not in _MARCACOES_ESPECIAIS and hora not in ('00:00', '00:00:00'):
+                        partes = hora.split(':')
+                        if len(partes) >= 2:
+                            horas.append(f'{partes[0]}:{partes[1]}')
+            if horas:
+                sec_map[(fid, d)] = horas
 
-            # ── Re-sincroniza o dia completo se houver divergências ──────────────────
-            from services.sync_service import sync_batidas as _sync_batidas
-            ok_sync, msg_sync = _sync_batidas(ontem_str, ontem_str)
-            resultado = f'{n_div} divergência(s) em {ontem_str} → re-sync: {msg_sync}'
+        from extensions import db as _db
+        batidas_locais = (
+            Batida.query
+            .join(Funcionario, Batida.funcionario_id == Funcionario.id)
+            .filter(Funcionario.ativo == True, Batida.data == ontem)
+            .all()
+        )
+        local_map = {}
+        for b in batidas_locais:
+            local_map.setdefault((b.funcionario_id, b.data), []).append(b)
+
+        divergencias = [
+            (fid, dia)
+            for (fid, dia) in set(sec_map.keys()) | set(local_map.keys())
+            if len(sec_map.get((fid, dia), [])) != len(local_map.get((fid, dia), []))
+        ]
+
+        n_div = len(divergencias)
+        logger.info(f'[verificar_incons] {n_div} divergência(s) encontrada(s) para {ontem_str}.')
+
+        if n_div == 0:
+            resultado = f'OK – nenhuma divergência em {ontem_str}.'
             _set_cfg('verificar_incons_ultimo_resultado', resultado)
-            logger.info(f'[verificar_incons] {resultado}')
             
-            # Repete o envio aqui também (após re-sync)
+            # ── Disparo do Relatório de Inconsistências (via WhatsApp) ─────────
             try:
                 from models import NotificationRule
                 from services.notification_processor import _gerar_relatorio_inconsistencias, _enviar_relatorio
@@ -404,19 +388,45 @@ def register_tasks(celery):
                             r.mensagens_enviadas = (r.mensagens_enviadas or 0) + env
                             r.ultima_execucao = agora
                             total_env += env
-                    from extensions import db
-                    db.session.commit()
+                    _db.session.commit()
                     if total_env > 0:
-                        logger.info(f'[verificar_incons] {total_env} mensagem(ns) de inconsistência enviada(s) após re-sync.')
+                        logger.info(f'[verificar_incons] {total_env} mensagem(ns) de inconsistência enviada(s).')
             except Exception as e:
-                logger.error(f'[verificar_incons] Falha ao enviar relatório após re-sync: {e}')
-                
-            return {'ok': ok_sync, 'divergencias': n_div, 'msg': resultado}
+                logger.error(f'[verificar_incons] Falha ao enviar relatório: {e}')
+            
+            return {'ok': True, 'divergencias': 0, 'msg': resultado}
 
+        # ── Re-sincroniza o dia completo se houver divergências ──────────────────
+        from services.sync_service import sync_batidas as _sync_batidas
+        ok_sync, msg_sync = _sync_batidas(ontem_str, ontem_str)
+        resultado = f'{n_div} divergência(s) em {ontem_str} → re-sync: {msg_sync}'
+        _set_cfg('verificar_incons_ultimo_resultado', resultado)
+        logger.info(f'[verificar_incons] {resultado}')
+        
+        # Repete o envio aqui também (após re-sync)
+        try:
+            from models import NotificationRule
+            from services.notification_processor import _gerar_relatorio_inconsistencias, _enviar_relatorio
+            regras = NotificationRule.query.filter_by(ativo=True, condition_type='INCONSISTENCY_REPORT').all()
+            if regras:
+                relatorio = _gerar_relatorio_inconsistencias(ontem)
+                total_env = 0
+                for r in regras:
+                    env = _enviar_relatorio(r, relatorio)
+                    if env > 0:
+                        r.mensagens_enviadas = (r.mensagens_enviadas or 0) + env
+                        r.ultima_execucao = agora
+                        total_env += env
+                _db.session.commit()
+                if total_env > 0:
+                    logger.info(f'[verificar_incons] {total_env} mensagem(ns) de inconsistência enviada(s) após re-sync.')
         except Exception as e:
-            msg = f'Erro inesperado: {e}'
-            _set_cfg('verificar_incons_ultimo_resultado', f'ERRO: {msg}')
-            logger.error(f'[verificar_incons] {msg}')
-            return {'ok': False, 'msg': msg}
+            logger.error(f'[verificar_incons] Falha ao enviar relatório após re-sync: {e}')
+            
+        return {'ok': ok_sync, 'divergencias': n_div, 'msg': resultado}
 
-    return sync_secullum
+    except Exception as e:
+        msg = f'Erro inesperado: {e}'
+        _set_cfg('verificar_incons_ultimo_resultado', f'ERRO: {msg}')
+        logger.error(f'[verificar_incons] {msg}')
+        return {'ok': False, 'msg': msg}
