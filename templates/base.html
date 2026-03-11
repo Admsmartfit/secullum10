@@ -493,8 +493,8 @@
                     <i class="fas fa-exclamation-circle"></i>
                     <span class="nav-link-text">Inconsistências</span>
                 </a>
-                <a class="nav-link {% if request.path.startswith('/batidas') %}active{% endif %}"
-                   href="/batidas/" data-tooltip="Espelho de Ponto">
+                <a class="nav-link {% if request.path.startswith('/config/espelho') or request.path.startswith('/batidas') %}active{% endif %}"
+                   href="/config/espelho" data-tooltip="Espelho de Ponto">
                     <i class="fas fa-id-card"></i>
                     <span class="nav-link-text">Espelho de Ponto</span>
                 </a>
@@ -514,13 +514,18 @@
 
                 <hr class="sidebar-separator">
                 <div class="section-label">🤝 Desenv. Humano</div>
-                <a class="nav-link {% if request.path.startswith('/prontuario/alertas') or request.path.startswith('/prontuario/gerar') %}active{% endif %}"
-                   href="/prontuario/alertas" data-tooltip="Prontuários & Documentos">
+                <a class="nav-link {% if request.path.startswith('/prontuario/alertas') %}active{% endif %}"
+                   href="/prontuario/alertas" data-tooltip="Prontuários">
                     <i class="fas fa-users"></i>
-                    <span class="nav-link-text">Prontuários & Documentos</span>
+                    <span class="nav-link-text">Prontuários</span>
                     {% if alertas_docs > 0 %}
                     <span class="badge bg-danger ms-auto" style="font-size:0.65rem;">{{ alertas_docs }}</span>
                     {% endif %}
+                </a>
+                <a class="nav-link {% if request.path.startswith('/prontuario/gerar') or request.path.startswith('/prontuario/templates') %}active{% endif %}"
+                   href="/prontuario/gerar-documentos" data-tooltip="Gerar Documentos">
+                    <i class="fas fa-file-contract"></i>
+                    <span class="nav-link-text">Gerar Documentos</span>
                 </a>
                 <a class="nav-link {% if request.path == '/financeiro' %}active{% endif %}"
                    href="/financeiro" data-tooltip="Financeiro / Benefícios">
@@ -555,6 +560,16 @@
                    href="/whatsapp/logs" data-tooltip="Logs de Comunicação">
                     <i class="fab fa-whatsapp"></i>
                     <span class="nav-link-text">Logs de Mensagens</span>
+                </a>
+                <a class="nav-link {% if request.path.startswith('/prontuario/templates') %}active{% endif %}"
+                   href="/prontuario/templates" data-tooltip="Templates de Documentos">
+                    <i class="fas fa-file-word"></i>
+                    <span class="nav-link-text">Templates de Documentos</span>
+                </a>
+                <a class="nav-link {% if request.path == '/prontuario/salarios' %}active{% endif %}"
+                   href="/prontuario/salarios" data-tooltip="Tabela Salarial">
+                    <i class="fas fa-dollar-sign"></i>
+                    <span class="nav-link-text">Tabela Salarial</span>
                 </a>
                 {% endif %}
                 {% else %}

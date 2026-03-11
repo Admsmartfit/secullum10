@@ -62,6 +62,14 @@ def redirect_espelho(rest=''):
     return redirect(target, 301)
 
 
+@api_sync_bp.route('/batidas/')
+@api_sync_bp.route('/batidas/<path:rest>')
+def redirect_batidas(rest=''):
+    from flask import request as _req
+    target = url_for('espelho.espelho', **_req.args) if not rest else f'/config/espelho'
+    return redirect(target, 301)
+
+
 @api_sync_bp.route('/sync-horarios')
 @login_required
 def sync_horarios_route():
