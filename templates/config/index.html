@@ -189,16 +189,16 @@
             </button>
         </div>
         <p class="text-muted small mb-3">
-            Cada líder recebe e envia mensagens WhatsApp dos funcionários do seu departamento.
-            Deixe em branco para usar o GESTOR_CELULAR global definido no <code>.env</code>.
+            Configure o líder e os dados da empresa de cada departamento. Os dados da empresa são usados na geração de documentos (contratos, etc.).
         </p>
 
         <div id="unidadesContainer">
         {% if departamentos %}
             {% for dept in departamentos %}
             {% set ul = unidades.get(dept) %}
-            <div class="unidade-row">
-                <div class="row g-2 align-items-center">
+            <div class="unidade-row mb-3">
+                <!-- Linha principal: departamento / líder -->
+                <div class="row g-2 align-items-center mb-2">
                     <div class="col-md-3">
                         <div class="fw-bold small">{{ dept }}</div>
                         <input type="hidden" class="dept-key" value="{{ dept }}">
@@ -224,6 +224,73 @@
                             </option>
                             {% endfor %}
                         </select>
+                    </div>
+                </div>
+                <!-- Dados da empresa (expansível) -->
+                <div>
+                    <a class="small text-muted" data-bs-toggle="collapse"
+                       href="#empresa-{{ loop.index }}" role="button">
+                        <i class="fas fa-building me-1"></i>
+                        Dados da Empresa / Contrato
+                        {% if ul and ul.empresa_nome %}<span class="badge bg-success ms-1" style="font-size:.65rem">Configurado</span>{% endif %}
+                    </a>
+                    <div class="collapse {% if ul and ul.empresa_nome %}show{% endif %}" id="empresa-{{ loop.index }}">
+                        <div class="row g-2 mt-1" style="background:rgba(255,255,255,0.02);border-radius:.5rem;padding:.5rem">
+                            <div class="col-md-6">
+                                <label class="form-label form-label-sm small mb-1">Razão Social</label>
+                                <input type="text" class="form-control form-control-sm empresa-nome"
+                                    placeholder="Ex: Smart Academia LTDA"
+                                    value="{{ ul.empresa_nome if ul and ul.empresa_nome else '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label form-label-sm small mb-1">CNPJ</label>
+                                <input type="text" class="form-control form-control-sm empresa-cnpj"
+                                    placeholder="00.000.000/0001-00"
+                                    value="{{ ul.empresa_cnpj if ul and ul.empresa_cnpj else '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label form-label-sm small mb-1">Dias de Experiência</label>
+                                <input type="number" class="form-control form-control-sm experiencia-dias"
+                                    placeholder="45" min="1" max="90"
+                                    value="{{ ul.experiencia_dias if ul and ul.experiencia_dias else 45 }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label form-label-sm small mb-1">Sócio / Representante</label>
+                                <input type="text" class="form-control form-control-sm empresa-socio"
+                                    placeholder="Nome do sócio"
+                                    value="{{ ul.empresa_socio if ul and ul.empresa_socio else '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label form-label-sm small mb-1">CPF do Sócio</label>
+                                <input type="text" class="form-control form-control-sm socio-cpf"
+                                    placeholder="000.000.000-00"
+                                    value="{{ ul.socio_cpf if ul and ul.socio_cpf else '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label form-label-sm small mb-1">CEP</label>
+                                <input type="text" class="form-control form-control-sm empresa-cep"
+                                    placeholder="00000-000"
+                                    value="{{ ul.empresa_cep if ul and ul.empresa_cep else '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label form-label-sm small mb-1">Endereço</label>
+                                <input type="text" class="form-control form-control-sm empresa-endereco"
+                                    placeholder="Rua, número, complemento"
+                                    value="{{ ul.empresa_endereco if ul and ul.empresa_endereco else '' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label form-label-sm small mb-1">Cidade</label>
+                                <input type="text" class="form-control form-control-sm empresa-cidade"
+                                    placeholder="Vitória"
+                                    value="{{ ul.empresa_cidade if ul and ul.empresa_cidade else '' }}">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label form-label-sm small mb-1">UF</label>
+                                <input type="text" class="form-control form-control-sm empresa-uf"
+                                    placeholder="ES" maxlength="2"
+                                    value="{{ ul.empresa_uf if ul and ul.empresa_uf else '' }}">
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -883,10 +950,19 @@ function atualizarPreviewWpp(el) {
 function salvarUnidades() {
     const rows = document.querySelectorAll('.unidade-row');
     const unidades = Array.from(rows).map(r => ({
-        departamento: r.querySelector('.dept-key').value,
-        nome_unidade: r.querySelector('.nome-unidade').value.trim(),
-        celular_lider: r.querySelector('.celular-lider').value.trim(),
-        lider_id: r.querySelector('.lider-id').value || null,
+        departamento:     r.querySelector('.dept-key').value,
+        nome_unidade:     r.querySelector('.nome-unidade').value.trim(),
+        celular_lider:    r.querySelector('.celular-lider').value.trim(),
+        lider_id:         r.querySelector('.lider-id').value || null,
+        empresa_nome:     r.querySelector('.empresa-nome')?.value.trim() || '',
+        empresa_cnpj:     r.querySelector('.empresa-cnpj')?.value.trim() || '',
+        empresa_socio:    r.querySelector('.empresa-socio')?.value.trim() || '',
+        socio_cpf:        r.querySelector('.socio-cpf')?.value.trim() || '',
+        empresa_endereco: r.querySelector('.empresa-endereco')?.value.trim() || '',
+        empresa_cidade:   r.querySelector('.empresa-cidade')?.value.trim() || '',
+        empresa_uf:       r.querySelector('.empresa-uf')?.value.trim() || '',
+        empresa_cep:      r.querySelector('.empresa-cep')?.value.trim() || '',
+        experiencia_dias: r.querySelector('.experiencia-dias')?.value || 45,
     }));
     fetch('/config/unidades/salvar', {
         method: 'POST',

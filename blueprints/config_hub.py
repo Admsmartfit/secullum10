@@ -206,10 +206,20 @@ def unidades_salvar():
         if not unidade:
             unidade = UnidadeLider(departamento=dept)
             db.session.add(unidade)
-        unidade.nome_unidade = (item.get('nome_unidade') or dept).strip()
-        unidade.celular_lider = (item.get('celular_lider') or '').strip()
+        unidade.nome_unidade     = (item.get('nome_unidade') or dept).strip()
+        unidade.celular_lider    = (item.get('celular_lider') or '').strip()
         lider_id = item.get('lider_id')
-        unidade.lider_id = int(lider_id) if lider_id else None
+        unidade.lider_id         = int(lider_id) if lider_id else None
+        unidade.empresa_nome     = (item.get('empresa_nome') or '').strip() or None
+        unidade.empresa_cnpj     = (item.get('empresa_cnpj') or '').strip() or None
+        unidade.empresa_socio    = (item.get('empresa_socio') or '').strip() or None
+        unidade.socio_cpf        = (item.get('socio_cpf') or '').strip() or None
+        unidade.empresa_endereco = (item.get('empresa_endereco') or '').strip() or None
+        unidade.empresa_cidade   = (item.get('empresa_cidade') or '').strip() or None
+        unidade.empresa_uf       = (item.get('empresa_uf') or '').strip() or None
+        unidade.empresa_cep      = (item.get('empresa_cep') or '').strip() or None
+        exp = item.get('experiencia_dias')
+        unidade.experiencia_dias = int(exp) if exp else 45
         salvos += 1
     db.session.commit()
     return jsonify({'ok': True, 'salvos': salvos})

@@ -33,7 +33,29 @@ def _get_cfg(chave: str, default: str = '') -> str:
     return row.valor if row else default
 
 
-def _config_empresa() -> dict:
+def _config_empresa(departamento: str = None) -> dict:
+    """Retorna dados da empresa.
+    Prioridade: UnidadeLider do departamento → config global (Configuracao).
+    """
+    # Tenta buscar dados específicos do departamento
+    if departamento:
+        try:
+            from models import UnidadeLider
+            unidade = UnidadeLider.query.filter_by(departamento=departamento).first()
+            if unidade and unidade.empresa_nome:
+                return {
+                    'empresa_nome':     unidade.empresa_nome     or '',
+                    'empresa_cnpj':     unidade.empresa_cnpj     or '',
+                    'empresa_socio':    unidade.empresa_socio    or '',
+                    'socio_cpf':        unidade.socio_cpf        or '',
+                    'empresa_endereco': unidade.empresa_endereco or '',
+                    'empresa_cidade':   unidade.empresa_cidade   or '',
+                    'empresa_uf':       unidade.empresa_uf       or '',
+                    'empresa_cep':      unidade.empresa_cep      or '',
+                }
+        except Exception:
+            pass
+    # Fallback: configuração global
     chaves = [
         'empresa_nome', 'empresa_cnpj', 'empresa_socio', 'socio_cpf',
         'empresa_endereco', 'empresa_cidade', 'empresa_uf', 'empresa_cep',
@@ -97,11 +119,23 @@ def _contexto_datas_hoje() -> dict:
 
 
 def _contexto_experiencia(func) -> dict:
-    dias_str = _get_cfg('experiencia_dias', '45')
-    try:
-        dias = int(dias_str)
-    except ValueError:
-        dias = 45
+    # Prioridade: dias configurado no departamento → config global
+    dias = 45
+    if func.departamento:
+        try:
+            from models import UnidadeLider
+            unidade = UnidadeLider.query.filter_by(departamento=func.departamento).first()
+            if unidade and unidade.experiencia_dias:
+                dias = unidade.experiencia_dias
+            else:
+                dias = int(_get_cfg('experiencia_dias', '45'))
+        except Exception:
+            dias = int(_get_cfg('experiencia_dias', '45') or 45)
+    else:
+        try:
+            dias = int(_get_cfg('experiencia_dias', '45'))
+        except ValueError:
+            dias = 45
 
     inicio = func.admissao
     if inicio:
@@ -244,7 +278,7 @@ def gerar_pdf_de_template(template_doc, funcionario) -> tuple:
             f'Template não encontrado no servidor: {template_doc.arquivo_nome}'
         )
 
-    ctx = _config_empresa()
+    ctx = _config_empresa(departamento=funcionario.departamento)
     ctx.update(_contexto_funcionario(funcionario))
     ctx.update(_contexto_salario(funcionario))
     ctx.update(_contexto_datas_hoje())

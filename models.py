@@ -387,6 +387,17 @@ class UnidadeLider(db.Model):
     lider_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     lider = db.relationship('Usuario', backref='unidades_lider')
 
+    # Dados da empresa responsável pelo departamento
+    empresa_nome      = db.Column(db.String(300))
+    empresa_cnpj      = db.Column(db.String(30))
+    empresa_socio     = db.Column(db.String(300))
+    socio_cpf         = db.Column(db.String(20))
+    empresa_endereco  = db.Column(db.String(400))
+    empresa_cidade    = db.Column(db.String(200))
+    empresa_uf        = db.Column(db.String(5))
+    empresa_cep       = db.Column(db.String(15))
+    experiencia_dias  = db.Column(db.Integer, default=45)
+
     def __repr__(self):
         return f'<UnidadeLider {self.departamento}>'
 
