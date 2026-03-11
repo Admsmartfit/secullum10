@@ -17,6 +17,7 @@ services:
     volumes:
       - ./uploads:/app/uploads
       - ./instance:/app/instance
+      - ./storage:/app/storage
 
   celery_worker:
     build: .
@@ -31,6 +32,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./uploads:/app/uploads
+      - ./storage:/app/storage
 
   celery_beat:
     build: .

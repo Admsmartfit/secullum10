@@ -32,8 +32,10 @@ fi
 echo "[+] Configurando diretórios de uploads..."
 mkdir -p instance
 mkdir -p uploads/prontuario
+mkdir -p storage/templates
 chmod -R 777 instance
 chmod -R 777 uploads
+chmod -R 777 storage
 
 # 4. Configurar .env
 if [ -f ".env" ]; then
