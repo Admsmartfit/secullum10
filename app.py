@@ -108,6 +108,10 @@ def create_app():
             'task': 'tasks.verificar_inconsistencias_dia_anterior',
             'schedule': crontab(minute='*'),  # verifica a cada minuto, self-limita pelo horário configurado
         },
+        'sincronizar-feriados-anuais': {
+            'task': 'tasks.sincronizar_feriados_anuais',
+            'schedule': crontab(hour=6, minute=0),  # 06:00 diário; self-limita para 1º de Janeiro
+        },
     }
     celery.conf.timezone = 'America/Sao_Paulo'
     app.extensions['celery'] = celery

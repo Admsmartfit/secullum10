@@ -97,9 +97,10 @@ def index():
         'secullum_banco':    get_setting('secullum_banco',    'SECULLUM_BANCO',    ''),
         'megaapi_host':      get_setting('megaapi_host',      'MEGAAPI_HOST',      'apistart01.megaapi.com.br'),
         'megaapi_instance':  get_setting('megaapi_instance',  'MEGAAPI_INSTANCE',  ''),
-        'megaapi_token':     get_setting('megaapi_token',     'MEGAAPI_TOKEN',     ''),
-        'megaapi_secret':    get_setting('megaapi_secret',    'MEGAAPI_SECRET',    ''),
-        'gestor_celular':    get_setting('gestor_celular',    'GESTOR_CELULAR',    ''),
+        'megaapi_token':        get_setting('megaapi_token',        'MEGAAPI_TOKEN',  ''),
+        'megaapi_secret':       get_setting('megaapi_secret',       'MEGAAPI_SECRET', ''),
+        'gestor_celular':       get_setting('gestor_celular',       'GESTOR_CELULAR', ''),
+        'calendario_api_token': get_setting('calendario_api_token', '',               ''),
     }
 
     rh_politicas = {
@@ -108,7 +109,10 @@ def index():
         'fecho_folha_fim':    _cfg('fecho_folha_fim', '31'),
         'descontar_dsr':      _cfg('descontar_dsr', '0') == '1',
     }
-    feriados = Feriado.query.order_by(Feriado.data.desc()).all()
+    ano_feriados = int(request.args.get('ano_feriados', date.today().year))
+    feriados = Feriado.query.filter(
+        db.extract('year', Feriado.data) == ano_feriados
+    ).order_by(Feriado.data).all()
 
     return render_template(
         'config/index.html',
@@ -124,6 +128,8 @@ def index():
         sync_cfg=sync_cfg,
         rh_politicas=rh_politicas,
         feriados=feriados,
+        ano_feriados=ano_feriados,
+        ano_atual=date.today().year,
         funcoes_sal=funcoes_sal,
         salarios_map=salarios_map,
         experiencia_dias=experiencia_dias,
@@ -228,6 +234,7 @@ def unidades_salvar():
         unidade.empresa_cidade   = (item.get('empresa_cidade') or '').strip() or None
         unidade.empresa_uf       = (item.get('empresa_uf') or '').strip() or None
         unidade.empresa_cep      = (item.get('empresa_cep') or '').strip() or None
+        unidade.cidade_ibge      = (item.get('cidade_ibge') or '').strip() or None
         exp = item.get('experiencia_dias')
         unidade.experiencia_dias = int(exp) if exp else 45
         salvos += 1
@@ -670,24 +677,41 @@ def politicas_salvar():
 def feriado_novo():
     data_str = request.form.get('data')
     descricao = request.form.get('descricao', '').strip()
+    uf = request.form.get('uf', '').strip().upper() or None
+    cidade_ibge = request.form.get('cidade_ibge', '').strip() or None
+    tipo = request.form.get('tipo', 'personalizado')
 
-    if not data_str:
-        flash('Data do feriado é obrigatória.', 'danger')
-        return redirect(url_for('config_hub.index') + '#politicas')
+    if not data_str or not descricao:
+        flash('Data e descrição são obrigatórias.', 'danger')
+        return redirect(url_for('config_hub.index') + '#feriados')
 
     try:
         data = datetime.strptime(data_str, '%Y-%m-%d').date()
-        if Feriado.query.filter_by(data=data).first():
-            flash('Feriado já cadastrado para esta data.', 'warning')
+        if Feriado.query.filter_by(data=data, tipo=tipo, uf=uf, cidade_ibge=cidade_ibge).first():
+            flash('Feriado já cadastrado para esta data/tipo/localidade.', 'warning')
         else:
-            f = Feriado(data=data, descricao=descricao)
+            f = Feriado(
+                data=data, descricao=descricao, tipo=tipo,
+                uf=uf, cidade_ibge=cidade_ibge, fonte='manual',
+                ativo=True, criado_por_id=current_user.id,
+            )
             db.session.add(f)
             db.session.commit()
             flash('Feriado adicionado com sucesso.', 'success')
     except Exception as e:
         flash(f'Erro ao adicionar feriado: {e}', 'danger')
 
-    return redirect(url_for('config_hub.index') + '#politicas')
+    return redirect(url_for('config_hub.index') + '#feriados')
+
+
+@config_hub_bp.route('/feriados/<int:fid>/toggle', methods=['POST'])
+@login_required
+@_somente_gestor
+def feriado_toggle(fid):
+    f = Feriado.query.get_or_404(fid)
+    f.ativo = not f.ativo
+    db.session.commit()
+    return jsonify({'ok': True, 'ativo': f.ativo})
 
 
 @config_hub_bp.route('/feriados/<int:fid>/excluir', methods=['POST'])
@@ -698,7 +722,27 @@ def feriado_excluir(fid):
     db.session.delete(f)
     db.session.commit()
     flash('Feriado excluído.', 'success')
-    return redirect(url_for('config_hub.index') + '#politicas')
+    return redirect(url_for('config_hub.index') + '#feriados')
+
+
+@config_hub_bp.route('/feriados/sync', methods=['POST'])
+@login_required
+@_somente_gestor
+def feriados_sync():
+    """Sincroniza feriados via APIs externas para o ano solicitado."""
+    from services.feriados_service import sincronizar_feriados
+    try:
+        ano = int(request.form.get('ano', date.today().year))
+    except (ValueError, TypeError):
+        ano = date.today().year
+    result = sincronizar_feriados(ano, usuario_id=current_user.id)
+    criados = result.get('criados', 0)
+    avisos = result.get('avisos', [])
+    msg = f'{criados} feriado(s) importado(s) para {ano}.'
+    if avisos:
+        msg += ' Avisos: ' + '; '.join(avisos[:2])
+    flash(msg, 'success' if not avisos else 'warning')
+    return redirect(url_for('config_hub.index') + '#feriados')
 
 
 @config_hub_bp.route('/verificar-inconsistencias/executar', methods=['POST'])
@@ -722,9 +766,10 @@ def integracoes_salvar():
         ('secullum_banco',    'SECULLUM_BANCO'),
         ('megaapi_host',      'MEGAAPI_HOST'),
         ('megaapi_instance',  'MEGAAPI_INSTANCE'),
-        ('megaapi_token',     'MEGAAPI_TOKEN'),
-        ('megaapi_secret',    'MEGAAPI_SECRET'),
-        ('gestor_celular',    'GESTOR_CELULAR'),
+        ('megaapi_token',        'MEGAAPI_TOKEN'),
+        ('megaapi_secret',       'MEGAAPI_SECRET'),
+        ('gestor_celular',       'GESTOR_CELULAR'),
+        ('calendario_api_token', ''),
     ]
     for chave_db, form_field in campos:
         valor = request.form.get(form_field, '').strip()

@@ -396,6 +396,7 @@ class UnidadeLider(db.Model):
     empresa_cidade    = db.Column(db.String(200))
     empresa_uf        = db.Column(db.String(5))
     empresa_cep       = db.Column(db.String(15))
+    cidade_ibge       = db.Column(db.String(10), nullable=True)  # código IBGE (ex: 3205200 = Vila Velha)
     experiencia_dias  = db.Column(db.Integer, default=45)
 
     def __repr__(self):
@@ -644,9 +645,17 @@ class TabelaSalarial(db.Model):
 class Feriado(db.Model):
     __tablename__ = 'feriados'
     id = db.Column(db.Integer, primary_key=True)
-    data = db.Column(db.Date, nullable=False, unique=True)
+    data = db.Column(db.Date, nullable=False)
     descricao = db.Column(db.String(200))
+    # nacional | estadual | municipal | personalizado
+    tipo = db.Column(db.String(20), default='personalizado', nullable=False)
+    uf = db.Column(db.String(2), nullable=True)
+    cidade_ibge = db.Column(db.String(10), nullable=True)
+    fonte = db.Column(db.String(50), nullable=True)   # brasilapi / calendario / holidays / manual
+    ativo = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    criado_por = db.relationship('Usuario', backref='feriados_criados')
 
     def __repr__(self):
-        return f'<Feriado {self.data}: {self.descricao}>'
+        return f'<Feriado {self.data} [{self.tipo}]: {self.descricao}>'

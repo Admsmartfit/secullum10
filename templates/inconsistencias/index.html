@@ -489,14 +489,19 @@ function renderDivergencias(divs) {
         const lisSec = d.secullum_horas.map(h => `<li class="text-success">${h}</li>`).join('');
         const lisLoc = d.local_horas.map(h => `<li class="text-info">${h}</li>`).join('');
 
+        const feriadoBadge = d.feriado
+            ? `<span class="badge bg-warning text-dark ms-1" title="Dia de feriado para esta unidade"><i class="fas fa-calendar-day me-1"></i>Feriado</span>`
+            : '';
+
         return `
-        <div class="inc-card mb-2">
+        <div class="inc-card mb-2 ${d.feriado ? 'border-warning' : ''}">
             <div class="inc-header d-flex align-items-center gap-3 flex-wrap">
                 <div style="flex:1">
                     <span class="fw-bold">${d.nome}</span>
                     <span class="text-muted small ms-2">${d.departamento}</span>
                 </div>
                 <span class="text-muted small">${d.dia_semana}, ${d.data_fmt}</span>
+                ${feriadoBadge}
                 ${labelDif}
                 <button class="btn btn-outline-warning ms-auto"
                         onclick="ressincronizar('${d.data}', this)">

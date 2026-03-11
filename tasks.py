@@ -336,6 +336,17 @@ def register_tasks(celery):
                 logger.error(f'[acordos_mensais] Erro para {f.id}: {e}')
         return {'enviados': enviados}
 
+    @celery.task(name='tasks.sincronizar_feriados_anuais')
+    def sincronizar_feriados_anuais():
+        """Roda em 1º de Janeiro: importa feriados nacionais e municipais do novo ano."""
+        from services.feriados_service import sincronizar_feriados
+        hoje = date.today()
+        if hoje.month != 1 or hoje.day != 1:
+            return {'skipped': True, 'reason': 'não é 1º de Janeiro'}
+        result = sincronizar_feriados(hoje.year)
+        logger.info(f'[feriados_anuais] {result}')
+        return result
+
     @celery.task(name='tasks.sync_batidas_rapida')
     def sync_batidas_rapida():
         from services.sync_service import sync_batidas_incremental

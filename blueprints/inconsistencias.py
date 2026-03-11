@@ -13,7 +13,7 @@ from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required
 from extensions import db
-from models import Batida, Funcionario, AlocacaoDiaria
+from models import Batida, Funcionario, AlocacaoDiaria, UnidadeLider
 
 inconsistencias_bp = Blueprint('inconsistencias', __name__, url_prefix='/inconsistencias')
 
@@ -432,6 +432,11 @@ def comparar():
 
     func_cache = {f.id: f for f in Funcionario.query.filter_by(ativo=True).all()}
 
+    # Mapa de UnidadeLider por departamento para lookup de IBGE/UF
+    unidade_map = {u.departamento: u for u in UnidadeLider.query.all()}
+
+    from services.feriados_service import is_feriado
+
     for (fid, dia) in sorted(todas_chaves, key=lambda x: (x[1], x[0])):
         horas_sec   = sec_map.get((fid, dia), [])
         batidas_loc = local_map.get((fid, dia), [])
@@ -446,6 +451,12 @@ def comparar():
         nome = func.nome if func else fid
         dept_nome = func.departamento if func else '—'
 
+        # Verificar se o dia é feriado para a localidade do departamento
+        ul = unidade_map.get(dept_nome) if func else None
+        ibge = getattr(ul, 'cidade_ibge', None) if ul else None
+        uf   = getattr(ul, 'empresa_uf', None) if ul else None
+        dia_feriado = is_feriado(dia, ibge, uf)
+
         # Detalha o que o Secullum tem vs o que temos
         divergencias.append({
             'funcionario_id': fid,
@@ -459,6 +470,7 @@ def comparar():
             'faltando':       n_sec - n_loc,  # positivo = temos menos que o Secullum
             'secullum_horas': [h['hora'] + ' (' + h['tipo'] + ')' for h in horas_sec],
             'local_horas':    [b.hora + ' (' + (b.tipo or '?') + ')' for b in sorted(batidas_loc, key=lambda b: b.hora)],
+            'feriado':        dia_feriado,
         })
 
     return jsonify({
