@@ -86,12 +86,12 @@
         <div class="mb-4">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <label class="form-label text-muted small fw-bold mb-0">HORÁRIOS POR DIA DA SEMANA</label>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnAplicarPadrao">
+                <button type="button" class="btn btn-outline-secondary" id="btnAplicarPadrao">
                     <i class="fas fa-copy me-1"></i>Aplicar padrão a Seg–Sex
                 </button>
             </div>
             <div class="table-responsive">
-                <table class="table table-sm align-middle text-center">
+                <table class="table table align-middle text-center">
                     <thead class="table-light">
                         <tr>
                             <th style="width:50px;">Ativo</th>
@@ -125,17 +125,17 @@
                             </td>
                             <td>
                                 <input type="time" name="dia_{{ i }}_inicio"
-                                    class="form-control form-control-sm daily-input"
+                                    class="form-control form-control daily-input"
                                     value="{{ complex.inicio if complex else (turno.hora_inicio.strftime('%H:%M') if turno else '08:00') }}">
                             </td>
                             <td>
                                 <input type="time" name="dia_{{ i }}_fim"
-                                    class="form-control form-control-sm daily-input"
+                                    class="form-control form-control daily-input"
                                     value="{{ complex.fim if complex else (turno.hora_fim.strftime('%H:%M') if turno else '17:00') }}">
                             </td>
                             <td>
                                 <input type="number" name="dia_{{ i }}_intervalo"
-                                    class="form-control form-control-sm daily-input" placeholder="60" min="0" max="240"
+                                    class="form-control form-control daily-input" placeholder="60" min="0" max="240"
                                     value="{{ complex.intervalo if complex else (turno.intervalo_minutos if turno else 60) }}">
                             </td>
                         </tr>

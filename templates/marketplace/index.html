@@ -52,12 +52,12 @@
                     <span class="small">{{ c.funcionario.nome }}</span>
                     <div class="d-flex gap-1">
                         <form method="POST" action="{{ url_for('marketplace.aprovar_candidatura', cand_id=c.id) }}" class="d-inline">
-                            <button class="btn btn-success btn-sm py-0 px-2" title="Aprovar">
+                            <button class="btn btn-success btn py-0 px-2" title="Aprovar">
                                 <i class="fas fa-check"></i>
                             </button>
                         </form>
                         <form method="POST" action="{{ url_for('marketplace.rejeitar_candidatura', cand_id=c.id) }}" class="d-inline">
-                            <button class="btn btn-danger btn-sm py-0 px-2" title="Rejeitar">
+                            <button class="btn btn-danger btn py-0 px-2" title="Rejeitar">
                                 <i class="fas fa-times"></i>
                             </button>
                         </form>
@@ -68,7 +68,7 @@
             {% endif %}
             {% if vaga.status not in ('aprovado', 'cancelado') %}
             <form method="POST" action="{{ url_for('marketplace.cancelar_vaga', vaga_id=vaga.id) }}" class="mt-3">
-                <button class="btn btn-outline-danger btn-sm w-100">
+                <button class="btn btn-outline-danger btn w-100">
                     <i class="fas fa-ban me-1"></i>Cancelar Vaga
                 </button>
             </form>
@@ -79,17 +79,17 @@
             <div class="mt-auto pt-3">
                 {% set status_cand = candidaturas_usuario.get(vaga.id) %}
                 {% if status_cand == 'aprovado' %}
-                <span class="btn btn-success btn-sm w-100 disabled"><i class="fas fa-check me-1"></i>Aprovado!</span>
+                <span class="btn btn-success btn w-100 disabled"><i class="fas fa-check me-1"></i>Aprovado!</span>
                 {% elif status_cand == 'pendente' %}
-                <span class="btn btn-warning btn-sm w-100 disabled text-dark"><i class="fas fa-hourglass-half me-1"></i>Candidatura Enviada</span>
+                <span class="btn btn-warning btn w-100 disabled text-dark"><i class="fas fa-hourglass-half me-1"></i>Candidatura Enviada</span>
                 {% elif vaga.status == 'aberto' %}
                 <form method="POST" action="{{ url_for('marketplace.candidatar', vaga_id=vaga.id) }}">
-                    <button class="btn btn-primary btn-sm w-100">
+                    <button class="btn btn-primary btn w-100">
                         <i class="fas fa-hand-paper me-2"></i>Candidatar-se
                     </button>
                 </form>
                 {% else %}
-                <span class="btn btn-secondary btn-sm w-100 disabled">Indisponível</span>
+                <span class="btn btn-secondary btn w-100 disabled">Indisponível</span>
                 {% endif %}
             </div>
             {% endif %}

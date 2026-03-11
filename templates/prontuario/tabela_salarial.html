@@ -17,7 +17,7 @@
             Define o valor usado pela tag <code>&#123;&#123;salario&#125;&#125;</code> nos documentos contratuais
         </div>
     </div>
-    <a href="{{ url_for('prontuario.gerenciar_templates') }}" class="btn btn-outline-secondary btn-sm">
+    <a href="{{ url_for('prontuario.gerenciar_templates') }}" class="btn btn-outline-secondary btn">
         <i class="fas fa-arrow-left me-1"></i>Voltar a Templates
     </a>
 </div>
@@ -107,21 +107,21 @@
                         </span>
                     </td>
                     <td>
-                        <input type="text" class="form-control form-control-sm sal-input"
+                        <input type="text" class="form-control form-control sal-input"
                                data-campo="salario"
                                placeholder="0,00"
                                value="{{ '%.2f'|format(sal.salario|float) if sal and sal.salario is not none else '' }}"
                                oninput="markDirty(this)">
                     </td>
                     <td>
-                        <input type="text" class="form-control form-control-sm sal-input"
+                        <input type="text" class="form-control form-control sal-input"
                                data-campo="auxilio_alimentacao"
                                placeholder="0,00"
                                value="{{ '%.2f'|format(sal.auxilio_alimentacao|float) if sal and sal.auxilio_alimentacao is not none else '' }}"
                                oninput="markDirty(this)">
                     </td>
                     <td>
-                        <input type="text" class="form-control form-control-sm sal-input"
+                        <input type="text" class="form-control form-control sal-input"
                                data-campo="premiacao"
                                placeholder="0,00"
                                value="{{ '%.2f'|format(sal.premiacao|float) if sal and sal.premiacao is not none else '' }}"
@@ -129,12 +129,12 @@
                     </td>
                     <td>
                         <div class="d-flex gap-1 flex-wrap">
-                            <button class="btn btn-sm btn-primary save-btn"
+                            <button class="btn btn-primary save-btn"
                                     onclick="salvar(this)" disabled>
                                 <i class="fas fa-save me-1"></i>Salvar
                             </button>
                             {% if sal %}
-                            <button class="btn btn-sm btn-outline-danger"
+                            <button class="btn btn-outline-danger"
                                     onclick="excluir(this)" title="Remover todos os valores">
                                 <i class="fas fa-times"></i>
                             </button>
@@ -160,7 +160,7 @@
     <div id="toast" class="toast align-items-center text-white border-0" role="alert" aria-live="assertive">
         <div class="d-flex">
             <div class="toast-body" id="toastMsg"></div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            <button type="button" class="btn btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
         </div>
     </div>
 </div>
@@ -176,7 +176,7 @@ function salvar(btn) {
     const funcao = row.dataset.funcao;
 
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    btn.innerHTML = '<span class="spinner-border spinner-border"></span>';
 
     const fd = new FormData();
     fd.append('funcao', funcao);
@@ -193,7 +193,7 @@ function salvar(btn) {
                 badge.className = 'sal-status sal-badge-set';
                 if (!row.querySelector('.btn-outline-danger')) {
                     const delBtn = document.createElement('button');
-                    delBtn.className = 'btn btn-sm btn-outline-danger';
+                    delBtn.className = 'btn btn-outline-danger';
                     delBtn.title = 'Remover todos os valores';
                     delBtn.innerHTML = '<i class="fas fa-times"></i>';
                     delBtn.onclick = function() { excluir(delBtn); };

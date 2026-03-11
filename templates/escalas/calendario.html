@@ -51,10 +51,10 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h3 mb-0 fw-bold">Calendário de Escalas</h1>
     <div class="d-flex gap-2">
-        <a href="{{ url_for('escalas.alocar') }}" class="btn btn-primary btn-sm">
+        <a href="{{ url_for('escalas.alocar') }}" class="btn btn-primary btn">
             <i class="fas fa-plus me-1"></i>Nova Alocação
         </a>
-        <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-light btn-sm">
+        <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-light btn">
             <i class="fas fa-list me-1"></i>Turnos
         </a>
     </div>
@@ -67,7 +67,7 @@
             <h6 class="fw-semibold mb-3 small text-muted text-uppercase">Filtros</h6>
 
             <label class="form-label small fw-bold mb-1">Departamento</label>
-            <select id="filtDept" class="form-select form-select-sm mb-2">
+            <select id="filtDept" class="form-select form-select mb-2">
                 <option value="">Todos</option>
                 {% for dept in departamentos %}
                 <option value="{{ dept }}">{{ dept }}</option>
@@ -75,12 +75,12 @@
             </select>
 
             <label class="form-label small fw-bold mb-1">Função</label>
-            <select id="filtFuncao" class="form-select form-select-sm mb-3">
+            <select id="filtFuncao" class="form-select form-select mb-3">
                 <option value="">Todas</option>
             </select>
 
             <label class="form-label small fw-bold mb-1">Funcionário</label>
-            <select id="filtFunc" class="form-select form-select-sm mb-3">
+            <select id="filtFunc" class="form-select form-select mb-3">
                 <option value="">Todos</option>
                 {% for f in funcionarios %}
                 <option value="{{ f.id }}">{{ f.nome }}</option>
@@ -111,16 +111,16 @@
         <div class="modal-content">
             <div class="modal-header border-0 pb-0">
                 <h6 class="modal-title fw-bold" id="modalEventoTitulo"></h6>
-                <button class="btn-close" data-bs-dismiss="modal"></button>
+                <button class="btn btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div id="modalEventoBody"></div>
             </div>
             <div class="modal-footer border-0 pt-0">
-                <button class="btn btn-outline-danger btn-sm" id="btnExcluirAloc">
+                <button class="btn btn-outline-danger btn" id="btnExcluirAloc">
                     <i class="fas fa-trash me-1"></i>Excluir Alocação
                 </button>
-                <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+                <button class="btn btn-outline-secondary btn" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
     </div>

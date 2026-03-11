@@ -447,7 +447,7 @@
 <body>
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
-            <button id="sidebarToggleNav" class="btn btn-sm btn-outline-secondary me-2 d-lg-none" type="button">
+            <button id="sidebarToggleNav" class="btn btn-outline-secondary me-2 d-lg-none" type="button">
                 <i class="fas fa-bars"></i>
             </button>
             <a class="navbar-brand" href="/">
@@ -458,7 +458,7 @@
                     <i class="fas fa-database me-1"></i>{{ session.get('banco', '—') }}
                 </span>
                 <div class="dropdown">
-                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle rounded-pill px-3"
+                    <button class="btn btn-outline-secondary dropdown-toggle rounded-pill px-3"
                             type="button" data-bs-toggle="dropdown">
                         <i class="fas fa-user-circle me-1"></i>
                         <span class="d-none d-md-inline">{{ current_user.nome.split()[0] if current_user.is_authenticated else 'Conta' }}</span>
@@ -478,81 +478,89 @@
             {% set is_admin   = current_user.nivel_acesso == 'administrador' %}
             {% set is_gerente = current_user.nivel_acesso in ['administrador', 'gerente'] %}
             <nav class="nav flex-column">
+                <div class="section-label">🏠 Visão Geral</div>
                 <a class="nav-link {% if request.path == '/' %}active{% endif %}"
                    href="/" data-tooltip="Dashboard">
-                    <i class="fas fa-chart-line"></i>
+                    <i class="fas fa-home"></i>
                     <span class="nav-link-text">Dashboard</span>
                 </a>
-                {% if is_gerente %}
-                <a class="nav-link {% if request.path == '/relatorios' %}active{% endif %}"
-                   href="/relatorios" data-tooltip="Relatórios">
-                    <i class="fas fa-file-export"></i>
-                    <span class="nav-link-text">Relatórios</span>
-                </a>
-                <a class="nav-link {% if request.path.startswith('/inconsistencias') %}active{% endif %}"
-                   href="/inconsistencias/" data-tooltip="Inconsistências">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <span class="nav-link-text">Inconsistências</span>
-                </a>
-                {% endif %}
 
                 {% if is_gerente %}
                 <hr class="sidebar-separator">
-                <div class="section-label">Gestão</div>
-
+                <div class="section-label">⏱️ Gestão de Ponto</div>
+                <a class="nav-link {% if request.path.startswith('/inconsistencias') %}active{% endif %}"
+                   href="/inconsistencias/" data-tooltip="Inconsistências">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span class="nav-link-text">Inconsistências</span>
+                </a>
+                <a class="nav-link {% if request.path.startswith('/batidas') %}active{% endif %}"
+                   href="/batidas/" data-tooltip="Espelho de Ponto">
+                    <i class="fas fa-id-card"></i>
+                    <span class="nav-link-text">Espelho de Ponto</span>
+                </a>
                 <a class="nav-link {% if request.path.startswith('/escalas') %}active{% endif %}"
-                   href="/escalas/" data-tooltip="Escalas">
-                    <i class="fas fa-calendar-week"></i>
-                    <span class="nav-link-text">Escalas</span>
+                   href="/escalas/" data-tooltip="Gestão de Escalas">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span class="nav-link-text">Gestão de Escalas</span>
                 </a>
                 <a class="nav-link {% if request.path == '/banco-horas' or request.path == '/banco-horas/alertas' %}active{% endif %}"
                    href="/banco-horas" data-tooltip="Banco de Horas">
-                    <i class="fas fa-hourglass-half"></i>
+                    <i class="fas fa-history"></i>
                     <span class="nav-link-text">Banco de Horas</span>
                     {% if alertas_banco_horas > 0 %}
                     <span class="badge bg-warning text-dark ms-auto" style="font-size:0.65rem;">{{ alertas_banco_horas }}</span>
                     {% endif %}
                 </a>
-                <a class="nav-link {% if request.path == '/financeiro' %}active{% endif %}"
-                   href="/financeiro" data-tooltip="Financeiro">
-                    <i class="fas fa-chart-pie"></i>
-                    <span class="nav-link-text">Financeiro</span>
-                </a>
-                <a class="nav-link {% if request.path.startswith('/whatsapp') %}active{% endif %}"
-                   href="/whatsapp/logs" data-tooltip="WhatsApp">
-                    <i class="fab fa-whatsapp"></i>
-                    <span class="nav-link-text">WhatsApp</span>
-                </a>
-                <a class="nav-link {% if request.path.startswith('/notificacoes') %}active{% endif %}"
-                   href="/notificacoes/" data-tooltip="Regras de Notificação">
-                    <i class="fas fa-bell"></i>
-                    <span class="nav-link-text">Regras de Notificação</span>
-                </a>
-                <a class="nav-link {% if request.path.startswith('/marketplace') %}active{% endif %}"
-                   href="/marketplace/" data-tooltip="Marketplace">
-                    <i class="fas fa-store"></i>
-                    <span class="nav-link-text">Marketplace</span>
-                </a>
-                <a class="nav-link {% if request.path.startswith('/prontuario') %}active{% endif %}"
-                   href="/prontuario/alertas" data-tooltip="Prontuário">
-                    <i class="fas fa-folder-open"></i>
-                    <span class="nav-link-text">Prontuário</span>
+
+                <hr class="sidebar-separator">
+                <div class="section-label">🤝 Desenv. Humano</div>
+                <a class="nav-link {% if request.path.startswith('/prontuario/alertas') or request.path.startswith('/prontuario/gerar') %}active{% endif %}"
+                   href="/prontuario/alertas" data-tooltip="Prontuários & Documentos">
+                    <i class="fas fa-users"></i>
+                    <span class="nav-link-text">Prontuários & Documentos</span>
                     {% if alertas_docs > 0 %}
                     <span class="badge bg-danger ms-auto" style="font-size:0.65rem;">{{ alertas_docs }}</span>
                     {% endif %}
                 </a>
-                <a class="nav-link {% if request.path.startswith('/prontuario/gerar') or request.path.startswith('/prontuario/templates') %}active{% endif %}"
-                   href="/prontuario/gerar-documentos" data-tooltip="Docs Contratuais">
-                    <i class="fas fa-file-contract"></i>
-                    <span class="nav-link-text">Docs Contratuais</span>
+                <a class="nav-link {% if request.path == '/financeiro' %}active{% endif %}"
+                   href="/financeiro" data-tooltip="Financeiro / Benefícios">
+                    <i class="fas fa-wallet"></i>
+                    <span class="nav-link-text">Financeiro / Benefícios</span>
                 </a>
-                <a class="nav-link {% if request.path == '/prontuario/salarios' %}active{% endif %}"
-                   href="/prontuario/salarios" data-tooltip="Tabela Salarial">
-                    <i class="fas fa-dollar-sign"></i>
-                    <span class="nav-link-text">Tabela Salarial</span>
+                <a class="nav-link {% if request.path == '/relatorios' %}active{% endif %}"
+                   href="/relatorios" data-tooltip="Relatórios PDF">
+                    <i class="fas fa-file-pdf"></i>
+                    <span class="nav-link-text">Relatórios Técnicos</span>
                 </a>
+                <a class="nav-link {% if request.path.startswith('/marketplace') or request.path.startswith('/trocas') %}active{% endif %}"
+                   href="/marketplace/" data-tooltip="Marketplace / Trocas">
+                    <i class="fas fa-random"></i>
+                    <span class="nav-link-text">Marketplace / Trocas</span>
+                </a>
+
+                {% if is_admin %}
+                <hr class="sidebar-separator">
+                <div class="section-label">⚙️ Administração</div>
+                <a class="nav-link {% if request.path == '/config/' %}active{% endif %}"
+                   href="/config/" data-tooltip="Configurações Hub">
+                    <i class="fas fa-tools"></i>
+                    <span class="nav-link-text">Parâmetros do Sistema</span>
+                </a>
+                <a class="nav-link {% if request.path.startswith('/notificacoes') %}active{% endif %}"
+                   href="/notificacoes/" data-tooltip="Regras de WhatsApp">
+                    <i class="fas fa-bullhorn"></i>
+                    <span class="nav-link-text">Regras de WhatsApp</span>
+                </a>
+                <a class="nav-link {% if request.path.startswith('/whatsapp/logs') %}active{% endif %}"
+                   href="/whatsapp/logs" data-tooltip="Logs de Comunicação">
+                    <i class="fab fa-whatsapp"></i>
+                    <span class="nav-link-text">Logs de Mensagens</span>
+                </a>
+                {% endif %}
                 {% else %}
-                {# Funcionário: acesso ao marketplace e trocas #}
+                {# Funcionário: Marketplace #}
+                <hr class="sidebar-separator">
+                <div class="section-label">🤝 Marketplace</div>
                 <a class="nav-link {% if request.path.startswith('/marketplace') %}active{% endif %}"
                    href="/marketplace/" data-tooltip="Marketplace">
                     <i class="fas fa-store"></i>
@@ -562,25 +570,6 @@
                    href="/trocas/minha-escala" data-tooltip="Trocas de Turno">
                     <i class="fas fa-exchange-alt"></i>
                     <span class="nav-link-text">Trocas de Turno</span>
-                </a>
-                {% endif %}
-
-                {% if is_admin %}
-                <hr class="sidebar-separator">
-                <div class="section-label">Sistema</div>
-
-                <a class="nav-link {% if request.path.startswith('/config') %}active{% endif %}"
-                   href="/config/" data-tooltip="Configurações">
-                    <i class="fas fa-cog"></i>
-                    <span class="nav-link-text">Configurações</span>
-                </a>
-                <a class="nav-link" href="/sync" data-tooltip="Sincronizar Funcionários">
-                    <i class="fas fa-sync"></i>
-                    <span class="nav-link-text">Sincronizar Funcionários</span>
-                </a>
-                <a class="nav-link" href="/sync-batidas" data-tooltip="Sincronizar Batidas">
-                    <i class="fas fa-clock-rotate-left"></i>
-                    <span class="nav-link-text">Sincronizar Batidas</span>
                 </a>
                 {% endif %}
             </nav>
@@ -598,7 +587,7 @@
                 {% for category, message in messages %}
                     <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
                         {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        <button type="button" class="btn btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
                 {% endfor %}
             {% endif %}

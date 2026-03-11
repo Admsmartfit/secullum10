@@ -72,7 +72,7 @@
         <strong>{{ ausencias|length }} ausência(s) hoje</strong> — escalados sem batida:
         <span class="ms-1">{{ ausencias|map(attribute='nome')|join(', ') }}</span>
     </div>
-    <a href="{{ url_for('escalas.divergencias') }}" class="btn btn-sm btn-warning ms-auto">Ver divergências</a>
+    <a href="{{ url_for('escalas.divergencias') }}" class="btn btn-warning ms-auto">Ver divergências</a>
 </div>
 {% endif %}
 
@@ -82,7 +82,7 @@
         <div class="card">
             <div class="d-flex justify-content-between align-items-center px-4 pt-4 pb-2">
                 <h6 class="mb-0 fw-semibold">Atividade de Hoje</h6>
-                <a href="/config/espelho" class="btn btn-sm btn-outline-light">Ver espelho completo</a>
+                <a href="/config/espelho" class="btn btn-outline-light">Ver espelho completo</a>
             </div>
             <div class="px-4 pb-4">
                 {% if batidas %}

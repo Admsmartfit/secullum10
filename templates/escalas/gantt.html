@@ -36,10 +36,10 @@
         <i class="fas fa-chart-gantt me-2 text-primary"></i>Gantt – Planejado vs. Realizado
     </h1>
     <div class="d-flex gap-2">
-        <a href="{{ url_for('escalas.scheduler') }}" class="btn btn-outline-secondary btn-sm">
+        <a href="{{ url_for('escalas.scheduler') }}" class="btn btn-outline-secondary btn">
             <i class="fas fa-table me-1"></i>Scheduler
         </a>
-        <a href="{{ url_for('escalas.calendario') }}" class="btn btn-outline-secondary btn-sm">
+        <a href="{{ url_for('escalas.calendario') }}" class="btn btn-outline-secondary btn">
             <i class="fas fa-calendar me-1"></i>Calendário
         </a>
     </div>
@@ -50,12 +50,12 @@
     <div class="row g-2 align-items-end">
         <div class="col-md-3">
             <label class="form-label small fw-bold mb-1">DATA</label>
-            <input type="date" id="filtData" class="form-control form-control-sm"
+            <input type="date" id="filtData" class="form-control form-control"
                    value="{{ data }}">
         </div>
         <div class="col-md-3">
             <label class="form-label small fw-bold mb-1">DEPARTAMENTO</label>
-            <select id="filtDept" class="form-select form-select-sm">
+            <select id="filtDept" class="form-select form-select">
                 <option value="">Todos</option>
                 {% for d in departamentos %}
                 <option value="{{ d }}" {{ 'selected' if d == dept_sel }}>{{ d }}</option>
@@ -64,7 +64,7 @@
         </div>
         <div class="col-md-4">
             <label class="form-label small fw-bold mb-1">FUNCIONÁRIO</label>
-            <select id="filtFunc" class="form-select form-select-sm">
+            <select id="filtFunc" class="form-select form-select">
                 <option value="">Todos</option>
                 {% for f in funcionarios %}
                 <option value="{{ f.id }}" {{ 'selected' if f.id|string == func_sel }}>{{ f.nome }}</option>
@@ -72,7 +72,7 @@
             </select>
         </div>
         <div class="col-md-2">
-            <button id="btnRecarregar" class="btn btn-primary btn-sm w-100">
+            <button id="btnRecarregar" class="btn btn-primary btn w-100">
                 <i class="fas fa-search me-1"></i>Visualizar
             </button>
         </div>

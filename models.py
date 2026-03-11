@@ -639,3 +639,14 @@ class TabelaSalarial(db.Model):
 
     def __repr__(self):
         return f'<TabelaSalarial {self.funcao} = {self.salario}>'
+
+
+class Feriado(db.Model):
+    __tablename__ = 'feriados'
+    id = db.Column(db.Integer, primary_key=True)
+    data = db.Column(db.Date, nullable=False, unique=True)
+    descricao = db.Column(db.String(200))
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Feriado {self.data}: {self.descricao}>'

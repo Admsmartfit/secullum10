@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
 from extensions import db
-from models import Usuario, Funcionario, UnidadeLider, AlocacaoDiaria, Turno, Configuracao
+from models import Usuario, Funcionario, UnidadeLider, AlocacaoDiaria, Turno, Configuracao, Feriado
 
 config_hub_bp = Blueprint('config_hub', __name__, url_prefix='/config')
 
@@ -102,6 +102,14 @@ def index():
         'gestor_celular':    get_setting('gestor_celular',    'GESTOR_CELULAR',    ''),
     }
 
+    rh_politicas = {
+        'tolerancia_ponto':   _cfg('tolerancia_ponto_minutos', '10'),
+        'fecho_folha_inicio': _cfg('fecho_folha_inicio', '1'),
+        'fecho_folha_fim':    _cfg('fecho_folha_fim', '31'),
+        'descontar_dsr':      _cfg('descontar_dsr', '0') == '1',
+    }
+    feriados = Feriado.query.order_by(Feriado.data.desc()).all()
+
     return render_template(
         'config/index.html',
         usuarios=usuarios,
@@ -114,6 +122,8 @@ def index():
         megaapi_token=bool(integ_cfg['megaapi_token']),
         megaapi_instance=bool(integ_cfg['megaapi_instance']),
         sync_cfg=sync_cfg,
+        rh_politicas=rh_politicas,
+        feriados=feriados,
         funcoes_sal=funcoes_sal,
         salarios_map=salarios_map,
         experiencia_dias=experiencia_dias,
@@ -473,29 +483,31 @@ def sync_batidas_executar():
     from zoneinfo import ZoneInfo
     _tz = ZoneInfo('America/Sao_Paulo')
     
-    if tipo == 'completa':
-        from tasks import _get_cfg
-        from datetime import datetime, timedelta
-        from services.sync_service import sync_batidas
-        janela = int(_get_cfg('sync_completa_janela_horas', '12'))
-        agora = datetime.now(_tz)
-        ok, msg = sync_batidas(
-            (agora - timedelta(hours=janela)).strftime('%Y-%m-%d'),
-            agora.strftime('%Y-%m-%d'),
-            (agora - timedelta(hours=janela)).strftime('%H:%M'),
-            agora.strftime('%H:%M'),
-        )
-        _salvar_cfg('sync_completa_ultimo_run', agora.isoformat())
-        db.session.commit()
-    else:
-        from services.sync_service import sync_batidas_incremental
-        from datetime import datetime
-        ok, msg = sync_batidas_incremental()
-        _salvar_cfg('sync_rapida_ultimo_run', datetime.now(_tz).isoformat())
-        db.session.commit()
-
-    flash(f'Sync {"concluído" if ok else "com erro"}: {msg}', 'success' if ok else 'danger')
-    return redirect(url_for('config_hub.index') + '#tab-sync')
+    try:
+        if tipo == 'completa':
+            from tasks import _get_cfg
+            from datetime import datetime, timedelta
+            from services.sync_service import sync_batidas
+            janela = int(_get_cfg('sync_completa_janela_horas', '12'))
+            agora = datetime.now(_tz)
+            ok, msg = sync_batidas(
+                (agora - timedelta(hours=janela)).strftime('%Y-%m-%d'),
+                agora.strftime('%Y-%m-%d'),
+                (agora - timedelta(hours=janela)).strftime('%H:%M'),
+                agora.strftime('%H:%M'),
+            )
+            _salvar_cfg('sync_completa_ultimo_run', agora.isoformat())
+            db.session.commit()
+        else:
+            from services.sync_service import sync_batidas_incremental
+            from datetime import datetime
+            ok, msg = sync_batidas_incremental()
+            _salvar_cfg('sync_rapida_ultimo_run', datetime.now(_tz).isoformat())
+            db.session.commit()
+            
+        return jsonify({'ok': ok, 'message': msg})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 500
 
 
 # ── Verificação de Inconsistências (DB vs Secullum) ───────────────────────────
@@ -621,9 +633,80 @@ def verificar_incons_executar():
         flash(resultado, 'success' if ok else 'danger')
 
     except Exception as e:
-        flash(f'Erro ao verificar: {e}', 'danger')
+        return jsonify({'ok': False, 'message': str(e)}), 500
 
-    return redirect(url_for('config_hub.index') + '#tab-sync')
+    return jsonify({'ok': True, 'message': resultado})
+
+
+# ── Políticas de RH ───────────────────────────────────────────────────────────
+
+@config_hub_bp.route('/politicas/salvar', methods=['POST'])
+@login_required
+@_somente_gestor
+def politicas_salvar():
+    """Salva parâmetros de políticas de RH (Tolerância, Fecho, DSR)."""
+    tolerancia = request.form.get('tolerancia_ponto', '10').strip()
+    fecho_inicio = request.form.get('fecho_folha_inicio', '1').strip()
+    fecho_fim = request.form.get('fecho_folha_fim', '31').strip()
+    descontar_dsr = '1' if request.form.get('descontar_dsr') else '0'
+    experiencia = request.form.get('experiencia_dias', '45').strip()
+
+    _salvar_cfg('tolerancia_ponto_minutos', tolerancia)
+    _salvar_cfg('fecho_folha_inicio', fecho_inicio)
+    _salvar_cfg('fecho_folha_fim', fecho_fim)
+    _salvar_cfg('descontar_dsr', descontar_dsr)
+    _salvar_cfg('experiencia_dias', experiencia)
+    
+    db.session.commit()
+    flash('Políticas de RH atualizadas com sucesso.', 'success')
+    return redirect(url_for('config_hub.index') + '#politicas')
+
+
+# ── Feriados ──────────────────────────────────────────────────────────────────
+
+@config_hub_bp.route('/feriados/novo', methods=['POST'])
+@login_required
+@_somente_gestor
+def feriado_novo():
+    data_str = request.form.get('data')
+    descricao = request.form.get('descricao', '').strip()
+
+    if not data_str:
+        flash('Data do feriado é obrigatória.', 'danger')
+        return redirect(url_for('config_hub.index') + '#politicas')
+
+    try:
+        data = datetime.strptime(data_str, '%Y-%m-%d').date()
+        if Feriado.query.filter_by(data=data).first():
+            flash('Feriado já cadastrado para esta data.', 'warning')
+        else:
+            f = Feriado(data=data, descricao=descricao)
+            db.session.add(f)
+            db.session.commit()
+            flash('Feriado adicionado com sucesso.', 'success')
+    except Exception as e:
+        flash(f'Erro ao adicionar feriado: {e}', 'danger')
+
+    return redirect(url_for('config_hub.index') + '#politicas')
+
+
+@config_hub_bp.route('/feriados/<int:fid>/excluir', methods=['POST'])
+@login_required
+@_somente_gestor
+def feriado_excluir(fid):
+    f = Feriado.query.get_or_404(fid)
+    db.session.delete(f)
+    db.session.commit()
+    flash('Feriado excluído.', 'success')
+    return redirect(url_for('config_hub.index') + '#politicas')
+
+
+@config_hub_bp.route('/verificar-inconsistencias/executar', methods=['POST'])
+@login_required
+@_somente_gestor
+def verificar_incons_executar_deprecated():
+    # Esta rota foi mantida para compatibilidade, mas o frontend deve usar JSON
+    pass
 
 
 # ── Integrações (credenciais via DB) ──────────────────────────────────────────

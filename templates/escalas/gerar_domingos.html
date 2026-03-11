@@ -24,7 +24,7 @@ const TODOS_FUNCS = [
     <h1 class="h3 mb-0 fw-bold">
         <i class="fas fa-sync-alt me-2 text-primary"></i>Gerar Rotação de Domingos
     </h1>
-    <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-secondary btn-sm">
+    <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-secondary btn">
         <i class="fas fa-arrow-left me-1"></i>Voltar
     </a>
 </div>
@@ -34,7 +34,7 @@ const TODOS_FUNCS = [
     <div class="row g-2 align-items-end">
         <div class="col-md-5">
             <label class="form-label small fw-bold mb-1">DEPARTAMENTO</label>
-            <select id="fDept" class="form-select form-select-sm" onchange="filtrarFuncionarios()">
+            <select id="fDept" class="form-select form-select" onchange="filtrarFuncionarios()">
                 <option value="">— Todos —</option>
                 {% for d in departamentos %}
                 <option value="{{ d }}">{{ d }}</option>
@@ -43,7 +43,7 @@ const TODOS_FUNCS = [
         </div>
         <div class="col-md-5">
             <label class="form-label small fw-bold mb-1">FUNÇÃO</label>
-            <select id="fFuncao" class="form-select form-select-sm" onchange="filtrarFuncionarios()">
+            <select id="fFuncao" class="form-select form-select" onchange="filtrarFuncionarios()">
                 <option value="">— Todas —</option>
             </select>
         </div>
@@ -74,13 +74,13 @@ const TODOS_FUNCS = [
                     </div>
                     <div class="mb-2">
                         <label class="form-label small fw-bold mb-1">FUNCIONÁRIO</label>
-                        <select name="func_a_id" id="func_a_id" class="form-select form-select-sm func-filtrada" required>
+                        <select name="func_a_id" id="func_a_id" class="form-select form-select func-filtrada" required>
                             <option value="">— Selecione —</option>
                         </select>
                     </div>
                     <div>
                         <label class="form-label small fw-bold mb-1">TURNO (para o domingo)</label>
-                        <select name="turno_a_id" id="turno_a_id" class="form-select form-select-sm" required>
+                        <select name="turno_a_id" id="turno_a_id" class="form-select form-select" required>
                             <option value="">— Selecione —</option>
                             {% for t in turnos_a %}
                             <option value="{{ t.id }}">{{ t.nome }} ({{ t.hora_inicio.strftime('%H:%M') }}–{{ t.hora_fim.strftime('%H:%M') }})</option>
@@ -104,13 +104,13 @@ const TODOS_FUNCS = [
                     </div>
                     <div class="mb-2">
                         <label class="form-label small fw-bold mb-1">FUNCIONÁRIO</label>
-                        <select name="func_b_id" id="func_b_id" class="form-select form-select-sm func-filtrada" required>
+                        <select name="func_b_id" id="func_b_id" class="form-select form-select func-filtrada" required>
                             <option value="">— Selecione —</option>
                         </select>
                     </div>
                     <div>
                         <label class="form-label small fw-bold mb-1">TURNO (para o domingo)</label>
-                        <select name="turno_b_id" id="turno_b_id" class="form-select form-select-sm" required>
+                        <select name="turno_b_id" id="turno_b_id" class="form-select form-select" required>
                             <option value="">— Selecione —</option>
                             {% for t in turnos_b %}
                             <option value="{{ t.id }}">{{ t.nome }} ({{ t.hora_inicio.strftime('%H:%M') }}–{{ t.hora_fim.strftime('%H:%M') }})</option>
@@ -154,13 +154,13 @@ const TODOS_FUNCS = [
                     <div class="form-text mb-2">Quando A trabalha domingo, C cobre a sexta no horário de abertura.</div>
                     <div class="mb-2">
                         <label class="form-label small fw-bold mb-1">FUNCIONÁRIO C</label>
-                        <select name="func_c_id" id="func_c_id" class="form-select form-select-sm func-filtrada">
+                        <select name="func_c_id" id="func_c_id" class="form-select form-select func-filtrada">
                             <option value="">— Não gerar —</option>
                         </select>
                     </div>
                     <div>
                         <label class="form-label small fw-bold mb-1">TURNO DE C NA SEXTA</label>
-                        <select name="turno_c_id" id="turno_c_id" class="form-select form-select-sm">
+                        <select name="turno_c_id" id="turno_c_id" class="form-select form-select">
                             <option value="">— Mesmo turno A —</option>
                             {% for t in todos_turnos %}
                             <option value="{{ t.id }}">{{ t.nome }}</option>
@@ -169,7 +169,7 @@ const TODOS_FUNCS = [
                     </div>
                 </div>
 
-                <button type="button" class="btn btn-outline-secondary btn-sm mb-2 w-100" onclick="gerarPreview()">
+                <button type="button" class="btn btn-outline-secondary btn mb-2 w-100" onclick="gerarPreview()">
                     <i class="fas fa-eye me-1"></i>Pré-visualizar
                 </button>
                 <button type="submit" class="btn btn-primary w-100">

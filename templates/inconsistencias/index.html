@@ -36,26 +36,26 @@
 <!-- Filtros -->
 <div class="filtros-card">
     <div class="row g-3 align-items-end">
-        <div class="col-sm-6 col-md-2">
+        <div class="col-6 col-md-2">
             <label class="form-label small fw-bold">DATA INÍCIO</label>
-            <input type="date" id="fDataInicio" class="form-control form-control-sm" value="{{ ontem }}">
+            <input type="date" id="fDataInicio" class="form-control" value="{{ ontem }}">
         </div>
-        <div class="col-sm-6 col-md-2">
+        <div class="col-6 col-md-2">
             <label class="form-label small fw-bold">DATA FIM</label>
-            <input type="date" id="fDataFim" class="form-control form-control-sm" value="{{ hoje }}">
+            <input type="date" id="fDataFim" class="form-control" value="{{ hoje }}">
         </div>
-        <div class="col-sm-6 col-md-3">
+        <div class="col-6 col-md-3">
             <label class="form-label small fw-bold">DEPARTAMENTO</label>
-            <select id="fDept" class="form-select form-select-sm">
+            <select id="fDept" class="form-select">
                 <option value="">Todos</option>
                 {% for d in departamentos %}
                 <option value="{{ d }}">{{ d }}</option>
                 {% endfor %}
             </select>
         </div>
-        <div class="col-sm-6 col-md-3">
+        <div class="col-6 col-md-3">
             <label class="form-label small fw-bold">FUNCIONÁRIO</label>
-            <select id="fFunc" class="form-select form-select-sm">
+            <select id="fFunc" class="form-select">
                 <option value="">Todos</option>
                 {% for f in todos_func %}
                 <option value="{{ f.id }}" data-dept="{{ f.departamento }}">{{ f.nome }}</option>
@@ -63,10 +63,10 @@
             </select>
         </div>
         <div class="col-md-2 d-flex gap-2">
-            <button class="btn btn-primary btn-sm flex-fill" onclick="analisar()">
+            <button class="btn btn-primary flex-fill" onclick="analisar()">
                 <i class="fas fa-search me-1"></i>Analisar
             </button>
-            <button class="btn btn-outline-warning btn-sm flex-fill" onclick="comparar()"
+            <button class="btn btn-outline-warning flex-fill" onclick="comparar()"
                     title="Comparar com dados reais do Secullum">
                 <i class="fas fa-cloud-download-alt me-1"></i>vs Secullum
             </button>
@@ -106,7 +106,7 @@
 <div id="painelComparacao" class="d-none">
     <div class="d-flex align-items-center justify-content-between mb-3">
         <h5 class="mb-0"><i class="fas fa-cloud-download-alt me-2 text-warning"></i>Comparação com o Secullum</h5>
-        <button class="btn btn-sm btn-outline-secondary" onclick="fecharComparacao()">
+        <button class="btn btn-outline-secondary" onclick="fecharComparacao()">
             <i class="fas fa-times me-1"></i>Fechar
         </button>
     </div>
@@ -127,7 +127,7 @@
         <div class="modal-content" style="background: var(--card-bg); border: 1px solid rgba(255,255,255,0.12);">
             <div class="modal-header border-0">
                 <h5 class="modal-title"><i class="fas fa-edit me-2 text-accent"></i>Editar Batida</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="editBatidaId">
@@ -149,8 +149,8 @@
                 <div id="editErro" class="alert alert-danger d-none py-2 small"></div>
             </div>
             <div class="modal-footer border-0">
-                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button class="btn btn-sm btn-primary" onclick="salvarEdicao()">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary" onclick="salvarEdicao()">
                     <i class="fas fa-save me-1"></i>Salvar
                 </button>
             </div>
@@ -164,7 +164,7 @@
         <div class="modal-content" style="background: var(--card-bg); border: 1px solid rgba(255,255,255,0.12);">
             <div class="modal-header border-0">
                 <h5 class="modal-title"><i class="fas fa-plus me-2 text-success"></i>Adicionar Batida</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="novaFuncId">
@@ -188,8 +188,8 @@
                 <div id="novaErro" class="alert alert-danger d-none py-2 small"></div>
             </div>
             <div class="modal-footer border-0">
-                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button class="btn btn-sm btn-success" onclick="salvarNova()">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-success" onclick="salvarNova()">
                     <i class="fas fa-plus me-1"></i>Adicionar
                 </button>
             </div>
@@ -278,7 +278,7 @@ function renderResultados(resultados) {
 
                 <!-- Ações -->
                 <div class="d-flex gap-2">
-                    <button class="btn btn-outline-success btn-sm"
+                    <button class="btn btn-outline-success btn"
                             onclick="abrirNova('${r.funcionario_id}','${r.data}','${r.nome}',${idx})">
                         <i class="fas fa-plus me-1"></i>Adicionar batida
                     </button>
@@ -295,11 +295,11 @@ function renderBatidas(batidas, funcId, data, idx) {
             <span class="badge ${b.tipo === 'Entrada' ? 'badge-entrada' : 'badge-saida'}">${b.tipo || '?'}</span>
             <span class="badge badge-orig">${b.origem}</span>
             <div class="ms-auto d-flex gap-1">
-                <button class="btn btn-outline-primary btn-sm py-0 px-2"
+                <button class="btn btn-outline-primary btn py-0 px-2"
                         onclick="abrirEditar(${b.id},'${b.hora}','${b.tipo}')">
                     <i class="fas fa-edit"></i>
                 </button>
-                <button class="btn btn-outline-danger btn-sm py-0 px-2"
+                <button class="btn btn-outline-danger btn py-0 px-2"
                         onclick="excluirBatida(${b.id},${idx})">
                     <i class="fas fa-trash"></i>
                 </button>
@@ -498,7 +498,7 @@ function renderDivergencias(divs) {
                 </div>
                 <span class="text-muted small">${d.dia_semana}, ${d.data_fmt}</span>
                 ${labelDif}
-                <button class="btn btn-sm btn-outline-warning ms-auto"
+                <button class="btn btn-outline-warning ms-auto"
                         onclick="ressincronizar('${d.data}', this)">
                     <i class="fas fa-sync-alt me-1"></i>Ressincronizar este dia
                 </button>
@@ -527,7 +527,7 @@ function renderDivergencias(divs) {
     if (datasUnicas.length) {
         cont.insertAdjacentHTML('beforeend', `
             <div class="mt-3">
-                <button class="btn btn-warning btn-sm" onclick="ressincronizarTodos(${JSON.stringify(datasUnicas)}, this)">
+                <button class="btn btn-warning btn" onclick="ressincronizarTodos(${JSON.stringify(datasUnicas)}, this)">
                     <i class="fas fa-sync-alt me-1"></i>Ressincronizar todos os dias com falta (${datasUnicas.length} data(s))
                 </button>
             </div>
@@ -544,7 +544,7 @@ function ressincronizar(data, btn) {
         .then(r => r.json())
         .then(d => {
             if (d.ok) {
-                btn.className = 'btn btn-sm btn-success ms-auto';
+                btn.className = 'btn btn-success ms-auto';
                 btn.innerHTML = '<i class="fas fa-check me-1"></i>Concluído';
             } else {
                 btn.disabled = false;
@@ -562,7 +562,7 @@ async function ressincronizarTodos(datas, btn) {
         fd.append('data', data);
         await fetch('/inconsistencias/ressincronizar', {method:'POST', body: fd});
     }
-    btn.className = 'btn btn-success btn-sm';
+    btn.className = 'btn btn-success btn';
     btn.innerHTML = '<i class="fas fa-check me-1"></i>Todos concluídos — recarregue a comparação';
     btn.disabled = false;
     btn.onclick = () => comparar();

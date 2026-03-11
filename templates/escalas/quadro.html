@@ -99,14 +99,14 @@ const TODOS_FUNCIONARIOS = [
         <i class="fas fa-th me-2 text-primary"></i>Quadro de Escalas
     </h1>
     <div class="d-flex gap-2 align-items-center flex-wrap">
-        <button class="btn btn-sm btn-outline-secondary" onclick="mudarMes(-1)">
+        <button class="btn btn-outline-secondary" onclick="mudarMes(-1)">
             <i class="fas fa-chevron-left"></i>
         </button>
         <span id="mesLabel">—</span>
-        <button class="btn btn-sm btn-outline-secondary" onclick="mudarMes(1)">
+        <button class="btn btn-outline-secondary" onclick="mudarMes(1)">
             <i class="fas fa-chevron-right"></i>
         </button>
-        <button class="btn btn-sm btn-success ms-2" id="btnSalvar" onclick="salvarTudo()" disabled>
+        <button class="btn btn-success ms-2" id="btnSalvar" onclick="salvarTudo()" disabled>
             <i class="fas fa-save me-1"></i>Salvar
             <span id="cntAlteracoes" class="badge bg-white text-success ms-1">0</span>
         </button>
@@ -118,7 +118,7 @@ const TODOS_FUNCIONARIOS = [
     <div class="row g-2 align-items-end">
         <div class="col-md-4">
             <label class="form-label small fw-bold mb-1">DEPARTAMENTO</label>
-            <select id="gDept" class="form-select form-select-sm" onchange="onGlobalDeptChange()">
+            <select id="gDept" class="form-select form-select" onchange="onGlobalDeptChange()">
                 <option value="">— Todos —</option>
                 {% for d in departamentos %}
                 <option value="{{ d }}">{{ d }}</option>
@@ -127,7 +127,7 @@ const TODOS_FUNCIONARIOS = [
         </div>
         <div class="col-md-4">
             <label class="form-label small fw-bold mb-1">FUNÇÃO</label>
-            <select id="gFuncao" class="form-select form-select-sm" onchange="onGlobalFuncaoChange()">
+            <select id="gFuncao" class="form-select form-select" onchange="onGlobalFuncaoChange()">
                 <option value="">— Todas —</option>
             </select>
         </div>
@@ -144,7 +144,7 @@ const TODOS_FUNCIONARIOS = [
         <div class="card painel" id="painel{{ i }}">
             <div class="card-header py-2 d-flex gap-2 align-items-center">
                 <span class="badge bg-secondary flex-shrink-0">P{{ i + 1 }}</span>
-                <select class="form-select form-select-sm func-select"
+                <select class="form-select form-select func-select"
                         onchange="carregarPainel({{ i }})">
                     <option value="">— Selecione um funcionário —</option>
                 </select>
@@ -164,7 +164,7 @@ const TODOS_FUNCIONARIOS = [
 <div id="paleta" class="card">
     <div class="card-header py-2 px-2 d-flex justify-content-between align-items-center">
         <span class="small fw-bold">Turnos</span>
-        <button class="btn btn-link btn-sm p-0" onclick="togglePaleta()" id="btnTogglePaleta">
+        <button class="btn btn-link btn p-0" onclick="togglePaleta()" id="btnTogglePaleta">
             <i class="fas fa-chevron-right small text-muted"></i>
         </button>
     </div>
@@ -193,7 +193,7 @@ const TODOS_FUNCIONARIOS = [
                 <h6 class="modal-title fw-bold">
                     <i class="fas fa-sun me-2 text-warning"></i>Turno A → Domingo
                 </h6>
-                <button class="btn-close" data-bs-dismiss="modal"></button>
+                <button class="btn btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <p class="mb-2">Conceder folga compensatória na <strong>sexta-feira anterior</strong>
@@ -204,10 +204,10 @@ const TODOS_FUNCIONARIOS = [
                 </div>
             </div>
             <div class="modal-footer border-0 pt-0">
-                <button id="btnCompSim" class="btn btn-primary btn-sm">
+                <button id="btnCompSim" class="btn btn-primary btn">
                     <i class="fas fa-check me-1"></i>Sim, dar folga na sexta
                 </button>
-                <button id="btnCompNao" class="btn btn-outline-secondary btn-sm">
+                <button id="btnCompNao" class="btn btn-outline-secondary btn">
                     Só alocar o domingo
                 </button>
             </div>
@@ -532,7 +532,7 @@ function esc(s) {
 function showToast(msg, type) {
     const el = document.createElement('div');
     el.className = `alert alert-${type} alert-dismissible fade show shadow`;
-    el.innerHTML = msg + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+    el.innerHTML = msg + '<button type="button" class="btn btn-close" data-bs-dismiss="alert"></button>';
     document.getElementById('toastBox').appendChild(el);
     setTimeout(() => { try { el.remove(); } catch(_){} }, 5000);
 }

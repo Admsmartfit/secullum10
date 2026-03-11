@@ -73,10 +73,10 @@
         <i class="fas fa-table me-2 text-primary"></i>Scheduler Visual
     </h1>
     <div class="d-flex gap-2">
-        <a href="{{ url_for('escalas.calendario') }}" class="btn btn-outline-secondary btn-sm">
+        <a href="{{ url_for('escalas.calendario') }}" class="btn btn-outline-secondary btn">
             <i class="fas fa-calendar me-1"></i>Calendário
         </a>
-        <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-secondary btn-sm">
+        <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-secondary btn">
             <i class="fas fa-list me-1"></i>Turnos
         </a>
     </div>
@@ -117,7 +117,7 @@
                 <h6 class="fw-semibold small text-muted text-uppercase mb-2">Filtros</h6>
 
                 <label class="form-label small fw-bold mb-1">Departamento</label>
-                <select id="filtDept" class="form-select form-select-sm mb-2">
+                <select id="filtDept" class="form-select form-select mb-2">
                     <option value="">Todos</option>
                     {% for d in departamentos %}
                     <option value="{{ d }}">{{ d }}</option>
@@ -125,7 +125,7 @@
                 </select>
 
                 <label class="form-label small fw-bold mb-1">Funcionário</label>
-                <select id="filtFunc" class="form-select form-select-sm mb-3">
+                <select id="filtFunc" class="form-select form-select mb-3">
                     <option value="">Todos</option>
                     {% for f in funcionarios %}
                     <option value="{{ f.id }}">{{ f.nome }}</option>
@@ -159,14 +159,14 @@
         <div class="modal-content">
             <div class="modal-header border-0 pb-0">
                 <h6 class="modal-title fw-bold" id="modalTitulo"></h6>
-                <button class="btn-close" data-bs-dismiss="modal"></button>
+                <button class="btn btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="modalBody"></div>
             <div class="modal-footer border-0 pt-0">
-                <button class="btn btn-outline-danger btn-sm" id="btnExcluir">
+                <button class="btn btn-outline-danger btn" id="btnExcluir">
                     <i class="fas fa-trash me-1"></i>Excluir
                 </button>
-                <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+                <button class="btn btn-outline-secondary btn" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
     </div>
@@ -180,12 +180,12 @@
                 <h6 class="modal-title fw-bold text-danger">
                     <i class="fas fa-exclamation-triangle me-2"></i>Infração CLT Detectada
                 </h6>
-                <button class="btn-close" data-bs-dismiss="modal"></button>
+                <button class="btn btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="modalInfracaoBody"></div>
             <div class="modal-footer border-0">
-                <button class="btn btn-danger btn-sm" id="btnForcar">Forçar mesmo assim</button>
-                <button class="btn btn-secondary btn-sm" id="btnCancelarDrop" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-danger btn" id="btnForcar">Forçar mesmo assim</button>
+                <button class="btn btn-secondary btn" id="btnCancelarDrop" data-bs-dismiss="modal">Cancelar</button>
             </div>
         </div>
     </div>

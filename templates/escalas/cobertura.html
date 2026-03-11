@@ -37,10 +37,10 @@
         <i class="fas fa-table me-2 text-primary"></i>Matriz de Cobertura
     </h1>
     <div class="d-flex gap-2">
-        <a href="{{ url_for('escalas.gantt') }}" class="btn btn-outline-secondary btn-sm">
+        <a href="{{ url_for('escalas.gantt') }}" class="btn btn-outline-secondary btn">
             <i class="fas fa-chart-gantt me-1"></i>Gantt
         </a>
-        <a href="{{ url_for('escalas.calendario') }}" class="btn btn-outline-secondary btn-sm">
+        <a href="{{ url_for('escalas.calendario') }}" class="btn btn-outline-secondary btn">
             <i class="fas fa-calendar me-1"></i>Calendário
         </a>
     </div>
@@ -51,12 +51,12 @@
     <div class="row g-2 align-items-end">
         <div class="col-md-2">
             <label class="form-label small fw-bold mb-1">MÊS/ANO</label>
-            <input type="month" id="filtMes" class="form-control form-control-sm"
+            <input type="month" id="filtMes" class="form-control form-control"
                    value="{{ mes_ano }}">
         </div>
         <div class="col-md-3">
             <label class="form-label small fw-bold mb-1">DEPARTAMENTO</label>
-            <select id="filtDept" class="form-select form-select-sm">
+            <select id="filtDept" class="form-select form-select">
                 <option value="">Todos</option>
                 {% for d in departamentos %}
                 <option value="{{ d }}" {{ 'selected' if d == dept_sel }}>{{ d }}</option>
@@ -65,7 +65,7 @@
         </div>
         <div class="col-md-3">
             <label class="form-label small fw-bold mb-1">FUNÇÃO</label>
-            <select id="filtFuncao" class="form-select form-select-sm">
+            <select id="filtFuncao" class="form-select form-select">
                 <option value="">Todas</option>
                 {% for f in funcoes %}
                 <option value="{{ f }}" {{ 'selected' if f == func_sel }}>{{ f }}</option>
@@ -73,7 +73,7 @@
             </select>
         </div>
         <div class="col-md-2">
-            <button id="btnCarregar" class="btn btn-primary btn-sm w-100">
+            <button id="btnCarregar" class="btn btn-primary btn w-100">
                 <i class="fas fa-search me-1"></i>Visualizar
             </button>
         </div>
@@ -116,16 +116,16 @@
                 <h6 class="modal-title fw-bold">
                     <i class="fas fa-magic me-2 text-primary"></i>Sugestão de Cobertura
                 </h6>
-                <button class="btn-close" data-bs-dismiss="modal"></button>
+                <button class="btn btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="modalResolverBody">
-                <div class="text-center py-3"><div class="spinner-border text-primary spinner-border-sm"></div></div>
+                <div class="text-center py-3"><div class="spinner-border text-primary spinner-border"></div></div>
             </div>
             <div class="modal-footer border-0">
-                <button id="btnAplicarSugestao" class="btn btn-primary btn-sm d-none">
+                <button id="btnAplicarSugestao" class="btn btn-primary btn d-none">
                     <i class="fas fa-check me-1"></i>Aplicar
                 </button>
-                <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+                <button class="btn btn-outline-secondary btn" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
     </div>
@@ -213,7 +213,7 @@ function renderAlertas(alertas) {
                 <i class="fas fa-user-slash me-2 text-danger"></i>
                 <strong>${fmt}</strong> — Dia descoberto${a.funcao ? ` (${a.funcao})` : ''}
             </div>
-            <button class="btn btn-sm btn-outline-danger"
+            <button class="btn btn-outline-danger"
                     onclick="abrirResolver('${a.data}','${a.funcao}','${a.dept}')">
                 <i class="fas fa-magic me-1"></i>Resolver
             </button>
@@ -253,7 +253,7 @@ async function abrirResolver(data, funcao, dept) {
     sugestaoAtual = null;
     document.getElementById('btnAplicarSugestao').classList.add('d-none');
     document.getElementById('modalResolverBody').innerHTML =
-        '<div class="text-center py-3"><div class="spinner-border text-primary spinner-border-sm"></div></div>';
+        '<div class="text-center py-3"><div class="spinner-border text-primary spinner-border"></div></div>';
     new bootstrap.Modal(document.getElementById('modalResolver')).show();
 
     const resp = await fetch(

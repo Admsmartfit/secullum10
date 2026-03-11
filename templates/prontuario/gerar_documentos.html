@@ -22,10 +22,10 @@
         <div class="text-muted small mt-1">Preenche templates Word com dados do funcionário e envia ao líder</div>
     </div>
     <div class="d-flex gap-2">
-        <a href="{{ url_for('prontuario.gerenciar_templates') }}#tags" class="btn btn-outline-secondary btn-sm">
+        <a href="{{ url_for('prontuario.gerenciar_templates') }}#tags" class="btn btn-outline-secondary btn">
             <i class="fas fa-tags me-1"></i>Ver Tags Disponíveis
         </a>
-        <a href="{{ url_for('prontuario.gerenciar_templates') }}" class="btn btn-outline-secondary btn-sm">
+        <a href="{{ url_for('prontuario.gerenciar_templates') }}" class="btn btn-outline-secondary btn">
             <i class="fas fa-file-word me-1"></i>Gerenciar Templates
         </a>
     </div>
@@ -107,7 +107,7 @@
                 <i class="fas fa-arrow-left me-1"></i> Selecione um funcionário para ver os dados.
             </div>
             <div id="funcInfoLoaded" style="display:none">
-                <table class="table table-sm mb-0" style="font-size:.82rem">
+                <table class="table table mb-0" style="font-size:.82rem">
                     <tr><td class="text-muted" style="width:110px">Nome</td><td id="fi-nome" class="fw-semibold">—</td></tr>
                     <tr><td class="text-muted">Função</td><td id="fi-funcao">—</td></tr>
                     <tr><td class="text-muted">Departamento</td><td id="fi-dept">—</td></tr>
@@ -201,7 +201,7 @@ function confirmarEnvio(btn) {
         return false;
     }
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gerando…';
+    btn.innerHTML = '<span class="spinner-border spinner-border me-2"></span>Gerando…';
     btn.closest('form').submit();
     return false;
 }

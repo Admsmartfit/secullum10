@@ -105,7 +105,7 @@ async function carregarPreview() {
     if (dept)   params.set('dept', dept);
     if (funcao) params.set('funcao', funcao);
 
-    preview.innerHTML = '<div class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+    preview.innerHTML = '<div class="text-center py-4"><div class="spinner-border spinner-border text-primary"></div></div>';
     try {
         const resp = await fetch(`/escalas/cargo-mensal/preview?${params}`);
         const data = await resp.json();
@@ -116,7 +116,7 @@ async function carregarPreview() {
         preview.innerHTML = `
             <p class="small text-muted mb-2">${data.length} funcionário(s) serão afetados:</p>
             <div class="table-responsive">
-            <table class="table table-sm">
+            <table class="table table">
                 <thead><tr><th>Nome</th><th>Cargo</th><th>Departamento</th></tr></thead>
                 <tbody>
                 ${data.map(f => `<tr>

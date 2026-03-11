@@ -3,7 +3,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 mb-0">Trocas de Turno</h1>
-    <a href="{{ url_for('trocas.minha_escala') }}" class="btn btn-outline-primary btn-sm">
+    <a href="{{ url_for('trocas.minha_escala') }}" class="btn btn-outline-primary btn">
         <i class="fas fa-user me-1"></i>Minha Escala
     </a>
 </div>
@@ -53,12 +53,12 @@
                 <td>
                     {% if t.status == 'AGUARDANDO_APROVACAO' %}
                     <form method="POST" action="{{ url_for('trocas.aprovar', troca_id=t.id) }}" class="d-inline">
-                        <button class="btn btn-sm btn-success" onclick="return confirm('Aprovar esta troca?')">
+                        <button class="btn btn-success" onclick="return confirm('Aprovar esta troca?')">
                             <i class="fas fa-check"></i> Aprovar
                         </button>
                     </form>
                     <form method="POST" action="{{ url_for('trocas.rejeitar', troca_id=t.id) }}" class="d-inline ms-1">
-                        <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Rejeitar?')">
+                        <button class="btn btn-outline-danger" onclick="return confirm('Rejeitar?')">
                             <i class="fas fa-times"></i>
                         </button>
                     </form>

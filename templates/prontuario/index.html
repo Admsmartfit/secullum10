@@ -7,10 +7,10 @@
         <div class="text-muted small mt-1">{{ func.nome }} &nbsp;|&nbsp; {{ func.funcao or '—' }}</div>
     </div>
     <div class="d-flex gap-2">
-        <a href="{{ url_for('prontuario.alertas_docs') }}" class="btn btn-outline-warning btn-sm">
+        <a href="{{ url_for('prontuario.alertas_docs') }}" class="btn btn-outline-warning btn">
             <i class="fas fa-bell me-1"></i>Alertas
         </a>
-        <a href="{{ url_for('funcionarios.funcionarios') }}" class="btn btn-outline-light btn-sm">
+        <a href="{{ url_for('funcionarios.funcionarios') }}" class="btn btn-outline-light btn">
             <i class="fas fa-arrow-left me-1"></i>Voltar
         </a>
     </div>
@@ -81,11 +81,11 @@
                     <td>
                         <div class="d-flex gap-1">
                             <a href="{{ url_for('prontuario.download_doc', doc_id=doc.id) }}"
-                               class="btn btn-outline-light btn-sm py-0" title="Baixar">
+                               class="btn btn-outline-light btn py-0" title="Baixar">
                                 <i class="fas fa-download"></i>
                             </a>
                             <form method="POST" action="{{ url_for('prontuario.excluir_doc', doc_id=doc.id) }}">
-                                <button class="btn btn-outline-danger btn-sm py-0" title="Excluir"
+                                <button class="btn btn-outline-danger btn py-0" title="Excluir"
                                         onclick="return confirm('Excluir documento?')">
                                     <i class="fas fa-trash"></i>
                                 </button>

@@ -129,25 +129,25 @@
             </div>
         </div>
         <div class="d-flex gap-1 flex-shrink-0">
-            <button class="btn btn-sm btn-outline-secondary" title="Executar agora"
+            <button class="btn btn-outline-secondary" title="Executar agora"
                     onclick="executarRegra({{ r.id }}, '{{ r.nome|e }}')"
                     data-rid="{{ r.id }}">
                 <i class="fas fa-play"></i>
             </button>
-            <button class="btn btn-sm btn-outline-secondary" title="Editar"
+            <button class="btn btn-outline-secondary" title="Editar"
                     data-bs-toggle="modal" data-bs-target="#modalRegra"
                     onclick="abrirEditar(this)"
                     data-rule='{{ {'id':r.id,'nome':r.nome,'ativo':r.ativo,'categoria':r.categoria or 'alerta','trigger_type':r.trigger_type,'trigger_hour':r.trigger_hour,'trigger_weekday':r.trigger_weekday,'condition_type':r.condition_type,'threshold_minutes':r.threshold_minutes,'dest_employee':r.dest_employee,'dest_manager':r.dest_manager,'dest_rh':r.dest_rh,'template_manager':r.template_manager or '','template_employee':r.template_employee or '','template_manager_tipo':(r.template_manager_tipo or 'texto') if r.template_manager_tipo is defined else 'texto','template_manager_interativo':(r.template_manager_interativo or '') if r.template_manager_interativo is defined else '','template_employee_tipo':(r.template_employee_tipo or 'texto') if r.template_employee_tipo is defined else 'texto','template_employee_interativo':(r.template_employee_interativo or '') if r.template_employee_interativo is defined else '','only_working_hours':r.only_working_hours,'send_immediately':r.send_immediately}|tojson }}'>
                 <i class="fas fa-edit"></i>
             </button>
-            <button class="btn btn-sm {% if r.ativo %}btn-warning{% else %}btn-outline-success{% endif %}"
+            <button class="btn btn {% if r.ativo %}btn-warning{% else %}btn-outline-success{% endif %}"
                     title="{% if r.ativo %}Pausar{% else %}Ativar{% endif %}"
                     onclick="toggleRegra({{ r.id }}, this)">
                 <i class="fas {% if r.ativo %}fa-pause{% else %}fa-play{% endif %}"></i>
             </button>
             <form method="POST" action="{{ url_for('notificacoes.excluir', rid=r.id) }}"
                   class="d-inline" onsubmit="return confirm('Excluir regra?')">
-                <button class="btn btn-sm btn-outline-danger" title="Excluir">
+                <button class="btn btn-outline-danger" title="Excluir">
                     <i class="fas fa-trash"></i>
                 </button>
             </form>
@@ -168,7 +168,7 @@
 {% for cat, msg in messages %}
 <div class="alert alert-{{ 'success' if cat == 'success' else 'warning' }} alert-dismissible fade show py-2" role="alert">
     {{ msg }}
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    <button type="button" class="btn btn-close" data-bs-dismiss="alert"></button>
 </div>
 {% endfor %}
 {% endif %}
@@ -205,7 +205,7 @@
     <div class="tab-pane fade show active" id="tab-alertas" role="tabpanel">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <p class="text-muted small mb-0">Regras disparadas ao sincronizar batidas (EVENT_SYNC).</p>
-            <button class="btn btn-primary btn-sm px-3" data-bs-toggle="modal" data-bs-target="#modalRegra"
+            <button class="btn btn-primary btn px-3" data-bs-toggle="modal" data-bs-target="#modalRegra"
                     onclick="abrirNovaRegra('EVENT_SYNC')">
                 <i class="fas fa-plus me-1"></i>Nova Regra de Alerta
             </button>
@@ -220,7 +220,7 @@
         <div class="card p-4 text-center text-muted">
             <i class="fas fa-bell-slash fa-2x mb-2 opacity-25"></i>
             <p class="mb-2 small">Nenhuma regra de alerta configurada.</p>
-            <button class="btn btn-sm btn-primary mx-auto" style="width:fit-content;"
+            <button class="btn btn-primary mx-auto" style="width:fit-content;"
                     data-bs-toggle="modal" data-bs-target="#modalRegra"
                     onclick="abrirNovaRegra('EVENT_SYNC')">
                 <i class="fas fa-plus me-1"></i>Criar regra de alerta
@@ -233,7 +233,7 @@
     <div class="tab-pane fade" id="tab-automacoes" role="tabpanel">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <p class="text-muted small mb-0">Regras agendadas: escala semanal, pré-turno, ausência, relatórios.</p>
-            <button class="btn btn-primary btn-sm px-3" data-bs-toggle="modal" data-bs-target="#modalRegra"
+            <button class="btn btn-primary btn px-3" data-bs-toggle="modal" data-bs-target="#modalRegra"
                     onclick="abrirNovaRegra('DAILY')">
                 <i class="fas fa-plus me-1"></i>Nova Automação
             </button>
@@ -248,7 +248,7 @@
         <div class="card p-4 text-center text-muted">
             <i class="fas fa-clock fa-2x mb-2 opacity-25"></i>
             <p class="mb-2 small">Nenhuma automação configurada.</p>
-            <button class="btn btn-sm btn-primary mx-auto" style="width:fit-content;"
+            <button class="btn btn-primary mx-auto" style="width:fit-content;"
                     data-bs-toggle="modal" data-bs-target="#modalRegra"
                     onclick="abrirNovaRegra('DAILY')">
                 <i class="fas fa-plus me-1"></i>Criar automação
@@ -261,7 +261,7 @@
     <div class="tab-pane fade" id="tab-chatbot" role="tabpanel">
 
         {# ── Sub-tabs ─────────────────────────────────────────────────────────── #}
-        <ul class="nav nav-pills nav-sm mb-3 gap-1" id="chatbotSubTabs" role="tablist">
+        <ul class="nav nav-pills nav mb-3 gap-1" id="chatbotSubTabs" role="tablist">
             <li class="nav-item">
                 <button class="nav-link active py-1 px-3 small" data-bs-toggle="pill"
                         data-bs-target="#subtab-msgs" type="button">
@@ -291,7 +291,7 @@
                     <p class="text-muted small mb-0">
                         Mensagens disparadas automaticamente pelo robô em resposta a eventos do sistema.
                     </p>
-                    <button class="btn btn-primary btn-sm px-3 ms-3 flex-shrink-0"
+                    <button class="btn btn-primary btn px-3 ms-3 flex-shrink-0"
                             data-bs-toggle="modal" data-bs-target="#modalSysMsg"
                             onclick="abrirSysMsgNova()">
                         <i class="fas fa-plus me-1"></i>Nova Mensagem
@@ -308,7 +308,7 @@
                         </div>
                         <div class="d-flex gap-1 flex-shrink-0">
                             <span class="badge bg-secondary-subtle text-secondary align-self-start" style="font-size:.6rem;">sistema</span>
-                            <button class="btn btn-sm btn-outline-secondary" title="Editar"
+                            <button class="btn btn-outline-secondary" title="Editar"
                                     data-bs-toggle="modal" data-bs-target="#modalSysMsg"
                                     onclick="abrirSysMsgEditar('{{ chave|e }}', {{ label|tojson }}, {{ bot_cfg.get(chave, bot_msg_defaults.get(chave,''))|tojson }}, false)">
                                 <i class="fas fa-edit"></i>
@@ -329,7 +329,7 @@
                         </div>
                         <div class="d-flex gap-1 flex-shrink-0">
                             <span class="badge bg-success-subtle text-success align-self-start" style="font-size:.6rem;">custom</span>
-                            <button class="btn btn-sm btn-outline-secondary" title="Editar"
+                            <button class="btn btn-outline-secondary" title="Editar"
                                     data-bs-toggle="modal" data-bs-target="#modalSysMsg"
                                     onclick="abrirSysMsgEditar('{{ cm.chave|e }}', {{ cm.label|tojson }}, {{ cm.valor|tojson }}, true)">
                                 <i class="fas fa-edit"></i>
@@ -337,7 +337,7 @@
                             <form method="POST" action="{{ url_for('notificacoes.chatbot_msg_excluir') }}"
                                   class="d-inline" onsubmit="return confirm('Excluir esta mensagem?')">
                                 <input type="hidden" name="chave" value="{{ cm.chave }}">
-                                <button class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                                <button class="btn btn-outline-danger"><i class="fas fa-trash"></i></button>
                             </form>
                         </div>
                     </div>
@@ -359,7 +359,7 @@
                         Quando o funcionário digitar exatamente a palavra-chave, o robô responde com a mensagem configurada.<br>
                         <strong>Verificadas antes de qualquer outra lógica</strong> (SIM/NÃO, menu, etc.).
                     </p>
-                    <button class="btn btn-primary btn-sm px-3 ms-3 flex-shrink-0"
+                    <button class="btn btn-primary btn px-3 ms-3 flex-shrink-0"
                             data-bs-toggle="modal" data-bs-target="#modalKeyword"
                             onclick="abrirKeywordNova()">
                         <i class="fas fa-plus me-1"></i>Nova Palavra-chave
@@ -387,19 +387,19 @@
                             <p class="small text-muted mb-0" style="white-space:pre-wrap;">{{ kw.resposta }}</p>
                         </div>
                         <div class="d-flex gap-1 flex-shrink-0">
-                            <button class="btn btn-sm btn-outline-secondary" title="Editar"
+                            <button class="btn btn-outline-secondary" title="Editar"
                                     data-bs-toggle="modal" data-bs-target="#modalKeyword"
                                     onclick="abrirKeywordEditar(this)"
                                     data-kw='{{ {'id':kw.id,'keyword':kw.keyword,'resposta':kw.resposta,'apenas_funcionario':kw.apenas_funcionario,'tipo_msg':(kw.tipo_msg or 'texto') if kw.tipo_msg is defined else 'texto','interativo_json':(kw.interativo_json or '') if kw.interativo_json is defined else ''}|tojson }}'>
                                 <i class="fas fa-edit"></i>
                             </button>
-                            <button class="btn btn-sm {% if kw.ativo %}btn-warning{% else %}btn-outline-success{% endif %}"
+                            <button class="btn btn {% if kw.ativo %}btn-warning{% else %}btn-outline-success{% endif %}"
                                     onclick="toggleKeyword({{ kw.id }}, this)">
                                 <i class="fas {% if kw.ativo %}fa-pause{% else %}fa-play{% endif %}"></i>
                             </button>
                             <form method="POST" action="{{ url_for('notificacoes.keyword_excluir', kid=kw.id) }}"
                                   class="d-inline" onsubmit="return confirm('Excluir palavra-chave?')">
-                                <button class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                                <button class="btn btn-outline-danger"><i class="fas fa-trash"></i></button>
                             </form>
                         </div>
                     </div>
@@ -409,7 +409,7 @@
                 <div class="card p-4 text-center text-muted">
                     <i class="fas fa-key fa-2x mb-2 opacity-25"></i>
                     <p class="small mb-2">Nenhuma palavra-chave configurada.</p>
-                    <button class="btn btn-sm btn-primary mx-auto" style="width:fit-content;"
+                    <button class="btn btn-primary mx-auto" style="width:fit-content;"
                             data-bs-toggle="modal" data-bs-target="#modalKeyword"
                             onclick="abrirKeywordNova()">
                         <i class="fas fa-plus me-1"></i>Criar primeira palavra-chave
@@ -425,7 +425,7 @@
                         Opções enviadas quando o funcionário digita <code>oi</code>, <code>menu</code> etc.
                         Edite o título e a descrição exibidos no WhatsApp.
                     </p>
-                    <button class="btn btn-primary btn-sm px-3 ms-3 flex-shrink-0"
+                    <button class="btn btn-primary btn px-3 ms-3 flex-shrink-0"
                             data-bs-toggle="modal" data-bs-target="#modalKeyword"
                             onclick="abrirKeywordNovaTipoMenu()">
                         <i class="fas fa-plus me-1"></i>Nova Opção (via Palavra-chave)
@@ -441,7 +441,7 @@
                         </div>
                         <div class="d-flex gap-1 flex-shrink-0 align-items-center">
                             <span class="badge bg-success-subtle text-success" style="font-size:.65rem;">Ativa</span>
-                            <button class="btn btn-sm btn-outline-secondary" title="Editar texto"
+                            <button class="btn btn-outline-secondary" title="Editar texto"
                                     data-bs-toggle="modal" data-bs-target="#modalMenuEdit"
                                     onclick="abrirMenuEditar('{{ item.id|e }}', {{ item.titulo|tojson }}, {{ item.desc|tojson }})">
                                 <i class="fas fa-edit"></i>
@@ -472,7 +472,7 @@
         <div class="modal-content">
             <div class="modal-header py-3">
                 <h6 class="modal-title fw-bold" id="modalSysMsgTitle">Editar Mensagem</h6>
-                <button class="btn-close" data-bs-dismiss="modal"></button>
+                <button class="btn btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="formSysMsg" method="POST">
                 <input type="hidden" name="chave" id="inputSysMsgChave">
@@ -481,16 +481,16 @@
                     <div id="divSysMsgLabel" style="display:none;">
                         <label class="form-label small fw-semibold">Rótulo (nome visível)</label>
                         <input type="text" name="label" id="inputSysMsgLabel"
-                               class="form-control form-control-sm"
+                               class="form-control form-control"
                                placeholder="Ex: Resposta sobre Férias">
                     </div>
                     {# Campo de chave — só visível ao criar nova customizada #}
                     <div id="divSysMsgChaveInput" style="display:none;">
                         <label class="form-label small fw-semibold">Chave (identificador)</label>
-                        <div class="input-group input-group-sm">
+                        <div class="input-group input-group">
                             <span class="input-group-text text-muted" style="font-size:.75rem;">bot_custom_</span>
                             <input type="text" name="chave_sufixo" id="inputSysMsgChaveSufixo"
-                                   class="form-control form-control-sm"
+                                   class="form-control form-control"
                                    placeholder="ferias" pattern="[a-z0-9_]+"
                                    oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,'')">
                         </div>
@@ -504,13 +504,13 @@
                             {% endfor %}
                         </div>
                         <textarea name="valor" id="inputSysMsgValor"
-                                  class="form-control form-control-sm sysmsg-textarea" rows="3"
+                                  class="form-control form-control sysmsg-textarea" rows="3"
                                   required></textarea>
                     </div>
                 </div>
                 <div class="modal-footer py-2">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-sm btn-primary">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
                         <i class="fas fa-save me-1"></i>Salvar
                     </button>
                 </div>
@@ -525,7 +525,7 @@
         <div class="modal-content">
             <div class="modal-header py-3">
                 <h6 class="modal-title fw-bold">Editar Opção do Menu</h6>
-                <button class="btn-close" data-bs-dismiss="modal"></button>
+                <button class="btn btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="formMenuEdit" method="POST" action="{{ url_for('notificacoes.chatbot_msg_salvar') }}">
                 <input type="hidden" name="chave" id="inputMenuChave">
@@ -534,18 +534,18 @@
                     <div>
                         <label class="form-label small fw-semibold">Título (exibido no botão do WhatsApp)</label>
                         <input type="text" name="valor" id="inputMenuTitulo"
-                               class="form-control form-control-sm" required maxlength="24">
+                               class="form-control form-control" required maxlength="24">
                         <div class="form-text small">Máx. 24 caracteres (limitação do WhatsApp).</div>
                     </div>
                     <div>
                         <label class="form-label small fw-semibold">Descrição (subtítulo)</label>
                         <input type="text" name="valor2" id="inputMenuDesc"
-                               class="form-control form-control-sm" maxlength="72">
+                               class="form-control form-control" maxlength="72">
                     </div>
                 </div>
                 <div class="modal-footer py-2">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-sm btn-primary" id="btnMenuEditSalvar">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnMenuEditSalvar">
                         <i class="fas fa-save me-1"></i>Salvar
                     </button>
                 </div>
@@ -560,13 +560,13 @@
         <div class="modal-content">
             <div class="modal-header py-3">
                 <h6 class="modal-title fw-bold" id="modalKeywordTitle">Nova Palavra-chave</h6>
-                <button class="btn-close" data-bs-dismiss="modal"></button>
+                <button class="btn btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="formKeyword" method="POST" action="{{ url_for('notificacoes.keyword_nova') }}">
                 <div class="modal-body d-flex flex-column gap-3">
                     <div>
                         <label class="form-label small fw-semibold">Palavra-chave</label>
-                        <input type="text" name="keyword" id="inputKw" class="form-control form-control-sm"
+                        <input type="text" name="keyword" id="inputKw" class="form-control form-control"
                                placeholder="Ex: FERIAS, HOLERITE, VALE" required
                                style="text-transform:uppercase;"
                                oninput="this.value=this.value.toUpperCase()">
@@ -579,7 +579,7 @@
                             <span class="var-chip" onclick="insertKwVar('{{ v }}', event)">{{ v }}</span>
                             {% endfor %}
                         </div>
-                        <textarea name="resposta" id="inputKwResposta" class="form-control form-control-sm kw-textarea"
+                        <textarea name="resposta" id="inputKwResposta" class="form-control form-control kw-textarea"
                                   rows="3" placeholder="Mensagem enviada ao funcionário..." required></textarea>
                     </div>
                     <!-- Tipo de mensagem interativa -->
@@ -616,7 +616,7 @@
                     <div id="builderBotoes_kw" class="border rounded p-2" style="display:none;background:#f8fafc;">
                         <div class="small text-muted mb-2">Botões (máx. 3) — o funcionário toca para responder</div>
                         <div id="listaBotoes_kw"></div>
-                        <button type="button" class="btn btn-outline-secondary btn-sm mt-1"
+                        <button type="button" class="btn btn-outline-secondary btn mt-1"
                                 onclick="addBotao('kw')">
                             <i class="fas fa-plus me-1"></i>Adicionar Botão
                         </button>
@@ -625,12 +625,12 @@
                     <div id="builderLista_kw" class="border rounded p-2" style="display:none;background:#f8fafc;">
                         <div class="mb-2">
                             <label class="form-label small fw-semibold mb-1">Texto do Botão do Menu</label>
-                            <input type="text" id="listaTitulo_kw" class="form-control form-control-sm"
+                            <input type="text" id="listaTitulo_kw" class="form-control form-control"
                                    placeholder="Ex: Ver opções" maxlength="20">
                         </div>
                         <div class="small text-muted mb-1">Opções do menu</div>
                         <div id="listaOpcoes_kw"></div>
-                        <button type="button" class="btn btn-outline-secondary btn-sm mt-1"
+                        <button type="button" class="btn btn-outline-secondary btn mt-1"
                                 onclick="addOpcaoLista('kw')">
                             <i class="fas fa-plus me-1"></i>Adicionar Opção
                         </button>
@@ -648,8 +648,8 @@
                     </div>
                 </div>
                 <div class="modal-footer py-2">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-sm btn-primary"
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"
                             onclick="serializarParaForm('kw', 'inputKwTipoMsg', 'inputKwInterativoJson')">
                         <i class="fas fa-save me-1"></i>Salvar
                     </button>
@@ -665,7 +665,7 @@
         <div class="modal-content" style="max-height:92vh;display:flex;flex-direction:column;">
             <div class="modal-header py-3" style="flex-shrink:0;">
                 <h5 class="modal-title fw-bold" id="modalRegraTitle">Nova Regra</h5>
-                <button class="btn-close" data-bs-dismiss="modal"></button>
+                <button class="btn btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="formRegra" method="POST" action="{{ url_for('notificacoes.nova') }}"
                   style="overflow-y:auto;flex:1 1 auto;">
@@ -676,12 +676,12 @@
                     <div class="row g-2">
                         <div class="col-md-5">
                             <label class="form-label small fw-semibold mb-1">Nome da Regra</label>
-                            <input type="text" name="nome" id="inputNome" class="form-control form-control-sm"
+                            <input type="text" name="nome" id="inputNome" class="form-control form-control"
                                    placeholder="Ex: Alerta de Atraso" required>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label small fw-semibold mb-1">Categoria</label>
-                            <select name="categoria" id="selCategoria" class="form-select form-select-sm">
+                            <select name="categoria" id="selCategoria" class="form-select form-select">
                                 {% for k, v in categorias.items() %}
                                 <option value="{{ k }}">{{ v }}</option>
                                 {% endfor %}
@@ -714,7 +714,7 @@
                                         <div class="col-md-5">
                                             <label class="form-label small fw-semibold">Tipo de Gatilho</label>
                                             <select name="trigger_type" id="selTrigger"
-                                                    class="form-select form-select-sm" onchange="updateTriggerFields()">
+                                                    class="form-select form-select" onchange="updateTriggerFields()">
                                                 <option value="EVENT_SYNC">Ao sincronizar batidas</option>
                                                 <option value="EVENT_ABSENCE">Ao detectar ausência</option>
                                                 <option value="EVENT_HOURLY">A cada hora (verificação contínua)</option>
@@ -726,12 +726,12 @@
                                         <div class="col-md-3" id="divTriggerHour" style="display:none;">
                                             <label class="form-label small fw-semibold">Hora</label>
                                             <input type="number" name="trigger_hour" id="inputTriggerHour"
-                                                   class="form-control form-control-sm" min="0" max="23" value="8">
+                                                   class="form-control form-control" min="0" max="23" value="8">
                                         </div>
                                         <div class="col-md-4" id="divTriggerWeekday" style="display:none;">
                                             <label class="form-label small fw-semibold">Dia da Semana</label>
                                             <select name="trigger_weekday" id="selWeekday"
-                                                    class="form-select form-select-sm">
+                                                    class="form-select form-select">
                                                 <option value="0">Segunda</option>
                                                 <option value="1">Terça</option>
                                                 <option value="2">Quarta</option>
@@ -760,7 +760,7 @@
                                         <div class="col-md-6">
                                             <label class="form-label small fw-semibold">Tipo de Condição</label>
                                             <select name="condition_type" id="selCondition"
-                                                    class="form-select form-select-sm"
+                                                    class="form-select form-select"
                                                     onchange="updateConditionFields(); loadDefaults(); suggestCategoria()">
                                                 {% for k, v in condition_labels.items() %}
                                                 <option value="{{ k }}">{{ v }}</option>
@@ -770,7 +770,7 @@
                                         <div class="col-md-4" id="divThreshold">
                                             <label class="form-label small fw-semibold">Tolerância (min)</label>
                                             <input type="number" name="threshold_minutes" id="inputThreshold"
-                                                   class="form-control form-control-sm" min="1" max="480" value="15">
+                                                   class="form-control form-control" min="1" max="480" value="15">
                                             <div class="form-text small">Dispara se exceder este valor</div>
                                         </div>
                                     </div>
@@ -832,7 +832,7 @@
                                             <i class="fas fa-user-tie me-1 text-purple"></i>Mensagem para Gestor / RH
                                         </label>
                                         <textarea name="template_manager" id="txaManager"
-                                                  class="form-control form-control-sm" rows="2"
+                                                  class="form-control form-control" rows="2"
                                                   placeholder="Mensagem enviada ao gestor/RH..."></textarea>
                                         <!-- Interativo: Gestor -->
                                         <div class="d-flex gap-3 mt-2">
@@ -849,12 +849,12 @@
                                         <div id="builderBotoes_mgr" class="border rounded p-2 mt-1" style="display:none;background:#f8fafc;">
                                             <div class="small text-muted mb-1">Botões (máx. 3)</div>
                                             <div id="listaBotoes_mgr"></div>
-                                            <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addBotao('mgr')"><i class="fas fa-plus me-1"></i>Botão</button>
+                                            <button type="button" class="btn btn-outline-secondary btn mt-1" onclick="addBotao('mgr')"><i class="fas fa-plus me-1"></i>Botão</button>
                                         </div>
                                         <div id="builderLista_mgr" class="border rounded p-2 mt-1" style="display:none;background:#f8fafc;">
-                                            <input type="text" id="listaTitulo_mgr" class="form-control form-control-sm mb-2" placeholder="Texto do botão do menu" maxlength="20">
+                                            <input type="text" id="listaTitulo_mgr" class="form-control form-control mb-2" placeholder="Texto do botão do menu" maxlength="20">
                                             <div id="listaOpcoes_mgr"></div>
-                                            <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addOpcaoLista('mgr')"><i class="fas fa-plus me-1"></i>Opção</button>
+                                            <button type="button" class="btn btn-outline-secondary btn mt-1" onclick="addOpcaoLista('mgr')"><i class="fas fa-plus me-1"></i>Opção</button>
                                         </div>
                                         <input type="hidden" name="template_manager_tipo" id="inputMgrTipoMsg" value="texto">
                                         <input type="hidden" name="template_manager_interativo" id="inputMgrInterativoJson">
@@ -864,7 +864,7 @@
                                             <i class="fas fa-user me-1 text-blue"></i>Mensagem para o Funcionário
                                         </label>
                                         <textarea name="template_employee" id="txaEmployee"
-                                                  class="form-control form-control-sm" rows="2"
+                                                  class="form-control form-control" rows="2"
                                                   placeholder="Mensagem enviada ao próprio funcionário..."></textarea>
                                         <!-- Interativo: Funcionário -->
                                         <div class="d-flex gap-3 mt-2">
@@ -881,12 +881,12 @@
                                         <div id="builderBotoes_emp" class="border rounded p-2 mt-1" style="display:none;background:#f8fafc;">
                                             <div class="small text-muted mb-1">Botões (máx. 3)</div>
                                             <div id="listaBotoes_emp"></div>
-                                            <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addBotao('emp')"><i class="fas fa-plus me-1"></i>Botão</button>
+                                            <button type="button" class="btn btn-outline-secondary btn mt-1" onclick="addBotao('emp')"><i class="fas fa-plus me-1"></i>Botão</button>
                                         </div>
                                         <div id="builderLista_emp" class="border rounded p-2 mt-1" style="display:none;background:#f8fafc;">
-                                            <input type="text" id="listaTitulo_emp" class="form-control form-control-sm mb-2" placeholder="Texto do botão do menu" maxlength="20">
+                                            <input type="text" id="listaTitulo_emp" class="form-control form-control mb-2" placeholder="Texto do botão do menu" maxlength="20">
                                             <div id="listaOpcoes_emp"></div>
-                                            <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addOpcaoLista('emp')"><i class="fas fa-plus me-1"></i>Opção</button>
+                                            <button type="button" class="btn btn-outline-secondary btn mt-1" onclick="addOpcaoLista('emp')"><i class="fas fa-plus me-1"></i>Opção</button>
                                         </div>
                                         <input type="hidden" name="template_employee_tipo" id="inputEmpTipoMsg" value="texto">
                                         <input type="hidden" name="template_employee_interativo" id="inputEmpInterativoJson">
@@ -928,9 +928,9 @@
                     </div><!-- /accordion -->
                 </div>
                 <div class="modal-footer py-2" style="flex-shrink:0;">
-                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                    <button type="button" class="btn btn-outline-secondary"
                             data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-sm btn-primary"
+                    <button type="submit" class="btn btn-primary"
                             onclick="serializarParaForm('mgr','inputMgrTipoMsg','inputMgrInterativoJson'); serializarParaForm('emp','inputEmpTipoMsg','inputEmpInterativoJson')">
                         <i class="fas fa-save me-1"></i>Salvar Regra
                     </button>
@@ -1238,11 +1238,11 @@ function addBotao(prefix) {
     if (idx >= 3) return;
     const row = document.createElement('div');
     row.className = 'd-flex gap-2 mb-1 align-items-center';
-    row.innerHTML = `<input type="text" class="form-control form-control-sm botao-title"
+    row.innerHTML = `<input type="text" class="form-control form-control botao-title"
                             placeholder="Texto do botão (máx. 20 chars)" maxlength="20">
-                     <input type="text" class="form-control form-control-sm botao-id" style="width:110px;"
+                     <input type="text" class="form-control form-control botao-id" style="width:110px;"
                             placeholder="ID (sem espaços)" value="btn_${idx+1}">
-                     <button type="button" class="btn btn-sm btn-outline-danger"
+                     <button type="button" class="btn btn-outline-danger"
                              onclick="this.closest('div').remove()">
                          <i class="fas fa-times"></i>
                      </button>`;
@@ -1254,13 +1254,13 @@ function addOpcaoLista(prefix) {
     const idx = container.children.length;
     const row = document.createElement('div');
     row.className = 'd-flex gap-2 mb-1 align-items-center';
-    row.innerHTML = `<input type="text" class="form-control form-control-sm opcao-title"
+    row.innerHTML = `<input type="text" class="form-control form-control opcao-title"
                             placeholder="Título da opção (máx. 24 chars)" maxlength="24">
-                     <input type="text" class="form-control form-control-sm opcao-desc"
+                     <input type="text" class="form-control form-control opcao-desc"
                             placeholder="Descrição (opcional)" maxlength="72">
-                     <input type="text" class="form-control form-control-sm opcao-id" style="width:90px;"
+                     <input type="text" class="form-control form-control opcao-id" style="width:90px;"
                             placeholder="ID" value="op_${idx+1}">
-                     <button type="button" class="btn btn-sm btn-outline-danger"
+                     <button type="button" class="btn btn-outline-danger"
                              onclick="this.closest('div').remove()">
                          <i class="fas fa-times"></i>
                      </button>`;

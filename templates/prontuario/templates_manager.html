@@ -7,7 +7,7 @@
         <h1 class="h3 mb-0">Templates de Documentos</h1>
         <div class="text-muted small mt-1">Arquivos .docx com tags <code>&#123;&#123;campo&#125;&#125;</code> para preenchimento automático</div>
     </div>
-    <a href="{{ url_for('prontuario.gerar_documentos') }}" class="btn btn-primary btn-sm">
+    <a href="{{ url_for('prontuario.gerar_documentos') }}" class="btn btn-primary btn">
         <i class="fas fa-file-contract me-1"></i>Gerar Documentos
     </a>
 </div>
@@ -64,7 +64,7 @@
                     <div class="px-3 py-2 fw-bold small" style="background:#eff6ff; color:#1d4ed8; border-bottom:1px solid #dbeafe">
                         <i class="fas fa-user me-2"></i>IDENTIFICAÇÃO DO FUNCIONÁRIO
                     </div>
-                    <table class="table table-sm table-hover mb-0" style="font-size:.8rem">
+                    <table class="table table table-hover mb-0" style="font-size:.8rem">
                         <tbody>
                             <tr>
                                 <td><code class="text-primary">&#123;&#123;nome_funcionario&#125;&#125;</code></td>
@@ -145,7 +145,7 @@
                     <div class="px-3 py-2 fw-bold small" style="background:#faf5ff; color:#7c3aed; border-bottom:1px solid #e9d5ff">
                         <i class="fas fa-calendar-day me-2"></i>DATA ATUAL (geração do documento)
                     </div>
-                    <table class="table table-sm table-hover mb-0" style="font-size:.8rem">
+                    <table class="table table table-hover mb-0" style="font-size:.8rem">
                         <tbody>
                             <tr>
                                 <td><code style="color:#7c3aed">&#123;&#123;data_hoje&#125;&#125;</code></td>
@@ -181,7 +181,7 @@
                     <div class="px-3 py-2 fw-bold small" style="background:#fff1f2; color:#be123c; border-bottom:1px solid #fecdd3">
                         <i class="fas fa-file-signature me-2"></i>CONTRATO DE EXPERIÊNCIA
                     </div>
-                    <table class="table table-sm table-hover mb-0" style="font-size:.8rem">
+                    <table class="table table table-hover mb-0" style="font-size:.8rem">
                         <tbody>
                             <tr>
                                 <td><code style="color:#be123c">&#123;&#123;experiencia_dias&#125;&#125;</code></td>
@@ -213,7 +213,7 @@
                     <div class="px-3 py-2 fw-bold small" style="background:#f0fdf4; color:#15803d; border-bottom:1px solid #dcfce7">
                         <i class="fas fa-map-marker-alt me-2"></i>ENDEREÇO E DATAS
                     </div>
-                    <table class="table table-sm table-hover mb-0" style="font-size:.8rem">
+                    <table class="table table table-hover mb-0" style="font-size:.8rem">
                         <tbody>
                             <tr>
                                 <td><code style="color:#15803d">&#123;&#123;endereco_func&#125;&#125;</code></td>
@@ -258,7 +258,7 @@
                     <div class="px-3 py-2 fw-bold small" style="background:#fff7ed; color:#c2410c; border-bottom:1px solid #fde8d8">
                         <i class="fas fa-building me-2"></i>DADOS DA EMPRESA
                     </div>
-                    <table class="table table-sm table-hover mb-0" style="font-size:.8rem">
+                    <table class="table table table-hover mb-0" style="font-size:.8rem">
                         <tbody>
                             <tr>
                                 <td><code style="color:#c2410c">&#123;&#123;empresa_nome&#125;&#125;</code></td>
@@ -355,7 +355,7 @@
                         <form method="POST"
                               action="{{ url_for('prontuario.excluir_template', tmpl_id=t.id) }}"
                               onsubmit="return confirm('Excluir template \'{{ t.nome }}\'?')">
-                            <button class="btn btn-sm btn-outline-danger">
+                            <button class="btn btn-outline-danger">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </form>
