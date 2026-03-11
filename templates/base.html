@@ -546,6 +546,11 @@
                     <i class="fas fa-file-contract"></i>
                     <span class="nav-link-text">Docs Contratuais</span>
                 </a>
+                <a class="nav-link {% if request.path == '/prontuario/salarios' %}active{% endif %}"
+                   href="/prontuario/salarios" data-tooltip="Tabela Salarial">
+                    <i class="fas fa-dollar-sign"></i>
+                    <span class="nav-link-text">Tabela Salarial</span>
+                </a>
                 {% else %}
                 {# Funcionário: acesso ao marketplace e trocas #}
                 <a class="nav-link {% if request.path.startswith('/marketplace') %}active{% endif %}"
