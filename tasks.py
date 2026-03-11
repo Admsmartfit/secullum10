@@ -245,7 +245,8 @@ def register_tasks(celery):
         _set_cfg('sync_completa_ultimo_run', datetime.now().isoformat())
 
         from services.sync_service import sync_batidas
-        agora = datetime.now()
+        from zoneinfo import ZoneInfo
+        agora = datetime.now(ZoneInfo('America/Sao_Paulo'))
         data_inicio = (agora - timedelta(hours=janela_horas)).strftime('%Y-%m-%d')
         hora_inicio = (agora - timedelta(hours=janela_horas)).strftime('%H:%M')
         data_fim = agora.strftime('%Y-%m-%d')
@@ -267,7 +268,9 @@ def register_tasks(celery):
             return {'skipped': True, 'reason': 'desativado'}
 
         hora_cfg = _get_cfg('verificar_incons_hora', '01:00')
-        agora = datetime.now()
+        from zoneinfo import ZoneInfo
+        _tz_br = ZoneInfo('America/Sao_Paulo')
+        agora = datetime.now(_tz_br)
         hora_agora = agora.strftime('%H:%M')
 
         # Só executa quando o horário atual está dentro de uma janela de 5 min

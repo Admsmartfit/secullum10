@@ -3,5 +3,12 @@
         "."
     ],
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+    "python.testing.pytestEnabled": true,
+    "html.validate.scripts": false,
+    "html.validate.styles": false,
+    "css.validate": false,
+    "javascript.validate.enable": false,
+    "[html]": {
+        "editor.defaultFormatter": "vscode.html-language-features"
+    }
 }

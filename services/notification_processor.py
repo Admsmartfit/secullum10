@@ -190,7 +190,7 @@ def _fora_do_expediente(aloc) -> bool:
 # ── Relatório de Inconsistências ───────────────────────────────────────────────
 
 def _gerar_relatorio_inconsistencias(data_ref: date) -> str:
-    """Monta texto resumido das inconsistências do dia data_ref."""
+    """Monta texto resumido GLOBAL das inconsistências do dia data_ref."""
     batidas_inc = (
         Batida.query
         .filter_by(data=data_ref, inconsistente=True)
@@ -235,15 +235,94 @@ def _gerar_relatorio_inconsistencias(data_ref: date) -> str:
     return '\n'.join(linhas)
 
 
-def _enviar_relatorio(regra: NotificationRule, texto: str) -> int:
-    """Envia o texto do relatório para gestor e/ou RH."""
+def _gerar_relatorio_por_departamento(data_ref: date) -> dict:
+    """
+    Retorna {departamento: texto_relatorio} apenas para departamentos
+    que possuem inconsistências ou ausências no dia data_ref.
+    """
+    from models import UnidadeLider
+    batidas_inc = (
+        Batida.query
+        .filter(Batida.data == data_ref, Batida.inconsistente == True)
+        .join(Funcionario)
+        .filter(Funcionario.ativo == True)
+        .all()
+    )
+    alocacoes = (
+        AlocacaoDiaria.query
+        .filter_by(data=data_ref)
+        .join(Funcionario)
+        .filter(Funcionario.ativo == True)
+        .all()
+    )
+    # Mapeia departamento → problemas
+    por_dept = {}  # {dept: {'inconsistentes': {nome: tipos}, 'ausentes': [nome]}}
+
+    for b in batidas_inc:
+        func = b.funcionario
+        if not func:
+            continue
+        dept = func.departamento or 'Sem Departamento'
+        d = por_dept.setdefault(dept, {'inconsistentes': {}, 'ausentes': []})
+        d['inconsistentes'].setdefault(func.nome, set()).add(b.tipo_inconsistencia or 'erro')
+
+    for aloc in alocacoes:
+        func = aloc.funcionario
+        if not func:
+            continue
+        if Batida.query.filter_by(funcionario_id=func.id, data=data_ref).count() == 0:
+            dept = func.departamento or 'Sem Departamento'
+            d = por_dept.setdefault(dept, {'inconsistentes': {}, 'ausentes': []})
+            d['ausentes'].append(func.nome)
+
+    # Gera texto por departamento
+    result = {}
+    data_str = data_ref.strftime('%d/%m/%Y')
+    for dept, dados in por_dept.items():
+        linhas = [f'📋 Inconsistências — {dept} — {data_str}']
+        if dados['inconsistentes']:
+            linhas.append(f'\n⚠️ Batidas inconsistentes ({len(dados["inconsistentes"])}):')
+            for nome in sorted(dados['inconsistentes']):
+                tipos = ', '.join(sorted(dados['inconsistentes'][nome]))
+                linhas.append(f'  • {nome}: {tipos}')
+        if dados['ausentes']:
+            linhas.append(f'\n🚫 Ausências ({len(dados["ausentes"])}):')
+            for nome in sorted(dados['ausentes']):
+                linhas.append(f'  • {nome}')
+        result[dept] = '\n'.join(linhas)
+    return result
+
+
+def _enviar_relatorio(regra: NotificationRule, texto_global: str) -> int:
+    """
+    Envia relatório de inconsistências:
+    - Para cada gestor de departamento: apenas inconsistências do seu depto
+    - Para o gestor global: relatório completo (se dest_manager ativo)
+    """
     from services.whatsapp_bot import enviar_texto
+    from models import UnidadeLider
     enviados = 0
-    if regra.dest_manager and _get_gestor_celular():
-        if enviar_texto(celular=_get_gestor_celular(), mensagem=texto, tipo='relatorio'):
+    ontem = date.today() - timedelta(days=1)
+    relatorios_dept = _gerar_relatorio_por_departamento(ontem)
+
+    # Envia para cada gestor de departamento
+    unidades = UnidadeLider.query.filter(UnidadeLider.celular_lider.isnot(None)).all()
+    for unidade in unidades:
+        if not unidade.celular_lider:
+            continue
+        dept = unidade.departamento
+        texto_dept = relatorios_dept.get(dept)
+        if not texto_dept:
+            # Sem problemas no depto → informa que está OK
+            texto_dept = f'📋 Inconsistências — {dept} — {ontem.strftime("%d/%m/%Y")}\n\n✅ Nenhuma inconsistência encontrada.'
+        if enviar_texto(celular=unidade.celular_lider, mensagem=texto_dept, tipo='relatorio'):
             enviados += 1
-    if regra.dest_rh and _get_gestor_celular():
-        pass  # reutiliza o mesmo número global quando não há celular separado
+
+    # Envia relatório global para o gestor geral
+    if regra.dest_manager and _get_gestor_celular():
+        if enviar_texto(celular=_get_gestor_celular(), mensagem=texto_global, tipo='relatorio'):
+            enviados += 1
+
     return enviados
 
 
