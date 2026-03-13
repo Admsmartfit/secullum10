@@ -141,17 +141,22 @@ def _contexto_experiencia(func) -> dict:
     if inicio:
         # Contrato de experiência pode ser prorrogado (máx 90 dias CLT)
         fim = inicio + timedelta(days=dias)
+        fim_total = inicio + timedelta(days=90)
         return {
-            'experiencia_dias':        str(dias),
-            'inicio_experiencia':      inicio.strftime('%d/%m/%Y'),
-            'fim_experiencia':         fim.strftime('%d/%m/%Y'),
-            'fim_experiencia_extenso': _data_extenso(fim),
+            'experiencia_dias':              str(dias),
+            'inicio_experiencia':            inicio.strftime('%d/%m/%Y'),
+            'fim_experiencia':               fim.strftime('%d/%m/%Y'),
+            'fim_experiencia_extenso':       _data_extenso(fim),
+            'fim_experiencia_total':         fim_total.strftime('%d/%m/%Y'),
+            'fim_experiencia_total_extenso': _data_extenso(fim_total),
         }
     return {
-        'experiencia_dias':        str(dias),
-        'inicio_experiencia':      '',
-        'fim_experiencia':         '',
-        'fim_experiencia_extenso': '',
+        'experiencia_dias':              str(dias),
+        'inicio_experiencia':            '',
+        'fim_experiencia':               '',
+        'fim_experiencia_extenso':       '',
+        'fim_experiencia_total':         '',
+        'fim_experiencia_total_extenso': '',
     }
 
 
