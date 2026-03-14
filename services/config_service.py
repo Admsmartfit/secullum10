@@ -20,7 +20,14 @@ def get_setting(chave_db: str, env_var: str, default: str = '') -> str:
 
 def get_secullum_api():
     """Retorna instância configurada da SecullumAPI."""
-    from secullum_api import SecullumAPI
+    try:
+        from secullum_api import SecullumAPI
+    except ModuleNotFoundError:
+        import sys, os
+        # Adiciona pasta raiz ao sys.path para background jobs / schedulers
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from secullum_api import SecullumAPI
+        
     return SecullumAPI(
         get_setting('secullum_email',    'SECULLUM_EMAIL',    ''),
         get_setting('secullum_password', 'SECULLUM_PASSWORD', ''),

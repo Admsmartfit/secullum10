@@ -572,69 +572,17 @@ def verificar_incons_executar():
             db.session.commit()
 
     try:
-        from services.config_service import get_secullum_api
-        from services.sync_service import parse_date, sync_batidas
-        from models import Batida, Funcionario
+        from services.sync_service import sync_batidas
 
-        api = get_secullum_api()
-        registros_api = api.buscar_batidas(ontem_str, ontem_str)
-        if registros_api is None:
-            flash('Falha ao conectar com a API Secullum.', 'danger')
-            return redirect(url_for('config_hub.index') + '#tab-sync')
-
-        _MARCACOES_ESPECIAIS = {
-            'ATESTAD', 'ATESTADO', 'FOLGA', 'FALTA', 'FERIAS',
-            'NEUTRO', 'DSRFOL', 'DSRFALTA', 'COMPENSAR',
-        }
-        sec_map = {}
-        for reg in registros_api:
-            fid = str(reg.get('FuncionarioId'))
-            d = parse_date(reg.get('Data'))
-            if not d:
-                continue
-            horas = []
-            for i in range(1, 6):
-                for campo in [f'Entrada{i}', f'Saida{i}']:
-                    hora_val = (reg.get(campo) or '').strip()
-                    if hora_val and hora_val.upper() not in _MARCACOES_ESPECIAIS and hora_val not in ('00:00', '00:00:00'):
-                        partes = hora_val.split(':')
-                        if len(partes) >= 2:
-                            horas.append(hora_val)
-            if horas:
-                sec_map[(fid, d)] = horas
-
-        batidas_locais = (
-            Batida.query
-            .join(Funcionario, Batida.funcionario_id == Funcionario.id)
-            .filter(Funcionario.ativo == True, Batida.data == ontem)
-            .all()
-        )
-        local_map = {}
-        for b in batidas_locais:
-            local_map.setdefault((b.funcionario_id, b.data), []).append(b)
-
-        n_div = sum(
-            1 for key in set(sec_map.keys()) | set(local_map.keys())
-            if len(sec_map.get(key, [])) != len(local_map.get(key, []))
-        )
-
-        if n_div == 0:
-            resultado = f'Nenhuma divergência encontrada para {ontem_str}.'
-            _salvar_cfg('verificar_incons_ultimo_resultado', resultado)
-            _salvar_cfg('verificar_incons_ultimo_run', agora.isoformat())
-            db.session.commit()
-            
-            _disparar_relatorio()
-            
-            flash(resultado, 'success')
-            return redirect(url_for('config_hub.index') + '#tab-sync')
-
+        # Sincroniza todas as batidas do dia anterior primeiro
         ok, msg = sync_batidas(ontem_str, ontem_str)
-        resultado = f'{n_div} divergência(s) em {ontem_str} → re-sync: {msg}'
+        resultado = f'Sincronização do dia anterior ({ontem_str}) concluída: {msg}'
+        
         _salvar_cfg('verificar_incons_ultimo_resultado', resultado)
         _salvar_cfg('verificar_incons_ultimo_run', agora.isoformat())
         db.session.commit()
         
+        # Somente depois de atualizar, dispara o relatório de inconsistências
         _disparar_relatorio()
         
         flash(resultado, 'success' if ok else 'danger')

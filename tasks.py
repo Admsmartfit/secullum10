@@ -83,97 +83,20 @@ def verificar_inconsistencias_dia_anterior():
     logger.info(f'[verificar_incons] Verificando divergências para {ontem_str}...')
 
     try:
-        from services.config_service import get_secullum_api
-        from services.sync_service import parse_date
-        from models import Batida, Funcionario
-
-        api = get_secullum_api()
-        registros_api = api.buscar_batidas(ontem_str, ontem_str)
-        if registros_api is None:
-            msg = 'Falha ao conectar com a API Secullum.'
-            _set_cfg('verificar_incons_ultimo_resultado', f'ERRO: {msg}')
-            logger.error(f'[verificar_incons] {msg}')
-            return {'ok': False, 'msg': msg}
-
-        _MARCACOES_ESPECIAIS = {
-            'ATESTAD', 'ATESTADO', 'FOLGA', 'FALTA', 'FERIAS',
-            'NEUTRO', 'DSRFOL', 'DSRFALTA', 'COMPENSAR',
-        }
-
-        sec_map = {}
-        for reg in registros_api:
-            fid = str(reg.get('FuncionarioId'))
-            d = parse_date(reg.get('Data'))
-            if not d:
-                continue
-            horas = []
-            for i in range(1, 6):
-                for campo in [f'Entrada{i}', f'Saida{i}']:
-                    hora = (reg.get(campo) or '').strip()
-                    if hora and hora.upper() not in _MARCACOES_ESPECIAIS and hora not in ('00:00', '00:00:00'):
-                        partes = hora.split(':')
-                        if len(partes) >= 2:
-                            horas.append(f'{partes[0]}:{partes[1]}')
-            if horas:
-                sec_map[(fid, d)] = horas
-
-        from extensions import db as _db
-        batidas_locais = (
-            Batida.query
-            .join(Funcionario, Batida.funcionario_id == Funcionario.id)
-            .filter(Funcionario.ativo == True, Batida.data == ontem)
-            .all()
-        )
-        local_map = {}
-        for b in batidas_locais:
-            local_map.setdefault((b.funcionario_id, b.data), []).append(b)
-
-        divergencias = [
-            (fid, dia)
-            for (fid, dia) in set(sec_map.keys()) | set(local_map.keys())
-            if len(sec_map.get((fid, dia), [])) != len(local_map.get((fid, dia), []))
-        ]
-
-        n_div = len(divergencias)
-        logger.info(f'[verificar_incons] {n_div} divergência(s) encontrada(s) para {ontem_str}.')
-
-        if n_div == 0:
-            resultado = f'OK – nenhuma divergência em {ontem_str}.'
-            _set_cfg('verificar_incons_ultimo_resultado', resultado)
-            
-            # ── Disparo do Relatório de Inconsistências (via WhatsApp) ─────────
-            try:
-                from models import NotificationRule
-                from services.notification_processor import _gerar_relatorio_inconsistencias, _enviar_relatorio
-                regras = NotificationRule.query.filter_by(ativo=True, condition_type='INCONSISTENCY_REPORT').all()
-                if regras:
-                    relatorio = _gerar_relatorio_inconsistencias(ontem)
-                    total_env = 0
-                    for r in regras:
-                        env = _enviar_relatorio(r, relatorio)
-                        if env > 0:
-                            r.mensagens_enviadas = (r.mensagens_enviadas or 0) + env
-                            r.ultima_execucao = agora
-                            total_env += env
-                    _db.session.commit()
-                    if total_env > 0:
-                        logger.info(f'[verificar_incons] {total_env} mensagem(ns) de inconsistência enviada(s).')
-            except Exception as e:
-                logger.error(f'[verificar_incons] Falha ao enviar relatório: {e}')
-            
-            return {'ok': True, 'divergencias': 0, 'msg': resultado}
-
-        # ── Re-sincroniza o dia completo se houver divergências ──────────────────
         from services.sync_service import sync_batidas as _sync_batidas
+        
+        # 1. Sincroniza todas as batidas do dia anterior primeiro
         ok_sync, msg_sync = _sync_batidas(ontem_str, ontem_str)
-        resultado = f'{n_div} divergência(s) em {ontem_str} → re-sync: {msg_sync}'
+        resultado = f'Sync do dia anterior ({ontem_str}) concluída: {msg_sync}'
         _set_cfg('verificar_incons_ultimo_resultado', resultado)
         logger.info(f'[verificar_incons] {resultado}')
         
-        # Repete o envio aqui também (após re-sync)
+        # 2. Somente depois de atualizar, envia o relatório
         try:
             from models import NotificationRule
+            from extensions import db as _db
             from services.notification_processor import _gerar_relatorio_inconsistencias, _enviar_relatorio
+            
             regras = NotificationRule.query.filter_by(ativo=True, condition_type='INCONSISTENCY_REPORT').all()
             if regras:
                 relatorio = _gerar_relatorio_inconsistencias(ontem)
@@ -186,11 +109,11 @@ def verificar_inconsistencias_dia_anterior():
                         total_env += env
                 _db.session.commit()
                 if total_env > 0:
-                    logger.info(f'[verificar_incons] {total_env} mensagem(ns) de inconsistência enviada(s) após re-sync.')
+                    logger.info(f'[verificar_incons] {total_env} mensagem(ns) de inconsistência enviada(s).')
         except Exception as e:
-            logger.error(f'[verificar_incons] Falha ao enviar relatório após re-sync: {e}')
+            logger.error(f'[verificar_incons] Falha ao enviar relatório: {e}')
             
-        return {'ok': ok_sync, 'divergencias': n_div, 'msg': resultado}
+        return {'ok': ok_sync, 'divergencias': 0, 'msg': resultado}
 
     except Exception as e:
         msg = f'Erro inesperado: {e}'
