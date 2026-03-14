@@ -323,15 +323,22 @@ def _enviar_relatorio(regra: NotificationRule, texto_global: str) -> int:
 
     # Envia para cada gestor de departamento
     unidades = UnidadeLider.query.filter(UnidadeLider.celular_lider.isnot(None)).all()
-    for unidade in unidades:
-        if not unidade.celular_lider:
-            continue
-        dept = unidade.departamento
+    
+    # Extrai os dados em memória limpa ANTES das chamadas enviar_texto, pois estas 
+    # executam db.session.commit(), o que invalida (expired) os modelos recuperados na ORM.
+    # O lazy load pós-commit corromperia a sessão gerando o PGRES_TUPLES_OK.
+    alvos = []
+    for u in unidades:
+        if u.celular_lider:
+            alvos.append({'celular': u.celular_lider, 'dept': u.departamento})
+
+    for alvo in alvos:
+        dept = alvo['dept']
         texto_dept = relatorios_dept.get(dept)
         if not texto_dept:
             # Sem problemas no depto → informa que está OK
             texto_dept = f'📋 Inconsistências — {dept} — {ontem.strftime("%d/%m/%Y")}\n\n✅ Nenhuma inconsistência encontrada.'
-        if enviar_texto(celular=unidade.celular_lider, mensagem=texto_dept, tipo='relatorio'):
+        if enviar_texto(celular=alvo['celular'], mensagem=texto_dept, tipo='relatorio'):
             enviados += 1
 
     # Envia relatório global para o gestor geral

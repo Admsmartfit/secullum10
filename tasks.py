@@ -98,16 +98,22 @@ def verificar_inconsistencias_dia_anterior():
             from services.notification_processor import _gerar_relatorio_inconsistencias, _enviar_relatorio
             
             regras = NotificationRule.query.filter_by(ativo=True, condition_type='INCONSISTENCY_REPORT').all()
-            if regras:
+            ids_regras = [r.id for r in regras]
+            
+            if ids_regras:
                 relatorio = _gerar_relatorio_inconsistencias(ontem)
                 total_env = 0
-                for r in regras:
-                    env = _enviar_relatorio(r, relatorio)
+                for rid in ids_regras:
+                    regra_obj = NotificationRule.query.get(rid)
+                    if not regra_obj: continue
+                    
+                    env = _enviar_relatorio(regra_obj, relatorio)
                     if env > 0:
-                        r.mensagens_enviadas = (r.mensagens_enviadas or 0) + env
-                        r.ultima_execucao = agora
+                        rr = NotificationRule.query.get(rid)
+                        rr.mensagens_enviadas = (rr.mensagens_enviadas or 0) + env
+                        rr.ultima_execucao = agora
+                        _db.session.commit()
                         total_env += env
-                _db.session.commit()
                 if total_env > 0:
                     logger.info(f'[verificar_incons] {total_env} mensagem(ns) de inconsistência enviada(s).')
         except Exception as e:

@@ -561,15 +561,24 @@ def verificar_incons_executar():
     def _disparar_relatorio():
         from models import NotificationRule
         from services.notification_processor import _gerar_relatorio_inconsistencias, _enviar_relatorio
+        
         regras = NotificationRule.query.filter_by(ativo=True, condition_type='INCONSISTENCY_REPORT').all()
-        if regras:
+        ids_regras = [r.id for r in regras]
+        
+        if ids_regras:
             relatorio = _gerar_relatorio_inconsistencias(ontem)
-            for r in regras:
-                env = _enviar_relatorio(r, relatorio)
+            for rid in ids_regras:
+                # Regra recarregada a cada iteração pois _enviar_relatorio faz db.session.commit() interno e expira objetos!
+                regra_obj = NotificationRule.query.get(rid)
+                if not regra_obj: continue
+                
+                env = _enviar_relatorio(regra_obj, relatorio)
                 if env > 0:
-                    r.mensagens_enviadas = (r.mensagens_enviadas or 0) + env
-                    r.ultima_execucao = datetime.utcnow()
-            db.session.commit()
+                    # Carregamento fresco garante segurança de thread/sessão para não dar PGRES_TUPLES_OK
+                    rr = NotificationRule.query.get(rid)
+                    rr.mensagens_enviadas = (rr.mensagens_enviadas or 0) + env
+                    rr.ultima_execucao = datetime.utcnow()
+                    db.session.commit()
 
     try:
         from services.sync_service import sync_batidas
