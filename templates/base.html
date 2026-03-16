@@ -514,6 +514,11 @@
 
                 <hr class="sidebar-separator">
                 <div class="section-label">🤝 Desenv. Humano</div>
+                <a class="nav-link {% if request.path.startswith('/config/funcionarios') %}active{% endif %}"
+                   href="/config/funcionarios" data-tooltip="Funcionários">
+                    <i class="fas fa-id-badge"></i>
+                    <span class="nav-link-text">Funcionários</span>
+                </a>
                 <a class="nav-link {% if request.path.startswith('/prontuario/alertas') %}active{% endif %}"
                    href="/prontuario/alertas" data-tooltip="Prontuários">
                     <i class="fas fa-users"></i>
