@@ -542,10 +542,15 @@
                     <i class="fas fa-file-pdf"></i>
                     <span class="nav-link-text">Relatórios Técnicos</span>
                 </a>
-                <a class="nav-link {% if request.path.startswith('/marketplace') or request.path.startswith('/trocas') %}active{% endif %}"
+                <a class="nav-link {% if request.path.startswith('/marketplace') %}active{% endif %}"
                    href="/marketplace/" data-tooltip="Marketplace / Trocas">
                     <i class="fas fa-random"></i>
                     <span class="nav-link-text">Marketplace / Trocas</span>
+                </a>
+                <a class="nav-link {% if request.path == '/trocas/' %}active{% endif %}"
+                   href="/trocas/" data-tooltip="Aprovar Trocas de Turno">
+                    <i class="fas fa-check-double"></i>
+                    <span class="nav-link-text">Aprovar Trocas de Turno</span>
                 </a>
 
                 {% if is_admin %}
@@ -565,6 +570,16 @@
                    href="/whatsapp/logs" data-tooltip="Logs de Comunicação">
                     <i class="fab fa-whatsapp"></i>
                     <span class="nav-link-text">Logs de Mensagens</span>
+                </a>
+                <a class="nav-link {% if request.path == '/whatsapp/teste' %}active{% endif %}"
+                   href="/whatsapp/teste" data-tooltip="Simulador do WhatsApp">
+                    <i class="fas fa-vial"></i>
+                    <span class="nav-link-text">Simulador do WhatsApp</span>
+                </a>
+                <a class="nav-link {% if request.path == '/config/banco-horas' %}active{% endif %}"
+                   href="/config/banco-horas" data-tooltip="Regras do Banco de Horas">
+                    <i class="fas fa-sliders-h"></i>
+                    <span class="nav-link-text">Regras do Banco de Horas</span>
                 </a>
                 <a class="nav-link {% if request.path.startswith('/prontuario/templates') %}active{% endif %}"
                    href="/prontuario/templates" data-tooltip="Templates de Documentos">
