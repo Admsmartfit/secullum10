@@ -9,9 +9,12 @@ Recursos:
 """
 import os
 from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
 
 from extensions import db
 from models import NotificationRule, AlocacaoDiaria, Batida, Funcionario, WhatsappLog, NotificacaoFila
+
+_TZ_BR = ZoneInfo('America/Sao_Paulo')
 
 def _get_gestor_celular():
     from services.config_service import get_gestor_celular
@@ -174,8 +177,8 @@ def _enfileirar(regra: NotificationRule, celular: str, mensagem: str,
 
 def _fora_do_expediente(aloc) -> bool:
     """True se o horário atual está fora do turno da alocação OU em horário de silêncio (22h-07h)."""
-    agora = datetime.now().time()
-    
+    agora = datetime.now(_TZ_BR).time()
+
     # Janela de silêncio absoluta para compliance (22h às 07h)
     if agora >= datetime.strptime('22:00', '%H:%M').time() or \
        agora <= datetime.strptime('07:00', '%H:%M').time():
@@ -183,11 +186,20 @@ def _fora_do_expediente(aloc) -> bool:
 
     if not aloc or not aloc.turno:
         return False
-        
+
     return not (aloc.turno.hora_inicio <= agora <= aloc.turno.hora_fim)
 
 
 # ── Relatório de Inconsistências ───────────────────────────────────────────────
+
+def _formatar_batidas(lista_batidas: list) -> str:
+    """Retorna string com horários. Ex: '08:02 · 12:01 · 13:05 · 17:58'"""
+    horas = []
+    for b in sorted(lista_batidas, key=lambda x: x.hora):
+        hora_str = b.hora if isinstance(b.hora, str) else b.hora.strftime('%H:%M')
+        horas.append(hora_str[:5])
+    return ' · '.join(horas) if horas else '—'
+
 
 def _gerar_relatorio_inconsistencias(data_ref: date) -> str:
     """Monta texto resumido GLOBAL das inconsistências do dia data_ref."""
@@ -208,36 +220,56 @@ def _gerar_relatorio_inconsistencias(data_ref: date) -> str:
         .filter(Funcionario.ativo == True)
         .all()
     )
-    
+
     batidas_por_fid = {}
     for b in batidas:
         batidas_por_fid.setdefault(b.funcionario_id, []).append(b)
 
+    # {nome: {'tipos': set, 'batidas': str, 'turno': str}}
     por_func = {}
     for fid, lista in batidas_por_fid.items():
         if lista:
             func = lista[0].funcionario
             probs = _analisar_dia(func, data_ref, lista)
             if probs:
-                for p in probs:
-                    por_func.setdefault(func.nome, set()).add(p['tipo'])
+                aloc = AlocacaoDiaria.query.filter_by(funcionario_id=fid, data=data_ref).first()
+                turno_str = ''
+                if aloc and aloc.turno:
+                    turno_str = f'{aloc.turno.hora_inicio.strftime("%H:%M")}–{aloc.turno.hora_fim.strftime("%H:%M")}'
+                por_func[func.nome] = {
+                    'tipos': {p['tipo'] for p in probs},
+                    'batidas': _formatar_batidas(lista),
+                    'turno': turno_str,
+                }
 
     ausentes = []
     for aloc in alocacoes:
         if aloc.funcionario and aloc.funcionario_id not in batidas_por_fid:
-            ausentes.append(aloc.funcionario.nome)
+            turno_str = ''
+            if aloc.turno:
+                turno_str = f'{aloc.turno.hora_inicio.strftime("%H:%M")}–{aloc.turno.hora_fim.strftime("%H:%M")}'
+            ausentes.append({'nome': aloc.funcionario.nome, 'turno': turno_str})
 
     linhas = [f'📋 Inconsistências — {data_ref.strftime("%d/%m/%Y")}']
 
     if por_func:
         linhas.append(f'\n⚠️ Batidas inconsistentes ({len(por_func)}):')
         for nome in sorted(por_func):
-            linhas.append(f'  • {nome}: {", ".join(sorted(por_func[nome]))}')
+            d = por_func[nome]
+            tipos = ', '.join(sorted(d['tipos']))
+            linha = f'  • {nome}: {tipos}'
+            if d['turno']:
+                linha += f'\n    🕐 Turno: {d["turno"]}'
+            linha += f'\n    👆 Batidas: {d["batidas"]}'
+            linhas.append(linha)
 
     if ausentes:
         linhas.append(f'\n🚫 Ausências ({len(ausentes)}):')
-        for nome in sorted(ausentes):
-            linhas.append(f'  • {nome}')
+        for a in sorted(ausentes, key=lambda x: x['nome']):
+            linha = f'  • {a["nome"]}'
+            if a['turno']:
+                linha += f' (turno {a["turno"]})'
+            linhas.append(linha)
 
     if not por_func and not ausentes:
         linhas.append('\n✅ Nenhuma inconsistência encontrada.')
@@ -272,7 +304,8 @@ def _gerar_relatorio_por_departamento(data_ref: date) -> dict:
     for b in batidas:
         batidas_por_fid.setdefault(b.funcionario_id, []).append(b)
 
-    por_dept = {}  # {dept: {'inconsistentes': {nome: tipos}, 'ausentes': [nome]}}
+    # {dept: {'inconsistentes': {nome: {tipos, batidas, turno}}, 'ausentes': [{nome, turno}]}}
+    por_dept = {}
 
     for fid, lista in batidas_por_fid.items():
         if lista:
@@ -280,16 +313,26 @@ def _gerar_relatorio_por_departamento(data_ref: date) -> dict:
             dept = func.departamento or 'Sem Departamento'
             probs = _analisar_dia(func, data_ref, lista)
             if probs:
+                aloc = AlocacaoDiaria.query.filter_by(funcionario_id=fid, data=data_ref).first()
+                turno_str = ''
+                if aloc and aloc.turno:
+                    turno_str = f'{aloc.turno.hora_inicio.strftime("%H:%M")}–{aloc.turno.hora_fim.strftime("%H:%M")}'
                 d = por_dept.setdefault(dept, {'inconsistentes': {}, 'ausentes': []})
-                for p in probs:
-                    d['inconsistentes'].setdefault(func.nome, set()).add(p['tipo'])
+                d['inconsistentes'][func.nome] = {
+                    'tipos': {p['tipo'] for p in probs},
+                    'batidas': _formatar_batidas(lista),
+                    'turno': turno_str,
+                }
 
     for aloc in alocacoes:
         func = aloc.funcionario
         if func and func.id not in batidas_por_fid:
             dept = func.departamento or 'Sem Departamento'
+            turno_str = ''
+            if aloc.turno:
+                turno_str = f'{aloc.turno.hora_inicio.strftime("%H:%M")}–{aloc.turno.hora_fim.strftime("%H:%M")}'
             d = por_dept.setdefault(dept, {'inconsistentes': {}, 'ausentes': []})
-            d['ausentes'].append(func.nome)
+            d['ausentes'].append({'nome': func.nome, 'turno': turno_str})
 
     # Gera texto por departamento
     result = {}
@@ -299,12 +342,20 @@ def _gerar_relatorio_por_departamento(data_ref: date) -> dict:
         if dados['inconsistentes']:
             linhas.append(f'\n⚠️ Batidas inconsistentes ({len(dados["inconsistentes"])}):')
             for nome in sorted(dados['inconsistentes']):
-                tipos = ', '.join(sorted(dados['inconsistentes'][nome]))
-                linhas.append(f'  • {nome}: {tipos}')
+                info = dados['inconsistentes'][nome]
+                tipos = ', '.join(sorted(info['tipos']))
+                linha = f'  • {nome}: {tipos}'
+                if info['turno']:
+                    linha += f'\n    🕐 Turno: {info["turno"]}'
+                linha += f'\n    👆 Batidas: {info["batidas"]}'
+                linhas.append(linha)
         if dados['ausentes']:
             linhas.append(f'\n🚫 Ausências ({len(dados["ausentes"])}):')
-            for nome in sorted(dados['ausentes']):
-                linhas.append(f'  • {nome}')
+            for a in sorted(dados['ausentes'], key=lambda x: x['nome']):
+                linha = f'  • {a["nome"]}'
+                if a['turno']:
+                    linha += f' (turno {a["turno"]})'
+                linhas.append(linha)
         result[dept] = '\n'.join(linhas)
     return result
 
@@ -440,8 +491,8 @@ def _checar_pre_checkin(func, data_ref: date) -> bool:
         return False
     if getattr(aloc, 'pre_checkin', False):
         return False
-    inicio = datetime.combine(data_ref, aloc.turno.hora_inicio)
-    diff_min = (inicio - datetime.now()).total_seconds() / 60
+    inicio = datetime.combine(data_ref, aloc.turno.hora_inicio, tzinfo=_TZ_BR)
+    diff_min = (inicio - datetime.now(_TZ_BR)).total_seconds() / 60
     return 45 <= diff_min <= 75
 
 
@@ -668,7 +719,7 @@ def processar_regras_agendadas() -> dict:
     e EVENT_HOURLY sempre (sem filtro de hora).
     Chamado a cada hora via Celery beat.
     """
-    agora = datetime.now()
+    agora = datetime.now(_TZ_BR)
     hora_atual = agora.hour
     dia_atual  = agora.weekday()
 
