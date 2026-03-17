@@ -360,42 +360,64 @@ def _gerar_relatorio_por_departamento(data_ref: date) -> dict:
     return result
 
 
+def _normalizar_celular(numero: str) -> str:
+    """Remove caracteres não numéricos e garante DDI 55 (Brasil)."""
+    import re
+    num = re.sub(r'\D', '', numero)
+    if len(num) >= 10 and not num.startswith('55'):
+        num = '55' + num
+    return num
+
+
 def _enviar_relatorio(regra: NotificationRule, texto_global: str) -> int:
     """
     Envia relatório de inconsistências:
     - Para cada gestor de departamento: apenas inconsistências do seu depto
     - Para o gestor global: relatório completo (se dest_manager ativo)
+    Cada envio é isolado em try/except: falha num depto não interrompe os demais.
     """
     from services.whatsapp_bot import enviar_texto
     from models import UnidadeLider
     enviados = 0
-    ontem = date.today() - timedelta(days=1)
-    relatorios_dept = _gerar_relatorio_por_departamento(ontem)
 
-    # Envia para cada gestor de departamento
+    # Data de ontem no fuso do Brasil (evita divergência UTC vs BRT na virada do dia)
+    ontem = (datetime.now(_TZ_BR).date() - timedelta(days=1))
+
+    try:
+        relatorios_dept = _gerar_relatorio_por_departamento(ontem)
+    except Exception as e:
+        logger.error(f'[enviar_relatorio] Erro ao gerar relatório por departamento: {e}')
+        relatorios_dept = {}
+
+    # Extrai dados em memória ANTES dos envios (commits do enviar_texto expiram a ORM)
     unidades = UnidadeLider.query.filter(UnidadeLider.celular_lider.isnot(None)).all()
-    
-    # Extrai os dados em memória limpa ANTES das chamadas enviar_texto, pois estas 
-    # executam db.session.commit(), o que invalida (expired) os modelos recuperados na ORM.
-    # O lazy load pós-commit corromperia a sessão gerando o PGRES_TUPLES_OK.
     alvos = []
     for u in unidades:
         if u.celular_lider:
-            alvos.append({'celular': u.celular_lider, 'dept': u.departamento})
+            alvos.append({
+                'celular': _normalizar_celular(u.celular_lider),
+                'dept': u.departamento,
+            })
 
     for alvo in alvos:
         dept = alvo['dept']
-        texto_dept = relatorios_dept.get(dept)
-        if not texto_dept:
-            # Sem problemas no depto → informa que está OK
-            texto_dept = f'📋 Inconsistências — {dept} — {ontem.strftime("%d/%m/%Y")}\n\n✅ Nenhuma inconsistência encontrada.'
-        if enviar_texto(celular=alvo['celular'], mensagem=texto_dept, tipo='relatorio'):
-            enviados += 1
+        texto_dept = relatorios_dept.get(dept) or (
+            f'📋 Inconsistências — {dept} — {ontem.strftime("%d/%m/%Y")}\n\n✅ Nenhuma inconsistência encontrada.'
+        )
+        try:
+            if enviar_texto(celular=alvo['celular'], mensagem=texto_dept, tipo='relatorio'):
+                enviados += 1
+        except Exception as e:
+            logger.error(f'[enviar_relatorio] Falha ao enviar para depto "{dept}" ({alvo["celular"]}): {e}')
 
-    # Envia relatório global para o gestor geral
+    # Relatório global para o gestor geral
     if regra.dest_manager and _get_gestor_celular():
-        if enviar_texto(celular=_get_gestor_celular(), mensagem=texto_global, tipo='relatorio'):
-            enviados += 1
+        cel_gestor = _normalizar_celular(_get_gestor_celular())
+        try:
+            if enviar_texto(celular=cel_gestor, mensagem=texto_global, tipo='relatorio'):
+                enviados += 1
+        except Exception as e:
+            logger.error(f'[enviar_relatorio] Falha ao enviar relatório global para {cel_gestor}: {e}')
 
     return enviados
 

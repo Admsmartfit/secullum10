@@ -74,9 +74,7 @@ def verificar_inconsistencias_dia_anterior():
     if _get_cfg('verificar_incons_ultimo_auto_chk', '') == chk_val:
         return {'skipped': True, 'reason': 'ja executou neste horario hoje'}
 
-    _set_cfg('verificar_incons_ultimo_auto_chk', chk_val)
-    _set_cfg('verificar_incons_ultimo_run', agora.isoformat())
-
+    # NÃO marcamos como executado aqui — só após concluir com sucesso
     ontem = (agora.date() - timedelta(days=1))
     ontem_str = ontem.strftime('%Y-%m-%d')
 
@@ -84,29 +82,29 @@ def verificar_inconsistencias_dia_anterior():
 
     try:
         from services.sync_service import sync_batidas as _sync_batidas
-        
+
         # 1. Sincroniza todas as batidas do dia anterior primeiro
         ok_sync, msg_sync = _sync_batidas(ontem_str, ontem_str)
         resultado = f'Sync do dia anterior ({ontem_str}) concluída: {msg_sync}'
         _set_cfg('verificar_incons_ultimo_resultado', resultado)
         logger.info(f'[verificar_incons] {resultado}')
-        
+
         # 2. Somente depois de atualizar, envia o relatório
         try:
             from models import NotificationRule
             from extensions import db as _db
             from services.notification_processor import _gerar_relatorio_inconsistencias, _enviar_relatorio
-            
+
             regras = NotificationRule.query.filter_by(ativo=True, condition_type='INCONSISTENCY_REPORT').all()
             ids_regras = [r.id for r in regras]
-            
+
             if ids_regras:
                 relatorio = _gerar_relatorio_inconsistencias(ontem)
                 total_env = 0
                 for rid in ids_regras:
                     regra_obj = NotificationRule.query.get(rid)
-                    if not regra_obj: continue
-                    
+                    if not regra_obj:
+                        continue
                     env = _enviar_relatorio(regra_obj, relatorio)
                     if env > 0:
                         rr = NotificationRule.query.get(rid)
@@ -118,7 +116,11 @@ def verificar_inconsistencias_dia_anterior():
                     logger.info(f'[verificar_incons] {total_env} mensagem(ns) de inconsistência enviada(s).')
         except Exception as e:
             logger.error(f'[verificar_incons] Falha ao enviar relatório: {e}')
-            
+
+        # Marca como executado APENAS após o trabalho completo
+        _set_cfg('verificar_incons_ultimo_auto_chk', chk_val)
+        _set_cfg('verificar_incons_ultimo_run', agora.isoformat())
+
         return {'ok': ok_sync, 'divergencias': 0, 'msg': resultado}
 
     except Exception as e:
