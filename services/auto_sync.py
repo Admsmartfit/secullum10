@@ -10,7 +10,10 @@ Os intervalos são lidos da tabela `configuracoes` a cada execução,
 então mudanças na config têm efeito no próximo ciclo sem restart.
 """
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import logging
+
+_TZ_BR = ZoneInfo('America/Sao_Paulo')
 
 logger = logging.getLogger('auto_sync')
 
@@ -50,7 +53,10 @@ def _deve_rodar(chave_ativo, chave_intervalo, chave_ultimo_run, intervalo_defaul
     if ultimo_str:
         try:
             ultimo = datetime.fromisoformat(ultimo_str)
-            if (datetime.now() - ultimo).total_seconds() < intervalo * 60:
+            # Blinda contra datas antigas sem fuso (offset-naive)
+            if ultimo.tzinfo is None:
+                ultimo = ultimo.replace(tzinfo=_TZ_BR)
+            if (datetime.now(_TZ_BR) - ultimo).total_seconds() < intervalo * 60:
                 return False
         except ValueError:
             pass
@@ -64,7 +70,7 @@ def job_rapida(app):
                            'sync_rapida_ultimo_run', 10):
             return
         try:
-            _set_cfg('sync_rapida_ultimo_run', datetime.now().isoformat())
+            _set_cfg('sync_rapida_ultimo_run', datetime.now(_TZ_BR).isoformat())
             from services.sync_service import sync_batidas_incremental
             ok, msg = sync_batidas_incremental()
             logger.info(f'[sync_rapida] {msg}')
@@ -80,9 +86,9 @@ def job_completa(app):
             return
         try:
             janela = int(_get_cfg('sync_completa_janela_horas', '12'))
-            _set_cfg('sync_completa_ultimo_run', datetime.now().isoformat())
+            _set_cfg('sync_completa_ultimo_run', datetime.now(_TZ_BR).isoformat())
             from services.sync_service import sync_batidas
-            agora = datetime.now()
+            agora = datetime.now(_TZ_BR)
             ok, msg = sync_batidas(
                 (agora - timedelta(hours=janela)).strftime('%Y-%m-%d'),
                 agora.strftime('%Y-%m-%d'),

@@ -1,7 +1,10 @@
 import json
 from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
 from extensions import db
 from models import Funcionario, Batida, Configuracao
+
+_TZ_BR = ZoneInfo('America/Sao_Paulo')
 
 
 _CHAVE_ULTIMA_SYNC = 'ultima_sync_batidas'
@@ -13,7 +16,11 @@ def get_ultima_sync_batidas() -> datetime | None:
     if not cfg or not cfg.valor:
         return None
     try:
-        return datetime.fromisoformat(cfg.valor)
+        dt = datetime.fromisoformat(cfg.valor)
+        # Blinda contra datas antigas sem fuso (offset-naive)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=_TZ_BR)
+        return dt
     except ValueError:
         return None
 
@@ -151,7 +158,7 @@ def sync_funcionarios():
 
 def sync_batidas(data_inicio, data_fim, hora_inicio=None, hora_fim=None):
     api = get_api()
-    agora_sync = datetime.now()
+    agora_sync = datetime.now(_TZ_BR)
     registros = api.buscar_batidas(data_inicio, data_fim, hora_inicio, hora_fim)
     if registros is None:
         return False, "Erro ao buscar batidas da API."
@@ -252,7 +259,7 @@ def sync_batidas_incremental():
       cobrir batidas que possam ter chegado atrasadas na API Secullum).
     Salva o timestamp de início da requisição atual ao concluir com sucesso.
     """
-    agora = datetime.now()
+    agora = datetime.now(_TZ_BR)
     ultima = get_ultima_sync_batidas()
 
     hora_inicio = None
