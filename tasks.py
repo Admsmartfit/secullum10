@@ -91,29 +91,55 @@ def verificar_inconsistencias_dia_anterior():
 
         # 2. Somente depois de atualizar, envia o relatório
         try:
-            from models import NotificationRule
+            from models import NotificationRule, UnidadeLider
             from extensions import db as _db
-            from services.notification_processor import _gerar_relatorio_inconsistencias, _enviar_relatorio
+            from services.notification_processor import (
+                _gerar_relatorio_inconsistencias,
+                _gerar_relatorio_por_departamento,
+                _normalizar_celular,
+            )
+            from services.whatsapp_bot import enviar_texto
 
+            relatorio_global = _gerar_relatorio_inconsistencias(ontem)
+            relatorios_dept  = _gerar_relatorio_por_departamento(ontem)
+
+            # ── Envia para cada líder de departamento (SEMPRE, sem precisar de NotificationRule) ──
+            unidades = UnidadeLider.query.filter(UnidadeLider.celular_lider.isnot(None)).all()
+            alvos = [
+                {'celular': _normalizar_celular(u.celular_lider), 'dept': u.departamento}
+                for u in unidades if u.celular_lider
+            ]
+            total_env = 0
+            for alvo in alvos:
+                dept = alvo['dept']
+                texto_dept = relatorios_dept.get(dept) or (
+                    f'📋 Inconsistências — {dept} — {ontem_str}\n\n✅ Nenhuma inconsistência encontrada.'
+                )
+                try:
+                    if enviar_texto(celular=alvo['celular'], mensagem=texto_dept, tipo='relatorio'):
+                        total_env += 1
+                except Exception as e_env:
+                    logger.error(f'[verificar_incons] Falha ao enviar para líder de "{dept}" ({alvo["celular"]}): {e_env}')
+
+            # ── Envia relatório global para gestor geral (apenas se existir NotificationRule ativa) ──
             regras = NotificationRule.query.filter_by(ativo=True, condition_type='INCONSISTENCY_REPORT').all()
-            ids_regras = [r.id for r in regras]
+            for regra in regras:
+                if regra.dest_manager:
+                    from services.config_service import get_gestor_celular
+                    cel = get_gestor_celular()
+                    if cel:
+                        try:
+                            if enviar_texto(celular=_normalizar_celular(cel), mensagem=relatorio_global, tipo='relatorio'):
+                                total_env += 1
+                        except Exception as e_env:
+                            logger.error(f'[verificar_incons] Falha ao enviar relatório global: {e_env}')
+                regra.mensagens_enviadas = (regra.mensagens_enviadas or 0) + 1
+                regra.ultima_execucao = agora
+            if regras:
+                _db.session.commit()
 
-            if ids_regras:
-                relatorio = _gerar_relatorio_inconsistencias(ontem)
-                total_env = 0
-                for rid in ids_regras:
-                    regra_obj = NotificationRule.query.get(rid)
-                    if not regra_obj:
-                        continue
-                    env = _enviar_relatorio(regra_obj, relatorio)
-                    if env > 0:
-                        rr = NotificationRule.query.get(rid)
-                        rr.mensagens_enviadas = (rr.mensagens_enviadas or 0) + env
-                        rr.ultima_execucao = agora
-                        _db.session.commit()
-                        total_env += env
-                if total_env > 0:
-                    logger.info(f'[verificar_incons] {total_env} mensagem(ns) de inconsistência enviada(s).')
+            if total_env > 0:
+                logger.info(f'[verificar_incons] {total_env} mensagem(ns) de inconsistência enviada(s).')
         except Exception as e:
             logger.error(f'[verificar_incons] Falha ao enviar relatório: {e}')
 
