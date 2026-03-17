@@ -3,7 +3,7 @@ Módulo de Configuração do Sistema.
 Gerencia: usuários, líderes de unidade, teste WhatsApp, importação de escalas Secullum.
 """
 from datetime import date, datetime, timedelta
-from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
+from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, current_app
 from flask_login import login_required, current_user
 from extensions import db
 from models import Usuario, Funcionario, UnidadeLider, AlocacaoDiaria, Turno, Configuracao, Feriado
@@ -559,26 +559,53 @@ def verificar_incons_executar():
     ontem_str = ontem.strftime('%Y-%m-%d')
 
     def _disparar_relatorio():
-        from models import NotificationRule
-        from services.notification_processor import _gerar_relatorio_inconsistencias, _enviar_relatorio
-        
+        from models import NotificationRule, UnidadeLider
+        from services.notification_processor import (
+            _gerar_relatorio_inconsistencias,
+            _gerar_relatorio_por_departamento,
+            _normalizar_celular,
+        )
+        from services.whatsapp_bot import enviar_texto
+
+        relatorio_global = _gerar_relatorio_inconsistencias(ontem)
+        relatorios_dept  = _gerar_relatorio_por_departamento(ontem)
+
+        # Envia para cada líder de departamento SEMPRE (sem depender de NotificationRule)
+        unidades = UnidadeLider.query.filter(UnidadeLider.celular_lider.isnot(None)).all()
+        alvos = [
+            {'celular': _normalizar_celular(u.celular_lider), 'dept': u.departamento}
+            for u in unidades if u.celular_lider
+        ]
+        total_env = 0
+        for alvo in alvos:
+            dept = alvo['dept']
+            texto_dept = relatorios_dept.get(dept) or (
+                f'📋 Inconsistências — {dept} — {ontem_str}\n\n✅ Nenhuma inconsistência encontrada.'
+            )
+            try:
+                if enviar_texto(celular=alvo['celular'], mensagem=texto_dept, tipo='relatorio'):
+                    total_env += 1
+            except Exception as e_env:
+                current_app.logger.error(
+                    f'[verificar_incons_manual] Falha ao enviar para líder de "{dept}" ({alvo["celular"]}): {e_env}'
+                )
+
+        # Envia relatório global para gestor geral (apenas se existir NotificationRule ativa)
         regras = NotificationRule.query.filter_by(ativo=True, condition_type='INCONSISTENCY_REPORT').all()
-        ids_regras = [r.id for r in regras]
-        
-        if ids_regras:
-            relatorio = _gerar_relatorio_inconsistencias(ontem)
-            for rid in ids_regras:
-                # Regra recarregada a cada iteração pois _enviar_relatorio faz db.session.commit() interno e expira objetos!
-                regra_obj = NotificationRule.query.get(rid)
-                if not regra_obj: continue
-                
-                env = _enviar_relatorio(regra_obj, relatorio)
-                if env > 0:
-                    # Carregamento fresco garante segurança de thread/sessão para não dar PGRES_TUPLES_OK
-                    rr = NotificationRule.query.get(rid)
-                    rr.mensagens_enviadas = (rr.mensagens_enviadas or 0) + env
-                    rr.ultima_execucao = datetime.utcnow()
-                    db.session.commit()
+        for regra in regras:
+            if regra.dest_manager:
+                from services.config_service import get_gestor_celular
+                cel = get_gestor_celular()
+                if cel:
+                    try:
+                        if enviar_texto(celular=_normalizar_celular(cel), mensagem=relatorio_global, tipo='relatorio'):
+                            total_env += 1
+                    except Exception as e_env:
+                        current_app.logger.error(f'[verificar_incons_manual] Falha ao enviar global: {e_env}')
+            regra.mensagens_enviadas = (regra.mensagens_enviadas or 0) + 1
+            regra.ultima_execucao = datetime.utcnow()
+        if regras:
+            db.session.commit()
 
     try:
         from services.sync_service import sync_batidas
