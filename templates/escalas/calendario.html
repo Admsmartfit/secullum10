@@ -51,9 +51,6 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h3 mb-0 fw-bold">Calendário de Escalas</h1>
     <div class="d-flex gap-2">
-        <a href="{{ url_for('escalas.alocar') }}" class="btn btn-primary btn">
-            <i class="fas fa-plus me-1"></i>Nova Alocação
-        </a>
         <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-light btn">
             <i class="fas fa-list me-1"></i>Turnos
         </a>
@@ -226,11 +223,6 @@ $(function() {
             document.getElementById('modalEventoBody').innerHTML = html;
             document.getElementById('btnExcluirAloc').dataset.id = p.aloc_id;
             new bootstrap.Modal(document.getElementById('modalEvento')).show();
-        },
-
-        // Clique em dia vazio → alocar
-        dateClick: function(info) {
-            window.location.href = `/escalas/alocar?data=${info.dateStr}`;
         },
 
         // Drag & drop → mover alocação

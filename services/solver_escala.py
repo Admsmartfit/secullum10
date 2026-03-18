@@ -5,8 +5,6 @@ Usados pela Etapa 4 do módulo de Escala Inteligente (prd.md).
 import calendar as cal_mod
 from datetime import date, timedelta
 from models import AlocacaoDiaria, Funcionario, BancoHorasSaldo, Turno, GrupoDepartamento
-from extensions import db
-from sqlalchemy.orm import joinedload
 
 
 def _filtrar_dept(q, dept_str: str):
@@ -19,79 +17,6 @@ def _filtrar_dept(q, dept_str: str):
         return q.filter(Funcionario.departamento == depts[0])
     return q.filter(Funcionario.departamento.in_(depts))
 
-
-def alertas_cobertura(mes_ano: str, dept: str = None, funcao: str = None) -> list[dict]:
-    """Retorna lista de dias do mês onde a cobertura para dept/função é zero."""
-    try:
-        ano, mes = int(mes_ano[:4]), int(mes_ano[5:7])
-    except (ValueError, IndexError):
-        return []
-
-    _, dias_no_mes = cal_mod.monthrange(ano, mes)
-    data_ini = date(ano, mes, 1)
-    data_fim = date(ano, mes, dias_no_mes)
-
-    # Funcionários no escopo — carrega horario_base em uma só query
-    q = Funcionario.query.filter_by(ativo=True).options(joinedload(Funcionario.horario_base))
-    q = _filtrar_dept(q, dept)
-    if funcao:
-        q = q.filter(Funcionario.funcao == funcao)
-    funcionarios = q.all()
-    if not funcionarios:
-        return []
-
-    func_ids = {f.id for f in funcionarios}
-
-    # Alocações do mês com turno — mesma estratégia do cobertura_dados (inner join)
-    alocacoes = (
-        AlocacaoDiaria.query
-        .filter(
-            AlocacaoDiaria.funcionario_id.in_(func_ids),
-            AlocacaoDiaria.data >= data_ini,
-            AlocacaoDiaria.data <= data_fim,
-        )
-        .join(Turno, AlocacaoDiaria.turno_id == Turno.id)
-        .add_columns(Turno.nome.label('turno_nome'))
-        .all()
-    )
-
-    # Indexar: {func_id: {dia: turno_nome}}
-    aloc_map: dict = {}
-    for aloc, turno_nome in alocacoes:
-        aloc_map.setdefault(aloc.funcionario_id, {})[aloc.data.day] = turno_nome
-
-    dias_com_cobertura = set()
-
-    for d in range(1, dias_no_mes + 1):
-        dt = date(ano, mes, d)
-        for f in funcionarios:
-            turno_nome = aloc_map.get(f.id, {}).get(d)
-            if turno_nome is not None:
-                # Exceção explícita — só conta se não for FOLGA
-                if turno_nome.upper() != 'FOLGA':
-                    dias_com_cobertura.add(d)
-                    break
-            else:
-                # Fallback para horário base
-                hb = f.horario_base
-                if hb and hb.nome and hb.nome.upper() != 'FOLGA':
-                    dias = hb.dias_semana or ''
-                    if str(dt.weekday()) in dias.split(','):
-                        dias_com_cobertura.add(d)
-                        break
-
-    descobertos = []
-    for d in range(1, dias_no_mes + 1):
-        if d not in dias_com_cobertura:
-            dt = date(ano, mes, d)
-            descobertos.append({
-                'data':       dt.isoformat(),
-                'dia':        d,
-                'dia_semana': dt.weekday(),
-                'funcao':     funcao or '',
-                'dept':       dept or '',
-            })
-    return descobertos
 
 
 def violacoes_art386(mes_ano: str, dept: str = None, funcao: str = None) -> list[dict]:

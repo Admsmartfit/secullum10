@@ -50,18 +50,16 @@
         </div>
     </div>
     <div class="col">
-        <a href="{{ url_for('escalas.divergencias') }}" class="text-decoration-none">
-            <div class="card h-100 p-3 stats-card" style="border-color: {{ 'rgba(239,68,68,0.4)' if ausencias else 'rgba(255,255,255,0.1)' }};">
-                <div class="icon-box" style="background-color: rgba(239,68,68,0.1); color: #ef4444;">
-                    <i class="fas fa-user-xmark fa-lg"></i>
-                </div>
-                <div class="text-muted small fw-bold text-uppercase">Ausências Hoje</div>
-                <div class="h2 mb-0 font-weight-bold {{ 'text-danger' if ausencias else '' }}">{{ ausencias|length }}</div>
-                <div class="small mt-2 {{ 'text-danger' if ausencias else 'text-muted' }}">
-                    {% if ausencias %}<i class="fas fa-exclamation-triangle me-1"></i> Ver divergências{% else %}<i class="fas fa-check-circle me-1"></i> Sem ausências{% endif %}
-                </div>
+        <div class="card h-100 p-3 stats-card" style="border-color: {{ 'rgba(239,68,68,0.4)' if ausencias else 'rgba(255,255,255,0.1)' }};">
+            <div class="icon-box" style="background-color: rgba(239,68,68,0.1); color: #ef4444;">
+                <i class="fas fa-user-xmark fa-lg"></i>
             </div>
-        </a>
+            <div class="text-muted small fw-bold text-uppercase">Ausências Hoje</div>
+            <div class="h2 mb-0 font-weight-bold {{ 'text-danger' if ausencias else '' }}">{{ ausencias|length }}</div>
+            <div class="small mt-2 {{ 'text-danger' if ausencias else 'text-muted' }}">
+                {% if ausencias %}<i class="fas fa-exclamation-triangle me-1"></i> Ausentes{% else %}<i class="fas fa-check-circle me-1"></i> Sem ausências{% endif %}
+            </div>
+        </div>
     </div>
 </div>
 
@@ -72,7 +70,6 @@
         <strong>{{ ausencias|length }} ausência(s) hoje</strong> — escalados sem batida:
         <span class="ms-1">{{ ausencias|map(attribute='nome')|join(', ') }}</span>
     </div>
-    <a href="{{ url_for('escalas.divergencias') }}" class="btn btn-warning ms-auto">Ver divergências</a>
 </div>
 {% endif %}
 
