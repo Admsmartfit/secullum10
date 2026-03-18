@@ -66,9 +66,20 @@
                     </td>
                     <td>
                         {% if item.horas|length % 2 != 0 %}
-                        <span class="badge bg-danger">Incompleto</span>
-                        {% else %}
-                        <span class="badge bg-success">OK</span>
+                        <span class="badge bg-danger"><i class="fas fa-exclamation-triangle me-1"></i>Incompleto</span>
+                        {% endif %}
+                        {% if item.status %}
+                            {% for st in item.status %}
+                                {% if st == 'Atrasado' %}
+                                <span class="badge bg-danger" title="Entrada com mais de 10 min de atraso"><i class="fas fa-clock me-1"></i>Atrasado</span>
+                                {% elif st == '+10m Saída' %}
+                                <span class="badge bg-warning text-dark" title="Saiu mais de 10 min além do horário"><i class="fas fa-business-time me-1"></i>+10m Saída</span>
+                                {% elif st == 'Intervalo Insuficiente' %}
+                                <span class="badge bg-info text-dark" title="Intervalo fora da faixa de 50–70 min"><i class="fas fa-utensils me-1"></i>Intervalo Insuf.</span>
+                                {% endif %}
+                            {% endfor %}
+                        {% elif item.horas|length % 2 == 0 and item.horas %}
+                        <span class="badge bg-success"><i class="fas fa-check me-1"></i>OK</span>
                         {% endif %}
                     </td>
                 </tr>

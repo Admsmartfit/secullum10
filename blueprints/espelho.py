@@ -1,9 +1,9 @@
 import pandas as pd
 from io import BytesIO
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, request, send_file, jsonify, flash, redirect, url_for
 from flask_login import login_required
-from models import Batida, Funcionario
+from models import Batida, Funcionario, AlocacaoDiaria
 
 espelho_bp = Blueprint('espelho', __name__, url_prefix='/config')
 
@@ -62,10 +62,56 @@ def espelho():
         key = (b.data.strftime('%Y-%m-%d'), b.funcionario_id, b.funcionario.nome)
         agrupado.setdefault(key, []).append(b.hora)
 
-    batidas_agrupadas = sorted([
-        {'data': d, 'funcionario_id': fid, 'funcionario': nome, 'horas': sorted(horas)}
-        for (d, fid, nome), horas in agrupado.items()
-    ], key=lambda x: x['data'], reverse=True)
+    batidas_agrupadas = []
+    for (d_str, fid, nome), horas in agrupado.items():
+        horas_ordenadas = sorted(horas)
+        data_obj = datetime.strptime(d_str, '%Y-%m-%d').date()
+
+        func = Funcionario.query.get(fid)
+        aloc = AlocacaoDiaria.query.filter_by(funcionario_id=fid, data=data_obj).first()
+        turno = aloc.turno if aloc else (func.horario_base if func else None)
+
+        status_lista = []
+
+        if turno and horas_ordenadas:
+            h_ini, h_fim, _ = turno.get_horario_dia(data_obj.weekday())
+            if h_ini and h_fim:
+                dt_ini = datetime.combine(data_obj, h_ini)
+                dt_fim = datetime.combine(data_obj, h_fim)
+                if h_fim < h_ini:            # turno vira a madrugada
+                    dt_fim += timedelta(days=1)
+
+                # 1. Atraso na entrada (> 10 min)
+                dt_entrada = datetime.combine(data_obj, horas_ordenadas[0])
+                if (dt_entrada - dt_ini).total_seconds() > 600:
+                    status_lista.append('Atrasado')
+
+                # 2. Saída tardia (> 10 min além do fim do turno)
+                dt_saida = datetime.combine(data_obj, horas_ordenadas[-1])
+                if horas_ordenadas[-1] < h_ini:   # batida após meia-noite
+                    dt_saida += timedelta(days=1)
+                if (dt_saida - dt_fim).total_seconds() > 600:
+                    status_lista.append('+10m Saída')
+
+                # 3. Intervalo fora da faixa 50–70 min (requer ≥ 4 batidas)
+                if len(horas_ordenadas) >= 4:
+                    dt_saida_int = datetime.combine(data_obj, horas_ordenadas[1])
+                    dt_retorno_int = datetime.combine(data_obj, horas_ordenadas[2])
+                    if horas_ordenadas[2] < horas_ordenadas[1]:
+                        dt_retorno_int += timedelta(days=1)
+                    intervalo_min = (dt_retorno_int - dt_saida_int).total_seconds() / 60
+                    if intervalo_min < 50 or intervalo_min > 70:
+                        status_lista.append('Intervalo Insuficiente')
+
+        batidas_agrupadas.append({
+            'data': d_str,
+            'funcionario_id': fid,
+            'funcionario': nome,
+            'horas': horas_ordenadas,
+            'status': status_lista,
+        })
+
+    batidas_agrupadas = sorted(batidas_agrupadas, key=lambda x: x['data'], reverse=True)
 
     funcionarios_com_batida = sorted(
         {b['funcionario_id']: b['funcionario'] for b in batidas_agrupadas}.items(),
