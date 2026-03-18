@@ -4,6 +4,7 @@ CRUD de regras + execução manual para teste.
 """
 from collections import defaultdict  # noqa: F401 — usado em index()
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required
 from extensions import db
@@ -288,7 +289,7 @@ def executar(rid):
     regra = NotificationRule.query.get_or_404(rid)
     from services.notification_processor import processar_regras_evento
     result = processar_regras_evento(regra.trigger_type)
-    regra.ultima_execucao = datetime.utcnow()
+    regra.ultima_execucao = datetime.now(ZoneInfo('America/Sao_Paulo'))
     db.session.commit()
     return jsonify({'ok': True, 'mensagens': result.get('mensagens', 0)})
 

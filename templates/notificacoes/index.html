@@ -138,7 +138,7 @@
             <button class="btn btn-outline-secondary" title="Editar"
                     data-bs-toggle="modal" data-bs-target="#modalRegra"
                     onclick="abrirEditar(this)"
-                    data-rule='{{ {'id':r.id,'nome':r.nome,'ativo':r.ativo,'categoria':r.categoria or 'alerta','trigger_type':r.trigger_type,'trigger_hour':r.trigger_hour,'trigger_weekday':r.trigger_weekday,'condition_type':r.condition_type,'threshold_minutes':r.threshold_minutes,'dest_employee':r.dest_employee,'dest_manager':r.dest_manager,'dest_rh':r.dest_rh,'template_manager':r.template_manager or '','template_employee':r.template_employee or '','template_manager_tipo':(r.template_manager_tipo or 'texto') if r.template_manager_tipo is defined else 'texto','template_manager_interativo':(r.template_manager_interativo or '') if r.template_manager_interativo is defined else '','template_employee_tipo':(r.template_employee_tipo or 'texto') if r.template_employee_tipo is defined else 'texto','template_employee_interativo':(r.template_employee_interativo or '') if r.template_employee_interativo is defined else '','only_working_hours':r.only_working_hours,'send_immediately':r.send_immediately}|tojson }}'>
+                    data-rule="{{ {'id':r.id,'nome':r.nome,'ativo':r.ativo,'categoria':r.categoria or 'alerta','trigger_type':r.trigger_type,'trigger_hour':r.trigger_hour,'trigger_weekday':r.trigger_weekday,'condition_type':r.condition_type,'threshold_minutes':r.threshold_minutes,'dest_employee':r.dest_employee,'dest_manager':r.dest_manager,'dest_rh':r.dest_rh,'template_manager':r.template_manager or '','template_employee':r.template_employee or '','template_manager_tipo':(r.template_manager_tipo or 'texto') if r.template_manager_tipo is defined else 'texto','template_manager_interativo':(r.template_manager_interativo or '') if r.template_manager_interativo is defined else '','template_employee_tipo':(r.template_employee_tipo or 'texto') if r.template_employee_tipo is defined else 'texto','template_employee_interativo':(r.template_employee_interativo or '') if r.template_employee_interativo is defined else '','only_working_hours':r.only_working_hours,'send_immediately':r.send_immediately}|tojson|forceescape }}">
                 <i class="fas fa-edit"></i>
             </button>
             <button class="btn btn {% if r.ativo %}btn-warning{% else %}btn-outline-success{% endif %}"
@@ -311,7 +311,7 @@
                             <span class="badge bg-secondary-subtle text-secondary align-self-start" style="font-size:.6rem;">sistema</span>
                             <button class="btn btn-outline-secondary" title="Editar"
                                     data-bs-toggle="modal" data-bs-target="#modalSysMsg"
-                                    onclick="abrirSysMsgEditar('{{ chave|e }}', {{ label|tojson }}, {{ bot_cfg.get(chave, bot_msg_defaults.get(chave,''))|tojson }}, false)">
+                                    onclick="abrirSysMsgEditar('{{ chave|e }}', {{ label|tojson|forceescape }}, {{ bot_cfg.get(chave, bot_msg_defaults.get(chave,''))|tojson|forceescape }}, false)">
                                 <i class="fas fa-edit"></i>
                             </button>
                         </div>
@@ -332,7 +332,7 @@
                             <span class="badge bg-success-subtle text-success align-self-start" style="font-size:.6rem;">custom</span>
                             <button class="btn btn-outline-secondary" title="Editar"
                                     data-bs-toggle="modal" data-bs-target="#modalSysMsg"
-                                    onclick="abrirSysMsgEditar('{{ cm.chave|e }}', {{ cm.label|tojson }}, {{ cm.valor|tojson }}, true)">
+                                    onclick="abrirSysMsgEditar('{{ cm.chave|e }}', {{ cm.label|tojson|forceescape }}, {{ cm.valor|tojson|forceescape }}, true)">
                                 <i class="fas fa-edit"></i>
                             </button>
                             <form method="POST" action="{{ url_for('notificacoes.chatbot_msg_excluir') }}"
@@ -391,7 +391,7 @@
                             <button class="btn btn-outline-secondary" title="Editar"
                                     data-bs-toggle="modal" data-bs-target="#modalKeyword"
                                     onclick="abrirKeywordEditar(this)"
-                                    data-kw='{{ {'id':kw.id,'keyword':kw.keyword,'resposta':kw.resposta,'apenas_funcionario':kw.apenas_funcionario,'tipo_msg':(kw.tipo_msg or 'texto') if kw.tipo_msg is defined else 'texto','interativo_json':(kw.interativo_json or '') if kw.interativo_json is defined else ''}|tojson }}'>
+                                    data-kw="{{ {'id':kw.id,'keyword':kw.keyword,'resposta':kw.resposta,'apenas_funcionario':kw.apenas_funcionario,'tipo_msg':(kw.tipo_msg or 'texto') if kw.tipo_msg is defined else 'texto','interativo_json':(kw.interativo_json or '') if kw.interativo_json is defined else ''}|tojson|forceescape }}">
                                 <i class="fas fa-edit"></i>
                             </button>
                             <button class="btn btn {% if kw.ativo %}btn-warning{% else %}btn-outline-success{% endif %}"
@@ -444,7 +444,7 @@
                             <span class="badge bg-success-subtle text-success" style="font-size:.65rem;">Ativa</span>
                             <button class="btn btn-outline-secondary" title="Editar texto"
                                     data-bs-toggle="modal" data-bs-target="#modalMenuEdit"
-                                    onclick="abrirMenuEditar('{{ item.id|e }}', {{ item.titulo|tojson }}, {{ item.desc|tojson }})">
+                                    onclick="abrirMenuEditar('{{ item.id|e }}', {{ item.titulo|tojson|forceescape }}, {{ item.desc|tojson|forceescape }})">
                                 <i class="fas fa-edit"></i>
                             </button>
                         </div>

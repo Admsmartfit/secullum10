@@ -118,7 +118,7 @@ def _parse_hora(hora_str: str, data_ref: date) -> datetime:
 
 def _em_cooldown(func_id: str, condition_type: str, data_ref: date = None) -> bool:
     """Retorna True se já foi enviada mensagem do mesmo tipo nas últimas COOLDOWN_HORAS horas."""
-    limite = datetime.utcnow() - timedelta(hours=COOLDOWN_HORAS)
+    limite = datetime.now(_TZ_BR) - timedelta(hours=COOLDOWN_HORAS)
     
     # Busca por tipo_regra e data_referencia (novos) ou tipo (legado)
     query = WhatsappLog.query.filter(
@@ -616,7 +616,7 @@ def processar_fila_notificacoes() -> dict:
     Chamado a cada hora via Celery beat.
     """
     from services.whatsapp_bot import enviar_texto
-    agora = datetime.utcnow()
+    agora = datetime.now(_TZ_BR)
     pendentes = (
         NotificacaoFila.query
         .filter(
@@ -640,17 +640,17 @@ def processar_fila_notificacoes() -> dict:
         )
         if ok:
             item.status = 'enviado'
-            item.enviado_em = datetime.utcnow()
+            item.enviado_em = datetime.now(_TZ_BR)
             enviados += 1
         else:
             # Exponential Backoff (PRD 2.0): 5min, 15min, 30min
             tentativas = item.tentativas or 1
             if tentativas == 1:
-                item.enviar_apos = datetime.utcnow() + timedelta(minutes=5)
+                item.enviar_apos = datetime.now(_TZ_BR) + timedelta(minutes=5)
             elif tentativas == 2:
-                item.enviar_apos = datetime.utcnow() + timedelta(minutes=15)
+                item.enviar_apos = datetime.now(_TZ_BR) + timedelta(minutes=15)
             elif tentativas == 3:
-                item.enviar_apos = datetime.utcnow() + timedelta(minutes=30)
+                item.enviar_apos = datetime.now(_TZ_BR) + timedelta(minutes=30)
             else:
                 item.status = 'erro'
             erros += 1
@@ -692,7 +692,7 @@ def processar_regras_evento(trigger_type: str, data_ref: date = None) -> dict:
             enviados_regra = _enviar_relatorio(regra, relatorio)
             if enviados_regra > 0:
                 regra.mensagens_enviadas = (regra.mensagens_enviadas or 0) + enviados_regra
-                regra.ultima_execucao = datetime.utcnow()
+                regra.ultima_execucao = datetime.now(_TZ_BR)
             total += enviados_regra
             continue
 
@@ -745,7 +745,7 @@ def processar_regras_evento(trigger_type: str, data_ref: date = None) -> dict:
 
         if enviados_regra > 0:
             regra.mensagens_enviadas = (regra.mensagens_enviadas or 0) + enviados_regra
-            regra.ultima_execucao = datetime.utcnow()
+            regra.ultima_execucao = datetime.now(_TZ_BR)
         total += enviados_regra
 
     db.session.commit()
