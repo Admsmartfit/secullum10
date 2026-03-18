@@ -9,6 +9,8 @@
 .badge-F { background: #ec4899; color: #fff; }
 .badge-M { background: #3b82f6; color: #fff; }
 .badge-tatico { background: #1f2937; color: #fbbf24; font-size: 0.65rem; border: 1px solid #fbbf24; }
+.demanda-card { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; }
+.demanda-card th { font-size: 0.75rem; color: #6b7280; background: #f1f5f9; }
 </style>
 {% endblock %}
 
@@ -48,7 +50,8 @@ const TODOS_TURNOS = [
     </div>
 </div>
 
-<div class="card p-3 mb-4">
+<!-- Filtros -->
+<div class="card p-3 mb-3">
     <div class="row g-2 align-items-end">
         <div class="col-md-3">
             <label class="form-label small fw-bold mb-1">MÊS / ANO</label>
@@ -77,10 +80,25 @@ const TODOS_TURNOS = [
     </div>
 </div>
 
+<!-- Configuração de demanda por função -->
+<div class="card demanda-card p-3 mb-3 d-none" id="demandaCard">
+    <h6 class="fw-bold mb-2"><i class="fas fa-sliders-h me-1 text-primary"></i>Demanda por Função no Domingo</h6>
+    <table class="table table-sm mb-0">
+        <thead>
+            <tr>
+                <th>Função</th>
+                <th style="width:130px;">Qtd. necessária</th>
+                <th>Turno no Domingo</th>
+            </tr>
+        </thead>
+        <tbody id="demandaBody"></tbody>
+    </table>
+</div>
+
 <div class="alert alert-info py-2 small d-none" id="alertaInfo">
     <i class="fas fa-info-circle me-1"></i>
     <strong>Lógica de Táticos:</strong> O sistema identifica quem trabalha ao domingo por contrato <span class="badge badge-tatico">TÁTICO</span>.
-    Quando a CLT exige a folga deles (F = 1×1, M = 3×1), aplica o turno "FOLGA" e puxa um substituto elegível da mesma função para cobrir o seu turno.
+    Quando a CLT exige a folga deles (F = 1×1, M = 3×1), aplica o turno "FOLGA" e puxa substitutos conforme a demanda configurada.
 </div>
 
 <div class="card p-0 overflow-hidden" id="matrizContainer" style="display:none;">
@@ -96,7 +114,10 @@ const TODOS_TURNOS = [
 {% block extra_js %}
 <script>
 let domingosAtuais = [];
-let equipeAtual = [];
+let equipeAtual    = [];
+
+// demandaConfig[funcao] = { qtd: N, turno_id: '' }
+const demandaConfig = {};
 
 function atualizarFuncoes() {
     const dept = document.getElementById('fDept').value;
@@ -105,10 +126,50 @@ function atualizarFuncoes() {
         TODOS_FUNCS.filter(f => f.dept === dept).map(f => f.funcao).filter(Boolean).sort()
     )];
     sel.innerHTML = '<option value="">— Todas as Funções —</option>';
-    funcoes.forEach(fn => {
-        sel.innerHTML += `<option value="${fn}">${fn}</option>`;
-    });
+    funcoes.forEach(fn => sel.innerHTML += `<option value="${fn}">${fn}</option>`);
     montarMatriz();
+}
+
+function montarDemanda(funcoes) {
+    const card = document.getElementById('demandaCard');
+    const tbody = document.getElementById('demandaBody');
+    const turnosOpts = '<option value="">— Turno base —</option>'
+        + TODOS_TURNOS.map(t => `<option value="${t.id}">${t.nome}</option>`).join('');
+
+    if (!funcoes.length) { card.classList.add('d-none'); return; }
+
+    let rows = '';
+    funcoes.forEach(fn => {
+        if (!demandaConfig[fn]) demandaConfig[fn] = { qtd: 1, turno_id: '' };
+        const cfg = demandaConfig[fn];
+        rows += `<tr>
+            <td class="fw-semibold small">${fn}</td>
+            <td>
+                <input type="number" min="1" max="20" value="${cfg.qtd}"
+                    class="form-control form-control-sm"
+                    onchange="demandaConfig[${JSON.stringify(fn)}].qtd = Math.max(1,+this.value)">
+            </td>
+            <td>
+                <select class="form-select form-select-sm"
+                    onchange="demandaConfig[${JSON.stringify(fn)}].turno_id = this.value">
+                    ${turnosOpts}
+                </select>
+            </td>
+        </tr>`;
+    });
+
+    tbody.innerHTML = rows;
+
+    // Restaurar selects ao valor salvo
+    funcoes.forEach(fn => {
+        const cfg = demandaConfig[fn];
+        if (cfg.turno_id) {
+            const row = [...tbody.querySelectorAll('tr')].find(tr => tr.cells[0].textContent.trim() === fn);
+            if (row) row.querySelector('select').value = cfg.turno_id;
+        }
+    });
+
+    card.classList.remove('d-none');
 }
 
 function montarMatriz() {
@@ -121,6 +182,7 @@ function montarMatriz() {
         document.getElementById('btnAuto').disabled = true;
         document.getElementById('btnSalvar').style.display = 'none';
         document.getElementById('alertaInfo').classList.add('d-none');
+        document.getElementById('demandaCard').classList.add('d-none');
         return;
     }
 
@@ -140,8 +202,13 @@ function montarMatriz() {
 
     if (!equipeAtual.length) {
         document.getElementById('matrizContainer').style.display = 'none';
+        document.getElementById('demandaCard').classList.add('d-none');
         return;
     }
+
+    // Atualiza painel de demanda
+    const funcoesPresentes = [...new Set(equipeAtual.map(f => f.funcao).filter(Boolean))].sort();
+    montarDemanda(funcoesPresentes);
 
     let ths = '<tr><th style="min-width:220px;">Funcionário</th>';
     domingosAtuais.forEach(dom => ths += `<th class="text-center">Dom<br>${dom.label}</th>`);
@@ -151,7 +218,6 @@ function montarMatriz() {
     const turnosOpts = '<option value="">— Horário de Contrato —</option>'
         + TODOS_TURNOS.map(t => `<option value="${t.id}">${t.nome}</option>`).join('');
 
-    // Táticos primeiro
     equipeAtual.sort((a, b) => (b.trabalha_domingos ? 1 : 0) - (a.trabalha_domingos ? 1 : 0));
 
     let trs = '';
@@ -160,8 +226,7 @@ function montarMatriz() {
             ? '<span class="badge badge-F ms-1" title="1x1">F</span>'
             : '<span class="badge badge-M ms-1" title="3x1">M</span>';
         const badgeTatico = func.trabalha_domingos
-            ? '<span class="badge badge-tatico ms-1">TÁTICO</span>'
-            : '';
+            ? '<span class="badge badge-tatico ms-1">TÁTICO</span>' : '';
 
         trs += `<tr><td><strong>${func.nome}</strong>${badgeSexo}${badgeTatico}</td>`;
         domingosAtuais.forEach(dom => {
@@ -177,7 +242,7 @@ function montarMatriz() {
     document.getElementById('btnSalvar').style.display = '';
 }
 
-// ── Auto-Solver (Substituição de Táticos) ────────────────────────────────────
+// ── Auto-Solver ───────────────────────────────────────────────────────────────
 function autoPreencher() {
     const turnoFolga = TODOS_TURNOS.find(t => t.nome.toUpperCase() === 'FOLGA');
     if (!turnoFolga) {
@@ -187,52 +252,73 @@ function autoPreencher() {
 
     document.querySelectorAll('.aloc-select').forEach(s => s.value = '');
 
-    const taticos     = equipeAtual.filter(f => f.trabalha_domingos);
-    const substitutos = equipeAtual.filter(f => !f.trabalha_domingos);
-
+    // Agrupa por função
+    const funcoes = [...new Set(equipeAtual.map(f => f.funcao))];
     const seguidos = {};
     equipeAtual.forEach(f => seguidos[f.id] = 0);
 
     domingosAtuais.forEach(dom => {
-        const escaladosHoje = new Set();
+        funcoes.forEach(fn => {
+            const cfg         = demandaConfig[fn] || { qtd: 1, turno_id: '' };
+            const taticos     = equipeAtual.filter(f => f.funcao === fn &&  f.trabalha_domingos);
+            const substitutos = equipeAtual.filter(f => f.funcao === fn && !f.trabalha_domingos);
 
-        taticos.forEach(tatico => {
-            const limite        = tatico.sexo === 'F' ? 1 : 3;
-            const precisaFolgar = seguidos[tatico.id] >= limite;
-            const selectTatico  = document.querySelector(`.aloc-select[data-func="${tatico.id}"][data-data="${dom.data}"]`);
+            // Quais táticos PODEM trabalhar hoje
+            const podem   = taticos.filter(f => seguidos[f.id] < (f.sexo === 'F' ? 1 : 3));
+            const precisam = taticos.filter(f => seguidos[f.id] >= (f.sexo === 'F' ? 1 : 3));
 
-            if (precisaFolgar) {
-                // Tático obrigado a folgar
-                if (selectTatico) selectTatico.value = turnoFolga.id;
-                seguidos[tatico.id] = 0;
+            // Zera os que precisam folgar
+            precisam.forEach(f => {
+                const sel = document.querySelector(`.aloc-select[data-func="${f.id}"][data-data="${dom.data}"]`);
+                if (sel) sel.value = turnoFolga.id;
+                seguidos[f.id] = 0;
+            });
 
-                // Puxa substituto elegível (quem descansou mais vem primeiro)
-                const subsDisponiveis = substitutos
-                    .filter(s => !escaladosHoje.has(s.id))
+            // Escalamos min(qtd, podem.length) táticos — os com mais descanso acumulado
+            const tacticosPorDescanso = [...podem].sort((a, b) => seguidos[b.id] - seguidos[a.id]);
+            const vagasParaTaticos    = Math.min(cfg.qtd, tacticosPorDescanso.length);
+            const tacticosEscalados   = new Set();
+
+            tacticosPorDescanso.slice(0, vagasParaTaticos).forEach(f => {
+                const sel = document.querySelector(`.aloc-select[data-func="${f.id}"][data-data="${dom.data}"]`);
+                if (sel) sel.value = ''; // horário base
+                seguidos[f.id]++;
+                tacticosEscalados.add(f.id);
+            });
+
+            // Táticos que podiam mas não foram escalados hoje → também folga (para não estourar)
+            podem.forEach(f => {
+                if (!tacticosEscalados.has(f.id)) {
+                    const sel = document.querySelector(`.aloc-select[data-func="${f.id}"][data-data="${dom.data}"]`);
+                    if (sel) sel.value = turnoFolga.id;
+                    // NÃO incrementa seguidos — eles descansaram
+                }
+            });
+
+            // Vagas restantes → preenche com substitutos
+            const vagasRestantes = cfg.qtd - vagasParaTaticos;
+            if (vagasRestantes > 0 && substitutos.length > 0) {
+                const subsPorDescanso = [...substitutos]
+                    .filter(s => seguidos[s.id] < (s.sexo === 'F' ? 1 : 3))
                     .sort((a, b) => seguidos[a.id] - seguidos[b.id]);
 
-                const subEscolhido = subsDisponiveis.find(sub => {
-                    const limSub = sub.sexo === 'F' ? 1 : 3;
-                    return seguidos[sub.id] < limSub;
+                // Turno a atribuir ao substituto: configurado na demanda, ou turno base do primeiro tático
+                const turnoParaSub = cfg.turno_id
+                    || (taticos[0] ? String(taticos[0].turno_base_id) : '');
+
+                subsPorDescanso.slice(0, vagasRestantes).forEach(sub => {
+                    const sel = document.querySelector(`.aloc-select[data-func="${sub.id}"][data-data="${dom.data}"]`);
+                    if (sel) sel.value = turnoParaSub;
+                    seguidos[sub.id]++;
                 });
 
-                if (subEscolhido && tatico.turno_base_id) {
-                    const selectSub = document.querySelector(`.aloc-select[data-func="${subEscolhido.id}"][data-data="${dom.data}"]`);
-                    if (selectSub) selectSub.value = tatico.turno_base_id;
-                    seguidos[subEscolhido.id]++;
-                    escaladosHoje.add(subEscolhido.id);
-                }
-            } else {
-                // Tático trabalha normalmente (horário base = select vazio)
-                if (selectTatico) selectTatico.value = '';
-                seguidos[tatico.id]++;
-                escaladosHoje.add(tatico.id);
+                // Subs não escalados hoje: zerar acumulador
+                substitutos.forEach(sub => {
+                    if (seguidos[sub.id] === 0 || !subsPorDescanso.slice(0, vagasRestantes).find(s => s.id === sub.id)) {
+                        seguidos[sub.id] = 0;
+                    }
+                });
             }
-        });
-
-        // Substitutos não escalados hoje tiveram folga — zerar acumulador
-        substitutos.forEach(sub => {
-            if (!escaladosHoje.has(sub.id)) seguidos[sub.id] = 0;
         });
     });
 
@@ -242,13 +328,8 @@ function autoPreencher() {
 // ── Salvar ────────────────────────────────────────────────────────────────────
 function salvarMatriz() {
     const alocacoes = [];
-    // Envia todos, incluindo vazios, para o backend saber o que excluir
     document.querySelectorAll('.aloc-select').forEach(s => {
-        alocacoes.push({
-            func_id:  s.dataset.func,
-            data:     s.dataset.data,
-            turno_id: s.value,
-        });
+        alocacoes.push({ func_id: s.dataset.func, data: s.dataset.data, turno_id: s.value });
     });
 
     const btn = document.getElementById('btnSalvar');
