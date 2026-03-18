@@ -1326,12 +1326,20 @@ def quadro_bulk_update():
         if not turno_id:
             continue
 
-        turno = Turno.query.get(turno_id)
+        try:
+            turno = db.session.get(Turno, turno_id)
+        except Exception as e:
+            errors.append(f'Erro ao buscar turno {turno_id}: {e}')
+            continue
         if not turno:
             errors.append(f'Turno {turno_id} não encontrado')
             continue
 
-        infracoes   = validar_alocacao(func_id, data_aloc, turno)
+        try:
+            infracoes = validar_alocacao(func_id, data_aloc, turno)
+        except Exception as e:
+            errors.append(f'{data_str}: erro de validação CLT: {e}')
+            continue
         bloqueantes = [i for i in infracoes if i.get('severity', 'error') == 'error']
         avisos      = [i for i in infracoes if i.get('severity') != 'error']
 

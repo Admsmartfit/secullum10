@@ -4,6 +4,30 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _run_safe_migrations(db):
+    """Applies ALTER TABLE migrations that are safe to run multiple times (IF NOT EXISTS)."""
+    import logging
+    log = logging.getLogger('migrations')
+    migrations = [
+        # Added for Motor A/B/C (Etapa 1)
+        "ALTER TABLE turnos ADD COLUMN IF NOT EXISTS tipo_turno VARCHAR(1)",
+        # Added for War Room baseline
+        "ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS horario_base_id INTEGER",
+        "ALTER TABLE turnos ADD COLUMN IF NOT EXISTS funcao VARCHAR(100)",
+        "ALTER TABLE alocacoes_diarias ADD COLUMN IF NOT EXISTS is_excecao BOOLEAN DEFAULT TRUE",
+    ]
+    for sql in migrations:
+        try:
+            db.session.execute(db.text(sql))
+        except Exception as e:
+            log.warning(f'[migration] skipped: {e}')
+            db.session.rollback()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object('config.Config')
@@ -156,6 +180,8 @@ def create_app():
     with app.app_context():
         import models  # noqa: garante que os models estão registrados
         db.create_all()
+        # Safe migrations for columns added after initial schema creation
+        _run_safe_migrations(db)
 
     # ── Auto-sync de batidas (APScheduler – roda no mesmo processo) ───────────
     from services.auto_sync import init_scheduler
