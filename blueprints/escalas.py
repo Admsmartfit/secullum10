@@ -1316,10 +1316,36 @@ def quadro_bulk_update():
             continue
 
         if action == 'delete':
-            AlocacaoDiaria.query.filter_by(
+            aloc = AlocacaoDiaria.query.filter_by(
                 funcionario_id=func_id, data=data_aloc
-            ).delete()
-            saved += 1
+            ).first()
+            if aloc:
+                # Havia uma exceção manual → apaga para voltar ao Contrato original
+                db.session.delete(aloc)
+                saved += 1
+            else:
+                # Dia sem exceção → estava a mostrar o Horário Base (Contrato).
+                # Para forçar folga nesse dia, criamos uma exceção explícita "FOLGA".
+                func_obj = db.session.get(Funcionario, func_id)
+                if (func_obj and func_obj.horario_base
+                        and data_aloc.weekday() in func_obj.horario_base.dias_semana_list):
+                    turno_folga = Turno.query.filter_by(nome='FOLGA').first()
+                    if not turno_folga:
+                        from datetime import time as _time
+                        turno_folga = Turno(
+                            nome='FOLGA',
+                            hora_inicio=_time(0, 0),
+                            hora_fim=_time(0, 0),
+                            color='#9ca3af',
+                        )
+                        db.session.add(turno_folga)
+                        db.session.flush()
+                    db.session.add(AlocacaoDiaria(
+                        funcionario_id=func_id,
+                        turno_id=turno_folga.id,
+                        data=data_aloc,
+                    ))
+                    saved += 1
             continue
 
         turno_id = change.get('turno_id')
