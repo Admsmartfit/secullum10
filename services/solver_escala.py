@@ -6,6 +6,7 @@ import calendar as cal_mod
 from datetime import date, timedelta
 from models import AlocacaoDiaria, Funcionario, BancoHorasSaldo, Turno, GrupoDepartamento
 from extensions import db
+from sqlalchemy.orm import joinedload
 
 
 def _filtrar_dept(q, dept_str: str):
@@ -30,27 +31,33 @@ def alertas_cobertura(mes_ano: str, dept: str = None, funcao: str = None) -> lis
     data_ini = date(ano, mes, 1)
     data_fim = date(ano, mes, dias_no_mes)
 
-    # Funcionários no escopo
-    q = Funcionario.query.filter_by(ativo=True)
+    # Funcionários no escopo — carrega horario_base em uma só query
+    q = Funcionario.query.filter_by(ativo=True).options(joinedload(Funcionario.horario_base))
     q = _filtrar_dept(q, dept)
-    if funcao: q = q.filter(Funcionario.funcao == funcao)
+    if funcao:
+        q = q.filter(Funcionario.funcao == funcao)
     funcionarios = q.all()
     if not funcionarios:
         return []
 
     func_ids = {f.id for f in funcionarios}
 
-    # Alocações (exceções) do mês no escopo
-    alocacoes = AlocacaoDiaria.query.filter(
-        AlocacaoDiaria.funcionario_id.in_(func_ids),
-        AlocacaoDiaria.data >= data_ini,
-        AlocacaoDiaria.data <= data_fim,
-    ).all()
+    # Alocações do mês com turno — mesma estratégia do cobertura_dados (inner join)
+    alocacoes = (
+        AlocacaoDiaria.query
+        .filter(
+            AlocacaoDiaria.funcionario_id.in_(func_ids),
+            AlocacaoDiaria.data >= data_ini,
+            AlocacaoDiaria.data <= data_fim,
+        )
+        .join(Turno, AlocacaoDiaria.turno_id == Turno.id)
+        .add_columns(Turno.nome.label('turno_nome'))
+        .all()
+    )
 
-    # Indexar alocações: {func_id: {dia: turno_nome}}
-    aloc_map = {}
-    for aloc in alocacoes:
-        turno_nome = aloc.turno.nome if aloc.turno else ''
+    # Indexar: {func_id: {dia: turno_nome}}
+    aloc_map: dict = {}
+    for aloc, turno_nome in alocacoes:
         aloc_map.setdefault(aloc.funcionario_id, {})[aloc.data.day] = turno_nome
 
     dias_com_cobertura = set()
@@ -66,8 +73,10 @@ def alertas_cobertura(mes_ano: str, dept: str = None, funcao: str = None) -> lis
                     break
             else:
                 # Fallback para horário base
-                if f.horario_base and dt.weekday() in f.horario_base.dias_semana_list:
-                    if f.horario_base.nome.upper() != 'FOLGA':
+                hb = f.horario_base
+                if hb and hb.nome and hb.nome.upper() != 'FOLGA':
+                    dias = hb.dias_semana or ''
+                    if str(dt.weekday()) in dias.split(','):
                         dias_com_cobertura.add(d)
                         break
 
