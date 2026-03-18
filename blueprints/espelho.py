@@ -80,10 +80,12 @@ def espelho():
         turno = db.session.get(Turno, aloc.turno_id) if aloc else (func.horario_base if func else None)
 
         status_lista = []
+        tem_turno = False
 
         if turno and horas_ordenadas:
             h_ini, h_fim, _ = turno.get_horario_dia(data_obj.weekday())
             if h_ini and h_fim:
+                tem_turno = True
                 dt_ini = datetime.combine(data_obj, h_ini)
                 dt_fim = datetime.combine(data_obj, h_fim)
                 if h_fim < h_ini:            # turno vira a madrugada
@@ -117,6 +119,7 @@ def espelho():
             'funcionario': nome,
             'horas': horas_ordenadas,
             'status': status_lista,
+            'tem_turno': tem_turno,
         })
 
     batidas_agrupadas = sorted(batidas_agrupadas, key=lambda x: x['data'], reverse=True)

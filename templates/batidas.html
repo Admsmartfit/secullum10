@@ -78,8 +78,10 @@
                                 <span class="badge bg-info text-dark" title="Intervalo fora da faixa de 50–70 min"><i class="fas fa-utensils me-1"></i>Intervalo Insuf.</span>
                                 {% endif %}
                             {% endfor %}
-                        {% elif item.horas|length % 2 == 0 and item.horas %}
+                        {% elif item.tem_turno and item.horas|length % 2 == 0 %}
                         <span class="badge bg-success"><i class="fas fa-check me-1"></i>OK</span>
+                        {% elif not item.tem_turno and item.horas %}
+                        <span class="badge bg-secondary" title="Sem turno configurado para este dia"><i class="fas fa-question me-1"></i>Sem Escala</span>
                         {% endif %}
                     </td>
                 </tr>
