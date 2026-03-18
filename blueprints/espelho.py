@@ -3,7 +3,8 @@ from io import BytesIO
 from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, request, send_file, jsonify, flash, redirect, url_for
 from flask_login import login_required
-from models import Batida, Funcionario, AlocacaoDiaria
+from extensions import db
+from models import Batida, Funcionario, AlocacaoDiaria, Turno
 
 espelho_bp = Blueprint('espelho', __name__, url_prefix='/config')
 
@@ -69,7 +70,7 @@ def espelho():
 
         func = Funcionario.query.get(fid)
         aloc = AlocacaoDiaria.query.filter_by(funcionario_id=fid, data=data_obj).first()
-        turno = aloc.turno if aloc else (func.horario_base if func else None)
+        turno = db.session.get(Turno, aloc.turno_id) if aloc else (func.horario_base if func else None)
 
         status_lista = []
 
