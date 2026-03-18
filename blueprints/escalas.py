@@ -870,9 +870,10 @@ def cobertura_dados():
             'dias':  dias,
         })
 
-    # Cobertura por dia (contagem de funcionários escalados, incluindo horario_base)
+    # Cobertura por dia (contagem de funcionários escalados, IGNORANDO turnos de FOLGA)
     cobertura = {
-        d: sum(1 for f in resultado_funcs if f['dias'].get(d) is not None)
+        d: sum(1 for f in resultado_funcs
+               if f['dias'].get(d) is not None and f['dias'][d]['turno'].upper() != 'FOLGA')
         for d in range(1, dias_no_mes + 1)
     }
 

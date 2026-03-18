@@ -34,29 +34,53 @@ def alertas_cobertura(mes_ano: str, dept: str = None, funcao: str = None) -> lis
     q = Funcionario.query.filter_by(ativo=True)
     q = _filtrar_dept(q, dept)
     if funcao: q = q.filter(Funcionario.funcao == funcao)
-    func_ids = {f.id for f in q.all()}
-    if not func_ids:
+    funcionarios = q.all()
+    if not funcionarios:
         return []
 
-    # Alocações do mês no escopo
+    func_ids = {f.id for f in funcionarios}
+
+    # Alocações (exceções) do mês no escopo
     alocacoes = AlocacaoDiaria.query.filter(
         AlocacaoDiaria.funcionario_id.in_(func_ids),
         AlocacaoDiaria.data >= data_ini,
         AlocacaoDiaria.data <= data_fim,
     ).all()
 
-    dias_com_cobertura = {a.data.day for a in alocacoes}
+    # Indexar alocações: {func_id: {dia: turno_nome}}
+    aloc_map = {}
+    for aloc in alocacoes:
+        turno_nome = aloc.turno.nome if aloc.turno else ''
+        aloc_map.setdefault(aloc.funcionario_id, {})[aloc.data.day] = turno_nome
+
+    dias_com_cobertura = set()
+
+    for d in range(1, dias_no_mes + 1):
+        dt = date(ano, mes, d)
+        for f in funcionarios:
+            turno_nome = aloc_map.get(f.id, {}).get(d)
+            if turno_nome is not None:
+                # Exceção explícita — só conta se não for FOLGA
+                if turno_nome.upper() != 'FOLGA':
+                    dias_com_cobertura.add(d)
+                    break
+            else:
+                # Fallback para horário base
+                if f.horario_base and dt.weekday() in f.horario_base.dias_semana_list:
+                    if f.horario_base.nome.upper() != 'FOLGA':
+                        dias_com_cobertura.add(d)
+                        break
 
     descobertos = []
     for d in range(1, dias_no_mes + 1):
         if d not in dias_com_cobertura:
             dt = date(ano, mes, d)
             descobertos.append({
-                'data':   dt.isoformat(),
-                'dia':    d,
-                'dia_semana': dt.weekday(),  # 6 = domingo
-                'funcao': funcao or '',
-                'dept':   dept or '',
+                'data':       dt.isoformat(),
+                'dia':        d,
+                'dia_semana': dt.weekday(),
+                'funcao':     funcao or '',
+                'dept':       dept or '',
             })
     return descobertos
 
