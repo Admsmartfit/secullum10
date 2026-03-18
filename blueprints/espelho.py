@@ -58,10 +58,17 @@ def espelho():
             as_attachment=True,
         )
 
+    def _to_time(val):
+        if isinstance(val, str):
+            parts = val.split(':')
+            from datetime import time as _time
+            return _time(int(parts[0]), int(parts[1]), int(parts[2]) if len(parts) > 2 else 0)
+        return val
+
     agrupado = {}
     for b in batidas_query:
         key = (b.data.strftime('%Y-%m-%d'), b.funcionario_id, b.funcionario.nome)
-        agrupado.setdefault(key, []).append(b.hora)
+        agrupado.setdefault(key, []).append(_to_time(b.hora))
 
     batidas_agrupadas = []
     for (d_str, fid, nome), horas in agrupado.items():
