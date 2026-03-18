@@ -249,8 +249,8 @@
     }
 
     const TODOS_FUNCIONARIOS = [
-        {% for f in funcionarios %}{ id: "{{ f.id }}", nome: { { f.nome | tojson } }, dept: { { (f.departamento or '') | tojson } }, funcao: { { (f.funcao or '') | tojson } } } {% if not loop.last %}, {% endif %}
-    {% endfor %}
+        {% for f in funcionarios %}{ id: "{{ f.id }}", nome: {{ f.nome | tojson }}, dept: {{ (f.departamento or '') | tojson }}, funcao: {{ (f.funcao or '') | tojson }} }{% if not loop.last %},{% endif %}
+        {% endfor %}
     ];
 </script>
 
