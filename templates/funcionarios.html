@@ -262,7 +262,7 @@
         const formData = new FormData();
         formData.append('horario_base_id', turnoId);
 
-        fetch(`/funcionarios/${funcId}/set-horario-base`, {
+        fetch(`/config/funcionarios/${funcId}/set-horario-base`, {
             method: 'POST',
             body: formData
         })

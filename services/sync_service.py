@@ -128,26 +128,6 @@ def sync_funcionarios():
 
             if f.ativo:
                 active_count += 1
-                # Auto-alocação baseada no horário da Secullum
-                if f.horario_secullum_numero:
-                    # Tenta encontrar um turno local que corresponda a este horário
-                    # No sync_horarios garantimos que turnos são criados com o nome do horário
-                    from models import HorarioSecullum, AlocacaoDiaria, Turno
-                    # Sincroniza alocação para hoje e amanhã como exemplo rápido
-                    hoje = date.today()
-                    for d in [hoje, hoje + timedelta(days=1)]:
-                        hs = HorarioSecullum.query.get(f.horario_secullum_numero)
-                        if hs:
-                            dias_dict = json.loads(hs.dias_json)
-                            dia_str = str(d.weekday())
-                            info = dias_dict.get(dia_str)
-                            if info and info.get('entrada') and info.get('tipo') != 2:
-                                t = Turno.query.filter_by(hora_inicio=datetime.strptime(info['entrada'], '%H:%M').time(), 
-                                                       hora_fim=datetime.strptime(info['saida'], '%H:%M').time()).first()
-                                if t:
-                                    aloc = AlocacaoDiaria.query.filter_by(funcionario_id=f.id, data=d).first()
-                                    if not aloc:
-                                        db.session.add(AlocacaoDiaria(funcionario_id=f.id, turno_id=t.id, data=d))
 
         db.session.commit()
         return True, f"Sync OK! {active_count} ativos, {new_count} novos, {updated_count} atualizados."
