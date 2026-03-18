@@ -93,6 +93,8 @@ def espelho():
 
                 # 1. Atraso na entrada (> 10 min)
                 dt_entrada = datetime.combine(data_obj, horas_ordenadas[0])
+                if h_fim < h_ini and horas_ordenadas[0] < h_ini:  # entrada pós-meia-noite em turno noturno
+                    dt_entrada += timedelta(days=1)
                 if (dt_entrada - dt_ini).total_seconds() > 600:
                     status_lista.append('Atrasado')
 
