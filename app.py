@@ -11,6 +11,9 @@ def _run_safe_migrations(db):
     migrations = [
         # Added for Motor A/B/C (Etapa 1)
         "ALTER TABLE turnos ADD COLUMN IF NOT EXISTS tipo_turno VARCHAR(1)",
+        # Added for custom phone on notification rules
+        "ALTER TABLE notification_rules ADD COLUMN IF NOT EXISTS dest_custom BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE notification_rules ADD COLUMN IF NOT EXISTS custom_phone VARCHAR(20)",
         # Added for War Room baseline
         "ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS horario_base_id INTEGER",
         "ALTER TABLE turnos ADD COLUMN IF NOT EXISTS funcao VARCHAR(100)",

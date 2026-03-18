@@ -8,6 +8,7 @@ Recursos:
   - Relatório de inconsistências do dia anterior
 """
 import os
+import re
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 
@@ -587,6 +588,22 @@ def _enviar(regra: NotificationRule, func, minutos: int, aloc, data_ref: date, e
                               func_id=func.id, tipo='regra',
                               tipo_regra=regra.condition_type, data_ref=data_ref):
                 enviados += 1
+
+    if getattr(regra, 'dest_custom', False) and getattr(regra, 'custom_phone', None):
+        num = re.sub(r'\D', '', regra.custom_phone)
+        if len(num) >= 10:
+            if not num.startswith('55'):
+                num = '55' + num
+            msg = _render(regra.template_manager or '', func, minutos, aloc, data_ref, extra=extra)
+            if msg:
+                if fora and not regra.send_immediately:
+                    _enfileirar(regra, num, msg, func.id, aloc, tipo_msg,
+                               tipo_regra=regra.condition_type, data_ref=data_ref)
+                    enviados += 1
+                elif enviar_texto(celular=num, mensagem=msg,
+                                  func_id=func.id, tipo='regra',
+                                  tipo_regra=regra.condition_type, data_ref=data_ref):
+                    enviados += 1
 
     return enviados
 

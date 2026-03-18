@@ -353,6 +353,8 @@ class NotificationRule(db.Model):
     dest_employee = db.Column(db.Boolean, default=False)
     dest_manager  = db.Column(db.Boolean, default=True)
     dest_rh       = db.Column(db.Boolean, default=False)
+    dest_custom   = db.Column(db.Boolean, default=False)
+    custom_phone  = db.Column(db.String(20), nullable=True)
 
     # Message templates (support variables: {name} {full_name} {minutes} {turno} {inicio} {fim} {data})
     template_manager  = db.Column(db.Text, nullable=True)

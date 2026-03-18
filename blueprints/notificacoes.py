@@ -151,6 +151,8 @@ def _save_from_form(regra: NotificationRule, form):
     regra.dest_employee      = 'dest_employee' in form
     regra.dest_manager       = 'dest_manager' in form
     regra.dest_rh            = 'dest_rh' in form
+    regra.dest_custom        = 'dest_custom' in form
+    regra.custom_phone       = (form.get('custom_phone') or '').strip() or None
     tmpl_mgr  = (form.get('template_manager')  or '').strip()
     tmpl_emp  = (form.get('template_employee') or '').strip()
     regra.template_manager   = tmpl_mgr  or _DEFAULTS.get(cond, {}).get('manager', '')

@@ -112,6 +112,7 @@
                 {% if r.dest_employee %}<span class="badge" style="background:#dbeafe;color:#1d4ed8;font-size:0.7rem;"><i class="fas fa-user me-1"></i>Funcionário</span>{% endif %}
                 {% if r.dest_manager  %}<span class="badge" style="background:#ede9fe;color:#6d28d9;font-size:0.7rem;"><i class="fas fa-user-tie me-1"></i>Gestor</span>{% endif %}
                 {% if r.dest_rh       %}<span class="badge" style="background:#ffedd5;color:#c2410c;font-size:0.7rem;"><i class="fas fa-building me-1"></i>RH</span>{% endif %}
+                {% if r.dest_custom and r.custom_phone %}<span class="badge" style="background:#1f2937;color:#fff;font-size:0.7rem;"><i class="fas fa-phone me-1"></i>{{ r.custom_phone }}</span>{% endif %}
             </div>
             <div class="small text-muted d-flex flex-wrap gap-3">
                 {% if r.ultima_execucao %}
@@ -804,6 +805,16 @@
                                                    id="chkRh" onchange="updateTemplateVisibility()">
                                             <label class="form-check-label small" for="chkRh">Grupo de RH</label>
                                         </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="dest_custom"
+                                                   id="chkCustom" onchange="toggleCustomPhone()">
+                                            <label class="form-check-label small" for="chkCustom">Número Personalizado</label>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2 ps-1" id="customPhoneDiv" style="display:none;">
+                                        <input type="text" class="form-control form-control-sm" id="inputCustomPhone"
+                                               name="custom_phone" placeholder="Ex: 5527999999999" style="max-width:220px;">
+                                        <div class="form-text">Apenas números com DDI (55 para Brasil).</div>
                                     </div>
                                 </div>
                             </div>
@@ -948,6 +959,12 @@ const CONDITION_CATEGORIA = {{ condition_categoria | tojson }};
 let _lastTextarea    = null;
 let _lastBotTextarea = null;
 
+// ── Número personalizado ──────────────────────────────────────────────────────
+function toggleCustomPhone() {
+    const show = document.getElementById('chkCustom').checked;
+    document.getElementById('customPhoneDiv').style.display = show ? '' : 'none';
+}
+
 // ── Nova regra (pré-seleciona trigger_type ou categoria) ─────────────────────
 function abrirNovaRegra(triggerOrCat) {
     document.getElementById('modalRegraTitle').textContent = 'Nova Regra';
@@ -957,6 +974,9 @@ function abrirNovaRegra(triggerOrCat) {
     document.getElementById('inputAtivo').checked      = true;
     document.getElementById('chkManager').checked      = true;
     document.getElementById('chkWorkingHours').checked = true;
+    document.getElementById('chkCustom').checked       = false;
+    document.getElementById('inputCustomPhone').value  = '';
+    toggleCustomPhone();
 
     const triggerTypes = ['EVENT_SYNC', 'EVENT_ABSENCE', 'EVENT_HOURLY', 'DAILY', 'WEEKLY'];
     if (triggerOrCat && triggerTypes.includes(triggerOrCat)) {
@@ -990,6 +1010,9 @@ function abrirEditar(btn) {
     document.getElementById('chkEmployee').checked      = r.dest_employee;
     document.getElementById('chkManager').checked       = r.dest_manager;
     document.getElementById('chkRh').checked            = r.dest_rh;
+    document.getElementById('chkCustom').checked        = r.dest_custom || false;
+    document.getElementById('inputCustomPhone').value   = r.custom_phone || '';
+    toggleCustomPhone();
     document.getElementById('txaManager').value         = r.template_manager  || '';
     document.getElementById('txaEmployee').value        = r.template_employee || '';
     document.getElementById('chkWorkingHours').checked  = r.only_working_hours;
