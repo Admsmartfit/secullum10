@@ -1114,12 +1114,18 @@ def grupos_api():
 def quadro():
     """Visualização multi-painel com drag-and-drop de turnos."""
     funcionarios = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
+    # Mapa {nome_grupo: [dept1, dept2, ...]} para o JS filtrar corretamente
+    grupos_map = {
+        g.nome: g.departamentos
+        for g in GrupoDepartamento.query.order_by(GrupoDepartamento.nome).all()
+    }
     return render_template(
         'escalas/quadro.html',
         funcionarios=funcionarios,
         departamentos=_departamentos(),
         turnos=Turno.query.order_by(Turno.nome).all(),
         mes_atual=date.today().strftime('%Y-%m'),
+        grupos_map=grupos_map,
     )
 
 

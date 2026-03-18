@@ -12,7 +12,6 @@
         width: 100%;
         border-collapse: collapse;
         font-size: .78rem;
-        table-layout: fixed;
     }
 
     .cal-table th {
@@ -239,10 +238,19 @@
 
 <!-- Serialize employee data for JS filtering -->
 <script>
+    const GRUPOS_MAP = {{ grupos_map | tojson | safe if grupos_map else '{}' }};
+
+    function matchesDept(fDept, selectedDept) {
+        if (!selectedDept) return true;
+        if (fDept === selectedDept) return true;
+        if (GRUPOS_MAP[selectedDept] && GRUPOS_MAP[selectedDept].includes(fDept)) return true;
+        return false;
+    }
+
     const TODOS_FUNCIONARIOS = [
-        {% for f in funcionarios %}{ id: "{{ f.id }}", nome: { { f.nome | tojson } }, dept: { { (f.departamento or '') | tojson } }, funcao: { { (f.funcao or '') | tojson } } } {% if not loop.last %}, {% endif %}
-    {% endfor %}
-];
+        {% for f in funcionarios %}{ id: "{{ f.id }}", nome: {{ f.nome | tojson }}, dept: {{ (f.departamento or '') | tojson }}, funcao: {{ (f.funcao or '') | tojson }} }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
 </script>
 
 <!-- ── Top bar ─────────────────────────────────────────────────────────────── -->
@@ -386,7 +394,7 @@
         // Rebuild funcao list
         const funcoes = [...new Set(
             TODOS_FUNCIONARIOS
-                .filter(f => !dept || f.dept === dept)
+                .filter(f => matchesDept(f.dept, dept))
                 .map(f => f.funcao).filter(Boolean).sort()
         )];
         funcaoSel.innerHTML = '<option value="">— Todas —</option>';
@@ -408,7 +416,7 @@
         const funcao = document.getElementById('gFuncao').value;
 
         const lista = TODOS_FUNCIONARIOS.filter(f =>
-            (!dept || f.dept === dept) &&
+            matchesDept(f.dept, dept) &&
             (!funcao || f.funcao === funcao)
         );
 
