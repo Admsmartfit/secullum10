@@ -3,332 +3,280 @@
 
 {% block extra_css %}
 <style>
-.preview-table th { font-size: .75rem; font-weight: 700; text-transform: uppercase; color: #6b7280; padding: 6px 10px; }
-.preview-table td { padding: 6px 10px; vertical-align: middle; }
-.badge-A { background: #16a34a; color: #fff; }
-.badge-B { background: #2563eb; color: #fff; }
+.matrix-table th { font-size: 0.8rem; text-transform: uppercase; color: #6b7280; background: #f8fafc; padding: 8px 6px; }
+.matrix-table td { vertical-align: middle; padding: 6px 4px; }
+.matrix-table .form-select-sm { font-size: .75rem; min-width: 120px; }
+.badge-F { background: #ec4899; color: #fff; }
+.badge-M { background: #3b82f6; color: #fff; }
 </style>
 {% endblock %}
 
 {% block content %}
-
-<!-- Dados de funcionários para filtro JS -->
 <script>
 const TODOS_FUNCS = [
-    {% for f in funcionarios %}{ id: {{ f.id | tojson }}, nome: {{ f.nome | tojson }}, dept: {{ (f.departamento or '') | tojson }}, funcao: {{ (f.funcao or '') | tojson }} }{% if not loop.last %},{% endif %}
+    {% for f in funcionarios %}
+    { id: {{ f.id | tojson }}, nome: {{ f.nome | tojson }}, dept: {{ (f.departamento or '') | tojson }}, funcao: {{ (f.funcao or '') | tojson }}, sexo: {{ (f.sexo or 'M') | tojson }}, tipo_turno: {{ (f.horario_base.tipo_turno if f.horario_base else '') | tojson }} }{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+const TODOS_TURNOS = [
+    {% for t in todos_turnos %}
+    { id: {{ t.id }}, nome: {{ t.nome | tojson }}, tipo: {{ (t.tipo_turno or '') | tojson }} }{% if not loop.last %},{% endif %}
     {% endfor %}
 ];
 </script>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 mb-0 fw-bold">
-        <i class="fas fa-sync-alt me-2 text-primary"></i>Gerar Rotação de Domingos
+        <i class="fas fa-magic me-2 text-primary"></i>Gerar Rotação Inteligente de Domingos
     </h1>
-    <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-secondary btn">
-        <i class="fas fa-arrow-left me-1"></i>Voltar
-    </a>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" onclick="salvarMatriz()" id="btnSalvar" style="display:none;">
+            <i class="fas fa-save me-1"></i>Salvar Rotação
+        </button>
+        <a href="{{ url_for('escalas.index') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i>Voltar
+        </a>
+    </div>
 </div>
 
-<!-- ── Filtro global ──────────────────────────────────────────────────────── -->
 <div class="card p-3 mb-4">
     <div class="row g-2 align-items-end">
-        <div class="col-md-5">
+        <div class="col-md-3">
+            <label class="form-label small fw-bold mb-1">MÊS / ANO</label>
+            <input type="month" id="mes_ano" class="form-control" value="{{ mes_atual }}" onchange="montarMatriz()">
+        </div>
+        <div class="col-md-4">
             <label class="form-label small fw-bold mb-1">DEPARTAMENTO</label>
-            <select id="fDept" class="form-select form-select" onchange="filtrarFuncionarios()">
-                <option value="">— Todos —</option>
+            <select id="fDept" class="form-select" onchange="atualizarFuncoes()">
+                <option value="">— Selecione —</option>
                 {% for d in departamentos %}
                 <option value="{{ d }}">{{ d }}</option>
                 {% endfor %}
             </select>
         </div>
-        <div class="col-md-5">
+        <div class="col-md-3">
             <label class="form-label small fw-bold mb-1">FUNÇÃO</label>
-            <select id="fFuncao" class="form-select form-select" onchange="filtrarFuncionarios()">
-                <option value="">— Todas —</option>
+            <select id="fFuncao" class="form-select" onchange="montarMatriz()">
+                <option value="">— Selecione o Depto —</option>
             </select>
         </div>
-        <div class="col-md-2 d-flex align-items-end">
-            <span class="small text-muted" id="fContador">—</span>
+        <div class="col-md-2">
+            <button class="btn btn-outline-success w-100" onclick="autoPreencher()" id="btnAuto" disabled>
+                <i class="fas fa-robot me-1"></i>Preencher CLT
+            </button>
         </div>
     </div>
 </div>
 
-<div class="row g-4">
-    <!-- ── Formulário ─────────────────────────────────────────────────── -->
-    <div class="col-lg-5">
-        <div class="card p-4">
-            <form method="POST" id="frmGerar">
+<div class="alert alert-info py-2 small d-none" id="alertaInfo">
+    <i class="fas fa-info-circle me-1"></i>
+    <strong>Regras aplicadas:</strong>
+    Mulheres <span class="badge badge-F">F</span> — descanso quinzenal (1×1, Art. 386 CLT).
+    Homens <span class="badge badge-M">M</span> — até 3 domingos consecutivos (3×1).
+    Após preencher, revise e ajuste manualmente se necessário.
+</div>
 
-                <div class="mb-3">
-                    <label class="form-label fw-bold small text-muted">MÊS / ANO</label>
-                    <input type="month" name="mes_ano" id="mes_ano" class="form-control"
-                           value="{{ mes_atual }}" required>
-                </div>
-
-                <hr class="my-3">
-
-                <!-- Funcionário A -->
-                <div class="p-3 mb-3 rounded" style="border-left:4px solid #16a34a; background:#f0fdf4;">
-                    <div class="fw-bold mb-2" style="color:#16a34a;">
-                        <span class="badge me-1" style="background:#16a34a;">A</span> Abridor
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label small fw-bold mb-1">FUNCIONÁRIO</label>
-                        <select name="func_a_id" id="func_a_id" class="form-select form-select func-filtrada" required>
-                            <option value="">— Selecione —</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="form-label small fw-bold mb-1">TURNO (para o domingo)</label>
-                        <select name="turno_a_id" id="turno_a_id" class="form-select form-select" required>
-                            <option value="">— Selecione —</option>
-                            {% for t in turnos_a %}
-                            <option value="{{ t.id }}">{{ t.nome }} ({{ t.hora_inicio.strftime('%H:%M') }}–{{ t.hora_fim.strftime('%H:%M') }})</option>
-                            {% endfor %}
-                            {% if not turnos_a %}
-                            {% for t in todos_turnos %}
-                            <option value="{{ t.id }}">{{ t.nome }}</option>
-                            {% endfor %}
-                            {% endif %}
-                        </select>
-                        {% if not turnos_a %}
-                        <div class="form-text text-warning">Nenhum turno com tipo A. Classifique em <a href="{{ url_for('escalas.grade_mestra') }}">Grade Mestra</a>.</div>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <!-- Funcionário B -->
-                <div class="p-3 mb-3 rounded" style="border-left:4px solid #2563eb; background:#eff6ff;">
-                    <div class="fw-bold mb-2" style="color:#2563eb;">
-                        <span class="badge me-1" style="background:#2563eb;">B</span> Fechador
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label small fw-bold mb-1">FUNCIONÁRIO</label>
-                        <select name="func_b_id" id="func_b_id" class="form-select form-select func-filtrada" required>
-                            <option value="">— Selecione —</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="form-label small fw-bold mb-1">TURNO (para o domingo)</label>
-                        <select name="turno_b_id" id="turno_b_id" class="form-select form-select" required>
-                            <option value="">— Selecione —</option>
-                            {% for t in turnos_b %}
-                            <option value="{{ t.id }}">{{ t.nome }} ({{ t.hora_inicio.strftime('%H:%M') }}–{{ t.hora_fim.strftime('%H:%M') }})</option>
-                            {% endfor %}
-                            {% if not turnos_b %}
-                            {% for t in todos_turnos %}
-                            <option value="{{ t.id }}">{{ t.nome }}</option>
-                            {% endfor %}
-                            {% endif %}
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Quem começa -->
-                <div class="mb-3">
-                    <label class="form-label fw-bold small text-muted">PRIMEIRO DOMINGO TRABALHA</label>
-                    <div class="d-flex gap-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="comeca_com" id="comecaA" value="A" checked>
-                            <label class="form-check-label" for="comecaA">
-                                <span class="badge badge-A">A</span> Abridor
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="comeca_com" id="comecaB" value="B">
-                            <label class="form-check-label" for="comecaB">
-                                <span class="badge badge-B">B</span> Fechador
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <hr class="my-3">
-
-                <!-- Funcionário C (opcional) -->
-                <div class="p-3 mb-3 rounded" style="border-left:4px solid #7c3aed; background:#faf5ff;">
-                    <div class="fw-bold mb-1" style="color:#7c3aed;">
-                        <span class="badge me-1" style="background:#7c3aed;">C</span> Tático — Cobertura de Sexta
-                        <span class="badge bg-secondary ms-1" style="font-size:.65rem;">opcional</span>
-                    </div>
-                    <div class="form-text mb-2">Quando A trabalha domingo, C cobre a sexta no horário de abertura.</div>
-                    <div class="mb-2">
-                        <label class="form-label small fw-bold mb-1">FUNCIONÁRIO C</label>
-                        <select name="func_c_id" id="func_c_id" class="form-select form-select func-filtrada">
-                            <option value="">— Não gerar —</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="form-label small fw-bold mb-1">TURNO DE C NA SEXTA</label>
-                        <select name="turno_c_id" id="turno_c_id" class="form-select form-select">
-                            <option value="">— Mesmo turno A —</option>
-                            {% for t in todos_turnos %}
-                            <option value="{{ t.id }}">{{ t.nome }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-
-                <button type="button" class="btn btn-outline-secondary btn mb-2 w-100" onclick="gerarPreview()">
-                    <i class="fas fa-eye me-1"></i>Pré-visualizar
-                </button>
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="fas fa-bolt me-1"></i>Gerar Rotação
-                </button>
-            </form>
-        </div>
-    </div>
-
-    <!-- ── Preview ───────────────────────────────────────────────────── -->
-    <div class="col-lg-7">
-        <div class="card p-4" id="previewCard" style="display:none;">
-            <h6 class="fw-bold mb-3">
-                <i class="fas fa-calendar-check me-2 text-primary"></i>
-                Pré-visualização — <span id="previewMesLabel"></span>
-            </h6>
-            <div class="table-responsive">
-                <table class="table preview-table align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Domingo</th>
-                            <th>Tipo</th>
-                            <th>Funcionário</th>
-                            <th>Turno</th>
-                            <th>Folga Sexta</th>
-                        </tr>
-                    </thead>
-                    <tbody id="previewBody"></tbody>
-                </table>
-            </div>
-        </div>
-        <div class="card p-4 text-center text-muted" id="previewPlaceholder">
-            <i class="fas fa-calendar-alt fa-3x mb-3 opacity-25"></i>
-            <p class="mb-0">Preencha o formulário e clique em <strong>Pré-visualizar</strong> para ver a escala antes de salvar.</p>
-        </div>
+<div class="card p-0 overflow-hidden" id="matrizContainer" style="display:none;">
+    <div class="table-responsive">
+        <table class="table matrix-table table-bordered mb-0">
+            <thead id="matrizHead"></thead>
+            <tbody id="matrizBody"></tbody>
+        </table>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
-                  'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+let domingosAtuais = [];
+let equipeAtual = [];
 
-// ── Filtro de funcionários ────────────────────────────────────────────────────
-
-function filtrarFuncionarios() {
-    const dept   = document.getElementById('fDept').value;
-    const funcao = document.getElementById('fFuncao').value;
-
-    // Rebuild funcao list when dept changes
-    const funcaoSel = document.getElementById('fFuncao');
-    const funcaoAtual = funcaoSel.value;
+function atualizarFuncoes() {
+    const dept = document.getElementById('fDept').value;
+    const sel  = document.getElementById('fFuncao');
     const funcoes = [...new Set(
-        TODOS_FUNCS.filter(f => !dept || f.dept === dept)
-                   .map(f => f.funcao).filter(Boolean).sort()
+        TODOS_FUNCS.filter(f => f.dept === dept).map(f => f.funcao).filter(Boolean).sort()
     )];
-    funcaoSel.innerHTML = '<option value="">— Todas —</option>';
+    sel.innerHTML = '<option value="">— Todas as Funções —</option>';
     funcoes.forEach(fn => {
         const o = document.createElement('option');
         o.value = fn; o.textContent = fn;
-        if (fn === funcaoAtual) o.selected = true;
-        funcaoSel.appendChild(o);
+        sel.appendChild(o);
+    });
+    montarMatriz();
+}
+
+function montarMatriz() {
+    const mesAno = document.getElementById('mes_ano').value;
+    const dept   = document.getElementById('fDept').value;
+    const funcao = document.getElementById('fFuncao').value;
+
+    if (!mesAno || !dept) {
+        document.getElementById('matrizContainer').style.display = 'none';
+        document.getElementById('btnAuto').disabled = true;
+        document.getElementById('btnSalvar').style.display = 'none';
+        document.getElementById('alertaInfo').classList.add('d-none');
+        return;
+    }
+
+    // Domingos do mês
+    const [ano, mes] = mesAno.split('-').map(Number);
+    const diasNoMes  = new Date(ano, mes, 0).getDate();
+    domingosAtuais   = [];
+    for (let d = 1; d <= diasNoMes; d++) {
+        if (new Date(ano, mes - 1, d).getDay() === 0) {
+            const mm = String(mes).padStart(2, '0');
+            const dd = String(d).padStart(2, '0');
+            domingosAtuais.push({ dia: d, data: `${ano}-${mm}-${dd}`, label: `${dd}/${mm}` });
+        }
+    }
+
+    // Equipe filtrada
+    equipeAtual = TODOS_FUNCS.filter(f => f.dept === dept && (!funcao || f.funcao === funcao));
+
+    if (!equipeAtual.length) {
+        document.getElementById('matrizContainer').style.display = 'none';
+        document.getElementById('btnAuto').disabled = true;
+        document.getElementById('btnSalvar').style.display = 'none';
+        return;
+    }
+
+    // Cabeçalho
+    let ths = '<tr><th style="min-width:200px;">Funcionário</th>';
+    domingosAtuais.forEach(dom => ths += `<th class="text-center">Dom<br>${dom.label}</th>`);
+    ths += '</tr>';
+    document.getElementById('matrizHead').innerHTML = ths;
+
+    // Opções de turnos para os selects
+    const turnosOpts = '<option value="">— Folga —</option>'
+        + TODOS_TURNOS.map(t => `<option value="${t.id}">${t.nome}</option>`).join('');
+
+    // Linhas
+    let trs = '';
+    equipeAtual.forEach(func => {
+        const badgeSexo = func.sexo === 'F'
+            ? '<span class="badge badge-F ms-1" title="CLT Art.386: folga quinzenal">F</span>'
+            : '<span class="badge badge-M ms-1" title="Até 3 domingos consecutivos">M</span>';
+        const infoContrato = func.tipo_turno
+            ? `<small class="text-muted d-block" style="font-size:.68rem;">Tipo ${func.tipo_turno}</small>`
+            : '';
+
+        trs += `<tr>
+            <td><strong>${func.nome}</strong>${badgeSexo}${infoContrato}</td>`;
+        domingosAtuais.forEach(dom => {
+            trs += `<td><select class="form-select form-select-sm aloc-select"
+                data-func="${func.id}" data-data="${dom.data}">${turnosOpts}</select></td>`;
+        });
+        trs += '</tr>';
     });
 
-    const lista = TODOS_FUNCS.filter(f =>
-        (!dept   || f.dept   === dept) &&
-        (!funcao || f.funcao === funcao)
-    );
+    document.getElementById('matrizBody').innerHTML = trs;
+    document.getElementById('matrizContainer').style.display = '';
+    document.getElementById('btnAuto').disabled = false;
+    document.getElementById('btnSalvar').style.display = '';
+}
 
-    document.getElementById('fContador').textContent = lista.length + ' funcionário(s)';
+// ── Auto-Solver CLT ───────────────────────────────────────────────────────────
+function autoPreencher() {
+    // Zera os selects primeiro
+    document.querySelectorAll('.aloc-select').forEach(s => s.value = '');
 
-    // Rebuild all 3 employee selects
-    [
-        { id: 'func_a_id', placeholder: '— Selecione —', required: true },
-        { id: 'func_b_id', placeholder: '— Selecione —', required: true },
-        { id: 'func_c_id', placeholder: '— Não gerar —', required: false },
-    ].forEach(cfg => {
-        const sel = document.getElementById(cfg.id);
-        const prev = sel.value;
-        sel.innerHTML = `<option value="">${cfg.placeholder}</option>`;
-        lista.forEach(f => {
-            const o = document.createElement('option');
-            o.value = f.id; o.textContent = f.nome;
-            if (f.id === prev) o.selected = true;
-            sel.appendChild(o);
+    // Contadores de domingos consecutivos trabalhados por funcionário
+    const seguidos = {};
+    equipeAtual.forEach(f => seguidos[f.id] = 0);
+
+    domingosAtuais.forEach(dom => {
+        // Ordena candidatos: menos domingos acumulados primeiro (balanceia carga)
+        const candidatos = [...equipeAtual].sort((a, b) => seguidos[a.id] - seguidos[b.id]);
+
+        // Separar por tipo de turno para cobrir abertura e fechamento
+        const porTipo = {};
+        candidatos.forEach(f => {
+            const t = f.tipo_turno || '_';
+            if (!porTipo[t]) porTipo[t] = [];
+            porTipo[t].push(f);
+        });
+
+        // Escalar um candidato por tipo de turno (garante cobertura A e B)
+        const tiposNecessarios = [...new Set(equipeAtual.map(f => f.tipo_turno || '_'))];
+        const escaladosHoje = new Set();
+
+        tiposNecessarios.forEach(tipo => {
+            const lista = porTipo[tipo] || [];
+            // Encontra o primeiro candidato elegível para este tipo
+            const escolhido = lista.find(func => {
+                if (escaladosHoje.has(func.id)) return false;
+                const lim = func.sexo === 'F' ? 1 : 3;
+                return seguidos[func.id] < lim;
+            });
+
+            if (escolhido) {
+                const turnoDoTipo = tipo !== '_'
+                    ? TODOS_TURNOS.find(t => t.tipo === tipo)
+                    : null;
+                const sel = document.querySelector(
+                    `.aloc-select[data-func="${escolhido.id}"][data-data="${dom.data}"]`
+                );
+                if (sel && turnoDoTipo) {
+                    sel.value = turnoDoTipo.id;
+                    seguidos[escolhido.id]++;
+                    escaladosHoje.add(escolhido.id);
+                }
+            }
+        });
+
+        // Quem não foi escalado hoje: zera contador de seguidos
+        equipeAtual.forEach(func => {
+            if (!escaladosHoje.has(func.id)) seguidos[func.id] = 0;
         });
     });
 
-    gerarPreview();
+    document.getElementById('alertaInfo').classList.remove('d-none');
 }
 
-// ── Preview ───────────────────────────────────────────────────────────────────
-
-function gerarPreview() {
-    const mesAno    = document.getElementById('mes_ano').value;
-    const funcANome = document.getElementById('func_a_id').selectedOptions[0]?.text || '—';
-    const funcBNome = document.getElementById('func_b_id').selectedOptions[0]?.text || '—';
-    const turnoANome = document.getElementById('turno_a_id').selectedOptions[0]?.text || '—';
-    const turnoBNome = document.getElementById('turno_b_id').selectedOptions[0]?.text || '—';
-    const comeca    = document.querySelector('[name="comeca_com"]:checked')?.value || 'A';
-    const funcCNome = document.getElementById('func_c_id').selectedOptions[0]?.text || '';
-    const gerarC    = document.getElementById('func_c_id').value !== '';
-
-    if (!mesAno) return;
-
-    const [ano, mes] = mesAno.split('-').map(Number);
-    const diasNoMes  = new Date(ano, mes, 0).getDate();
-    const domingos   = [];
-    for (let d = 1; d <= diasNoMes; d++) {
-        if (new Date(ano, mes - 1, d).getDay() === 0) domingos.push(d);
-    }
-
-    const nomes  = comeca === 'A' ? [funcANome, funcBNome]  : [funcBNome, funcANome];
-    const turnos = comeca === 'A' ? [turnoANome, turnoBNome] : [turnoBNome, turnoANome];
-    const tipos  = comeca === 'A' ? ['A','B'] : ['B','A'];
-
-    document.getElementById('previewMesLabel').textContent = MESES_PT[mes - 1] + ' ' + ano;
-
-    let rows = '';
-    domingos.forEach((d, i) => {
-        const tipo     = tipos[i % 2];
-        const nome     = nomes[i % 2];
-        const turno    = turnos[i % 2];
-        const dataFmt  = `${String(d).padStart(2,'0')}/${String(mes).padStart(2,'0')}`;
-        const badgeCls = tipo === 'A' ? 'badge-A' : 'badge-B';
-
-        const isA = (comeca === 'A' && i % 2 === 0) || (comeca === 'B' && i % 2 === 1);
-        const sextaD   = d - 2;
-        const sextaFmt = sextaD >= 1
-            ? `${String(sextaD).padStart(2,'0')}/${String(mes).padStart(2,'0')}`
-            : `${String(sextaD + 7).padStart(2,'0')}/${String(mes === 1 ? 12 : mes - 1).padStart(2,'0')}`;
-
-        const sextaCell = (isA && gerarC)
-            ? `<small class="text-success"><i class="fas fa-check me-1"></i>${funcCNome.split(' ')[0]} cobre sexta ${sextaFmt}</small>`
-            : '<span class="text-muted small">—</span>';
-
-        rows += `<tr>
-            <td class="fw-semibold">${dataFmt} (Dom)</td>
-            <td><span class="badge ${badgeCls}">${tipo}</span></td>
-            <td>${nome.split(' ').slice(0,2).join(' ')}</td>
-            <td class="small text-muted">${turno}</td>
-            <td>${sextaCell}</td>
-        </tr>`;
+// ── Salvar ────────────────────────────────────────────────────────────────────
+function salvarMatriz() {
+    const alocacoes = [];
+    document.querySelectorAll('.aloc-select').forEach(s => {
+        if (s.value) {
+            alocacoes.push({
+                func_id:  s.dataset.func,
+                data:     s.dataset.data,
+                turno_id: s.value,
+            });
+        }
     });
 
-    document.getElementById('previewBody').innerHTML = rows || '<tr><td colspan="5" class="text-center text-muted">Nenhum domingo no mês selecionado.</td></tr>';
-    document.getElementById('previewCard').style.display = '';
-    document.getElementById('previewPlaceholder').style.display = 'none';
+    if (!alocacoes.length) {
+        alert('Nenhum turno foi distribuído na matriz!');
+        return;
+    }
+
+    const btn = document.getElementById('btnSalvar');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Salvando...';
+    btn.disabled = true;
+
+    fetch('{{ url_for("escalas.gerar_domingos") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alocacoes }),
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.ok) {
+            alert('Sucesso: ' + d.msg);
+            window.location.reload();
+        } else {
+            alert('Erro: ' + d.msg);
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar Rotação';
+            btn.disabled = false;
+        }
+    })
+    .catch(e => {
+        alert('Erro de comunicação: ' + e.message);
+        btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar Rotação';
+        btn.disabled = false;
+    });
 }
-
-// Auto-preview on change
-['mes_ano','func_a_id','func_b_id','turno_a_id','turno_b_id','func_c_id'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('change', gerarPreview);
-});
-document.querySelectorAll('[name="comeca_com"]').forEach(r => r.addEventListener('change', gerarPreview));
-
-// Inicializar selects com todos os funcionários
-filtrarFuncionarios();
 </script>
 {% endblock %}
