@@ -8,6 +8,7 @@
 .matrix-table .form-select-sm { font-size: .75rem; min-width: 120px; }
 .badge-F { background: #ec4899; color: #fff; }
 .badge-M { background: #3b82f6; color: #fff; }
+.badge-tatico { background: #1f2937; color: #fbbf24; font-size: 0.65rem; border: 1px solid #fbbf24; }
 </style>
 {% endblock %}
 
@@ -15,19 +16,27 @@
 <script>
 const TODOS_FUNCS = [
     {% for f in funcionarios %}
-    { id: {{ f.id | tojson }}, nome: {{ f.nome | tojson }}, dept: {{ (f.departamento or '') | tojson }}, funcao: {{ (f.funcao or '') | tojson }}, sexo: {{ (f.sexo or 'M') | tojson }}, tipo_turno: {{ (f.horario_base.tipo_turno if f.horario_base else '') | tojson }} }{% if not loop.last %},{% endif %}
+    {
+        id: {{ f.id | tojson }},
+        nome: {{ f.nome | tojson }},
+        dept: {{ (f.departamento or '') | tojson }},
+        funcao: {{ (f.funcao or '') | tojson }},
+        sexo: {{ (f.sexo or 'M') | tojson }},
+        turno_base_id: {{ (f.horario_base.id if f.horario_base else '') | tojson }},
+        trabalha_domingos: {{ 'true' if f.horario_base and '6' in f.horario_base.dias_semana else 'false' }}
+    }{% if not loop.last %},{% endif %}
     {% endfor %}
 ];
 const TODOS_TURNOS = [
     {% for t in todos_turnos %}
-    { id: {{ t.id }}, nome: {{ t.nome | tojson }}, tipo: {{ (t.tipo_turno or '') | tojson }} }{% if not loop.last %},{% endif %}
+    { id: {{ t.id }}, nome: {{ t.nome | tojson }} }{% if not loop.last %},{% endif %}
     {% endfor %}
 ];
 </script>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 mb-0 fw-bold">
-        <i class="fas fa-magic me-2 text-primary"></i>Gerar Rotação Inteligente de Domingos
+        <i class="fas fa-magic me-2 text-primary"></i>Substituição Inteligente de Domingos
     </h1>
     <div class="d-flex gap-2">
         <button class="btn btn-primary" onclick="salvarMatriz()" id="btnSalvar" style="display:none;">
@@ -62,7 +71,7 @@ const TODOS_TURNOS = [
         </div>
         <div class="col-md-2">
             <button class="btn btn-outline-success w-100" onclick="autoPreencher()" id="btnAuto" disabled>
-                <i class="fas fa-robot me-1"></i>Preencher CLT
+                <i class="fas fa-robot me-1"></i>Aplicar Substituições
             </button>
         </div>
     </div>
@@ -70,10 +79,8 @@ const TODOS_TURNOS = [
 
 <div class="alert alert-info py-2 small d-none" id="alertaInfo">
     <i class="fas fa-info-circle me-1"></i>
-    <strong>Regras aplicadas:</strong>
-    Mulheres <span class="badge badge-F">F</span> — descanso quinzenal (1×1, Art. 386 CLT).
-    Homens <span class="badge badge-M">M</span> — até 3 domingos consecutivos (3×1).
-    Após preencher, revise e ajuste manualmente se necessário.
+    <strong>Lógica de Táticos:</strong> O sistema identifica quem trabalha ao domingo por contrato <span class="badge badge-tatico">TÁTICO</span>.
+    Quando a CLT exige a folga deles (F = 1×1, M = 3×1), aplica o turno "FOLGA" e puxa um substituto elegível da mesma função para cobrir o seu turno.
 </div>
 
 <div class="card p-0 overflow-hidden" id="matrizContainer" style="display:none;">
@@ -99,9 +106,7 @@ function atualizarFuncoes() {
     )];
     sel.innerHTML = '<option value="">— Todas as Funções —</option>';
     funcoes.forEach(fn => {
-        const o = document.createElement('option');
-        o.value = fn; o.textContent = fn;
-        sel.appendChild(o);
+        sel.innerHTML += `<option value="${fn}">${fn}</option>`;
     });
     montarMatriz();
 }
@@ -119,10 +124,10 @@ function montarMatriz() {
         return;
     }
 
-    // Domingos do mês
     const [ano, mes] = mesAno.split('-').map(Number);
     const diasNoMes  = new Date(ano, mes, 0).getDate();
     domingosAtuais   = [];
+
     for (let d = 1; d <= diasNoMes; d++) {
         if (new Date(ano, mes - 1, d).getDay() === 0) {
             const mm = String(mes).padStart(2, '0');
@@ -131,38 +136,34 @@ function montarMatriz() {
         }
     }
 
-    // Equipe filtrada
     equipeAtual = TODOS_FUNCS.filter(f => f.dept === dept && (!funcao || f.funcao === funcao));
 
     if (!equipeAtual.length) {
         document.getElementById('matrizContainer').style.display = 'none';
-        document.getElementById('btnAuto').disabled = true;
-        document.getElementById('btnSalvar').style.display = 'none';
         return;
     }
 
-    // Cabeçalho
-    let ths = '<tr><th style="min-width:200px;">Funcionário</th>';
+    let ths = '<tr><th style="min-width:220px;">Funcionário</th>';
     domingosAtuais.forEach(dom => ths += `<th class="text-center">Dom<br>${dom.label}</th>`);
     ths += '</tr>';
     document.getElementById('matrizHead').innerHTML = ths;
 
-    // Opções de turnos para os selects
-    const turnosOpts = '<option value="">— Folga —</option>'
+    const turnosOpts = '<option value="">— Horário de Contrato —</option>'
         + TODOS_TURNOS.map(t => `<option value="${t.id}">${t.nome}</option>`).join('');
 
-    // Linhas
+    // Táticos primeiro
+    equipeAtual.sort((a, b) => (b.trabalha_domingos ? 1 : 0) - (a.trabalha_domingos ? 1 : 0));
+
     let trs = '';
     equipeAtual.forEach(func => {
         const badgeSexo = func.sexo === 'F'
-            ? '<span class="badge badge-F ms-1" title="CLT Art.386: folga quinzenal">F</span>'
-            : '<span class="badge badge-M ms-1" title="Até 3 domingos consecutivos">M</span>';
-        const infoContrato = func.tipo_turno
-            ? `<small class="text-muted d-block" style="font-size:.68rem;">Tipo ${func.tipo_turno}</small>`
+            ? '<span class="badge badge-F ms-1" title="1x1">F</span>'
+            : '<span class="badge badge-M ms-1" title="3x1">M</span>';
+        const badgeTatico = func.trabalha_domingos
+            ? '<span class="badge badge-tatico ms-1">TÁTICO</span>'
             : '';
 
-        trs += `<tr>
-            <td><strong>${func.nome}</strong>${badgeSexo}${infoContrato}</td>`;
+        trs += `<tr><td><strong>${func.nome}</strong>${badgeSexo}${badgeTatico}</td>`;
         domingosAtuais.forEach(dom => {
             trs += `<td><select class="form-select form-select-sm aloc-select"
                 data-func="${func.id}" data-data="${dom.data}">${turnosOpts}</select></td>`;
@@ -176,58 +177,62 @@ function montarMatriz() {
     document.getElementById('btnSalvar').style.display = '';
 }
 
-// ── Auto-Solver CLT ───────────────────────────────────────────────────────────
+// ── Auto-Solver (Substituição de Táticos) ────────────────────────────────────
 function autoPreencher() {
-    // Zera os selects primeiro
+    const turnoFolga = TODOS_TURNOS.find(t => t.nome.toUpperCase() === 'FOLGA');
+    if (!turnoFolga) {
+        alert("Atenção: O sistema precisa de um Turno chamado 'FOLGA' cadastrado para aplicar os descansos.");
+        return;
+    }
+
     document.querySelectorAll('.aloc-select').forEach(s => s.value = '');
 
-    // Contadores de domingos consecutivos trabalhados por funcionário
+    const taticos     = equipeAtual.filter(f => f.trabalha_domingos);
+    const substitutos = equipeAtual.filter(f => !f.trabalha_domingos);
+
     const seguidos = {};
     equipeAtual.forEach(f => seguidos[f.id] = 0);
 
     domingosAtuais.forEach(dom => {
-        // Ordena candidatos: menos domingos acumulados primeiro (balanceia carga)
-        const candidatos = [...equipeAtual].sort((a, b) => seguidos[a.id] - seguidos[b.id]);
-
-        // Separar por tipo de turno para cobrir abertura e fechamento
-        const porTipo = {};
-        candidatos.forEach(f => {
-            const t = f.tipo_turno || '_';
-            if (!porTipo[t]) porTipo[t] = [];
-            porTipo[t].push(f);
-        });
-
-        // Escalar um candidato por tipo de turno (garante cobertura A e B)
-        const tiposNecessarios = [...new Set(equipeAtual.map(f => f.tipo_turno || '_'))];
         const escaladosHoje = new Set();
 
-        tiposNecessarios.forEach(tipo => {
-            const lista = porTipo[tipo] || [];
-            // Encontra o primeiro candidato elegível para este tipo
-            const escolhido = lista.find(func => {
-                if (escaladosHoje.has(func.id)) return false;
-                const lim = func.sexo === 'F' ? 1 : 3;
-                return seguidos[func.id] < lim;
-            });
+        taticos.forEach(tatico => {
+            const limite        = tatico.sexo === 'F' ? 1 : 3;
+            const precisaFolgar = seguidos[tatico.id] >= limite;
+            const selectTatico  = document.querySelector(`.aloc-select[data-func="${tatico.id}"][data-data="${dom.data}"]`);
 
-            if (escolhido) {
-                const turnoDoTipo = tipo !== '_'
-                    ? TODOS_TURNOS.find(t => t.tipo === tipo)
-                    : null;
-                const sel = document.querySelector(
-                    `.aloc-select[data-func="${escolhido.id}"][data-data="${dom.data}"]`
-                );
-                if (sel && turnoDoTipo) {
-                    sel.value = turnoDoTipo.id;
-                    seguidos[escolhido.id]++;
-                    escaladosHoje.add(escolhido.id);
+            if (precisaFolgar) {
+                // Tático obrigado a folgar
+                if (selectTatico) selectTatico.value = turnoFolga.id;
+                seguidos[tatico.id] = 0;
+
+                // Puxa substituto elegível (quem descansou mais vem primeiro)
+                const subsDisponiveis = substitutos
+                    .filter(s => !escaladosHoje.has(s.id))
+                    .sort((a, b) => seguidos[a.id] - seguidos[b.id]);
+
+                const subEscolhido = subsDisponiveis.find(sub => {
+                    const limSub = sub.sexo === 'F' ? 1 : 3;
+                    return seguidos[sub.id] < limSub;
+                });
+
+                if (subEscolhido && tatico.turno_base_id) {
+                    const selectSub = document.querySelector(`.aloc-select[data-func="${subEscolhido.id}"][data-data="${dom.data}"]`);
+                    if (selectSub) selectSub.value = tatico.turno_base_id;
+                    seguidos[subEscolhido.id]++;
+                    escaladosHoje.add(subEscolhido.id);
                 }
+            } else {
+                // Tático trabalha normalmente (horário base = select vazio)
+                if (selectTatico) selectTatico.value = '';
+                seguidos[tatico.id]++;
+                escaladosHoje.add(tatico.id);
             }
         });
 
-        // Quem não foi escalado hoje: zera contador de seguidos
-        equipeAtual.forEach(func => {
-            if (!escaladosHoje.has(func.id)) seguidos[func.id] = 0;
+        // Substitutos não escalados hoje tiveram folga — zerar acumulador
+        substitutos.forEach(sub => {
+            if (!escaladosHoje.has(sub.id)) seguidos[sub.id] = 0;
         });
     });
 
@@ -237,20 +242,14 @@ function autoPreencher() {
 // ── Salvar ────────────────────────────────────────────────────────────────────
 function salvarMatriz() {
     const alocacoes = [];
+    // Envia todos, incluindo vazios, para o backend saber o que excluir
     document.querySelectorAll('.aloc-select').forEach(s => {
-        if (s.value) {
-            alocacoes.push({
-                func_id:  s.dataset.func,
-                data:     s.dataset.data,
-                turno_id: s.value,
-            });
-        }
+        alocacoes.push({
+            func_id:  s.dataset.func,
+            data:     s.dataset.data,
+            turno_id: s.value,
+        });
     });
-
-    if (!alocacoes.length) {
-        alert('Nenhum turno foi distribuído na matriz!');
-        return;
-    }
 
     const btn = document.getElementById('btnSalvar');
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Salvando...';

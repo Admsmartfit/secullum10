@@ -1432,38 +1432,44 @@ def grade_mestra_setar_tipo():
 @login_required
 def gerar_domingos():
     if request.method == 'POST':
-        # Recebe a matriz gerada pelo Auto-Solver do Front-end
         dados = request.get_json(force=True) or {}
         alocacoes = dados.get('alocacoes', [])
         saved = 0
 
         for item in alocacoes:
             try:
-                func_id  = str(item['func_id'])
-                turno_id = int(item['turno_id'])
-                data_dom = date.fromisoformat(item['data'])
+                func_id      = str(item['func_id'])
+                turno_id_str = item.get('turno_id', '')
+                data_dom     = date.fromisoformat(item['data'])
             except (KeyError, ValueError):
                 continue
 
             aloc = AlocacaoDiaria.query.filter_by(
                 funcionario_id=func_id, data=data_dom
             ).first()
-            if aloc:
-                aloc.turno_id = turno_id
+
+            if turno_id_str:  # turno explícito (FOLGA ou substituto)
+                turno_id = int(turno_id_str)
+                if aloc:
+                    aloc.turno_id = turno_id
+                else:
+                    db.session.add(AlocacaoDiaria(
+                        funcionario_id=func_id, turno_id=turno_id, data=data_dom
+                    ))
+                saved += 1
             else:
-                db.session.add(AlocacaoDiaria(
-                    funcionario_id=func_id, turno_id=turno_id, data=data_dom
-                ))
-            saved += 1
+                # vazio = devolver ao horário base (apagar exceção se existir)
+                if aloc:
+                    db.session.delete(aloc)
+                    saved += 1
 
         try:
             db.session.commit()
-            return jsonify({'ok': True, 'msg': f'{saved} alocações de domingo gravadas com sucesso!'})
+            return jsonify({'ok': True, 'msg': f'{saved} alterações de domingo gravadas com sucesso!'})
         except Exception as e:
             db.session.rollback()
             return jsonify({'ok': False, 'msg': f'Erro ao salvar: {str(e)}'}), 500
 
-    # GET — carrega a página
     funcionarios = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
     todos_turnos = Turno.query.order_by(Turno.nome).all()
 
