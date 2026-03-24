@@ -77,13 +77,20 @@ def _brasil_api(ano: int) -> List[Dict]:
 
 def _calendario_api(ano: int, uf: str, cidade: str,
                     token: str, cidade_ibge: str = None) -> List[Dict]:
+    import unicodedata
+    import re
     try:
-        r = requests.get(
-            'https://api.calendario.com.br/',
-            params={'json': 'true', 'ano': ano, 'estado': uf,
-                    'cidade': cidade, 'token': token},
-            timeout=15,
-        )
+        params = {'json': 'true', 'ano': ano, 'estado': uf, 'token': token}
+
+        # Prioriza código IBGE (busca exata); senão sanitiza nome da cidade
+        if cidade_ibge:
+            params['ibge'] = cidade_ibge
+        else:
+            cidade_limpa = unicodedata.normalize('NFKD', cidade).encode('ASCII', 'ignore').decode('utf-8')
+            cidade_limpa = re.sub(r'\s+', '_', cidade_limpa.strip().upper())
+            params['cidade'] = cidade_limpa
+
+        r = requests.get('https://api.calendario.com.br/', params=params, timeout=15)
         r.raise_for_status()
         result = []
         for item in r.json():
@@ -104,7 +111,8 @@ def _calendario_api(ano: int, uf: str, cidade: str,
                 'cidade_ibge': cidade_ibge,
             })
         return result
-    except Exception:
+    except Exception as e:
+        print(f'[Feriados] Erro na API Calendario.com.br: {e}')
         return []
 
 
@@ -113,11 +121,13 @@ def _calendario_api(ano: int, uf: str, cidade: str,
 def _holidays_python(ano: int, uf: str = None) -> List[Dict]:
     try:
         import holidays as hol
-        br = hol.Brazil(state=uf, years=ano) if uf else hol.Brazil(years=ano)
+        # 'subdiv' é o parâmetro correto em versões modernas da biblioteca holidays
+        br = hol.country_holidays('BR', subdiv=uf, years=ano) if uf else hol.country_holidays('BR', years=ano)
         tipo = 'estadual' if uf else 'nacional'
         return [{'data': str(d), 'descricao': n, 'tipo': tipo, 'uf': uf}
                 for d, n in br.items()]
-    except Exception:
+    except Exception as e:
+        print(f'[Feriados] Erro na biblioteca offline holidays: {e}')
         return []
 
 
