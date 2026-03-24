@@ -42,6 +42,8 @@ def _run_safe_migrations(db):
         "ALTER TABLE tokens_avaliacao ADD COLUMN IF NOT EXISTS lembrete_24h_em TIMESTAMP",
         "ALTER TABLE tokens_avaliacao ADD COLUMN IF NOT EXISTS lembrete_48h_em TIMESTAMP",
         "ALTER TABLE tokens_avaliacao ADD COLUMN IF NOT EXISTS expira_em TIMESTAMP",
+        "ALTER TABLE scores_avaliacao ADD COLUMN IF NOT EXISTS token_resultado VARCHAR(64)",
+        "ALTER TABLE scores_avaliacao ADD COLUMN IF NOT EXISTS resultado_enviado_em TIMESTAMP",
     ]
     for sql in migrations:
         try:

@@ -789,6 +789,10 @@ class ScoreAvaliacao(db.Model):
     conclusivo = db.Column(db.Boolean, default=True)
     calculado_em = db.Column(db.DateTime, nullable=True)
 
+    # Token único para acesso público ao resultado pelo próprio colaborador (PRD §4 Etapa 6)
+    token_resultado = db.Column(db.String(64), unique=True, nullable=True)
+    resultado_enviado_em = db.Column(db.DateTime, nullable=True)  # quando WhatsApp foi enviado
+
     funcionario = db.relationship('Funcionario', backref=db.backref('scores_avaliacao', lazy=True))
 
     def __repr__(self):

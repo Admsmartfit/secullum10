@@ -245,12 +245,35 @@ def gerar_tokens_ciclo(ciclo_id: int) -> dict:
                     contagem['par_por_professor'] += 1
 
     # 4. Alunos avaliam a equipe do horário
+    # PRD §4 Etapa 2 + §7: apenas alunos cujo horário coincide com o turno de algum professor.
+    # Match por correspondência do campo aluno.horario com o nome/horario dos turnos de hoje.
+    from models import Turno
+    turnos_hoje_ids = set(alocacoes_hoje.keys())
+    turnos_hoje = Turno.query.filter(Turno.id.in_(turnos_hoje_ids)).all() if turnos_hoje_ids else []
+    # Monta conjunto de palavras-chave dos turnos ativos hoje (nome e intervalo de horário)
+    turno_keywords: set[str] = set()
+    for t_obj in turnos_hoje:
+        if t_obj.nome:
+            turno_keywords.add(t_obj.nome.strip().lower())
+        if t_obj.hora_inicio:
+            turno_keywords.add(str(t_obj.hora_inicio)[:5])  # "HH:MM"
+        if t_obj.hora_fim:
+            turno_keywords.add(str(t_obj.hora_fim)[:5])
+
     alunos_q = AlunoUnidade.query.filter_by(ativo=True)
     if ciclo.departamento:
         alunos_q = alunos_q.filter_by(departamento=ciclo.departamento)
     alunos = alunos_q.all()
 
     for aluno in alunos:
+        # Se o aluno tem horário definido, verifica se coincide com algum turno ativo
+        if aluno.horario and turno_keywords:
+            horario_lower = aluno.horario.strip().lower()
+            match = any(kw in horario_lower or horario_lower in kw for kw in turno_keywords)
+            if not match:
+                log.debug(f'[avaliacao] Aluno {aluno.nome} horario={aluno.horario!r} sem turno correspondente — ignorado')
+                continue
+        # Aluno sem horário definido é incluído (não há filtro possível)
         t = TokenAvaliacao(
             ciclo_id=ciclo_id,
             token=_novo_token(),
@@ -379,8 +402,108 @@ def calcular_scores_ciclo(ciclo_id: int) -> list[dict]:
 
 # ── Fechar ciclo ──────────────────────────────────────────────────────────────
 
+def _notificar_gerentes_proximo_ciclo(ciclo: 'CicloAvaliacao') -> None:
+    """PRD §7: Gerente notificado via WhatsApp quando o sorteio ocorrer.
+    Enviado ao fechar o ciclo atual (quando proximo_ciclo_data é definido).
+    """
+    try:
+        from models import Usuario, Funcionario, UnidadeLider
+        from services.whatsapp_bot import enviar_texto
+
+        data_fmt = ciclo.proximo_ciclo_data.strftime('%d/%m/%Y') if ciclo.proximo_ciclo_data else '—'
+        msg = (
+            f'📋 *Avaliação 360° Agendada*\n\n'
+            f'Olá! O próximo ciclo de Avaliação 360°'
+            f'{f" do departamento {ciclo.departamento}" if ciclo.departamento else ""} '
+            f'foi sorteado para *{data_fmt}*.\n\n'
+            f'Você tem até essa data para preparar a equipe. '
+            f'A coleta de respostas terá janela de 72h após o início.\n\n'
+            f'Atenciosamente, Sistema de RH.'
+        )
+
+        # Busca gerentes: usuarios nível 'gerente' com funcionario vinculado por email
+        gerentes_usuario = Usuario.query.filter_by(nivel_acesso='gerente', ativo=True).all()
+        for ger_u in gerentes_usuario:
+            func = Funcionario.query.filter_by(email=ger_u.email, ativo=True).first()
+            if func and func.celular:
+                if ciclo.departamento and func.departamento != ciclo.departamento:
+                    continue
+                enviar_texto(func.celular, msg, func_id=func.id, tipo='avaliacao_notif')
+                log.info(f'[avaliacao] Gerente {func.nome} notificado sobre próximo ciclo em {data_fmt}')
+    except Exception as e:
+        log.warning(f'[avaliacao] Falha ao notificar gerentes: {e}')
+
+
+def _enviar_resultado_colaborador(ciclo_id: int) -> int:
+    """PRD §4 Etapa 6: envia resultado individual via WhatsApp a cada colaborador avaliado.
+    Gera um token_resultado único por ScoreAvaliacao e manda o link + nível.
+    Retorna número de mensagens enviadas.
+    """
+    from extensions import db
+    from models import ScoreAvaliacao, Funcionario
+    from services.whatsapp_bot import enviar_texto
+
+    url_base = _url_base()
+    scores = ScoreAvaliacao.query.filter_by(ciclo_id=ciclo_id).all()
+    emoji_map = {'diamante': '💎', 'ouro': '🥇', 'prata': '🥈', 'bronze': '🥉'}
+    bonus_map = {'diamante': '15%', 'ouro': '10%', 'prata': '5%', 'bronze': '—'}
+    enviados = 0
+
+    for sc in scores:
+        func = Funcionario.query.get(sc.funcionario_id)
+        if not func or not func.celular:
+            continue
+
+        # Gera token único de resultado (idempotente)
+        if not sc.token_resultado:
+            sc.token_resultado = _novo_token()
+            db.session.commit()
+
+        nivel = sc.nivel or 'bronze'
+        link = f'{url_base}/r/resultado/{sc.token_resultado}' if url_base else ''
+
+        msg_nivel = (
+            f'{emoji_map.get(nivel, "")} *{nivel.title()}*'
+            f'{" — Bônus: " + bonus_map[nivel] if sc.conclusivo and nivel != "bronze" else ""}'
+        )
+
+        if sc.conclusivo:
+            msg = (
+                f'Olá, {func.nome.split()[0]}! 🎯\n\n'
+                f'Seu resultado da *Avaliação 360°* (Ciclo #{sc.ciclo_id}) está disponível:\n\n'
+                f'📊 Score Global: *{sc.score_global:.1f}/100*\n'
+                f'🏅 Nível: {msg_nivel}\n\n'
+                f'{MENSAGENS_FEEDBACK.get(nivel, "")}\n\n'
+            )
+            if link:
+                msg += f'👉 Ver resultado completo: {link}\n\n'
+            msg += 'Parabéns pelo seu trabalho! 💪'
+        else:
+            msg = (
+                f'Olá, {func.nome.split()[0]}! 📋\n\n'
+                f'Seu ciclo de *Avaliação 360°* (#{sc.ciclo_id}) foi encerrado, mas '
+                f'a amostra de alunos foi insuficiente (mínimo 10 respostas).\n\n'
+                f'Um novo ciclo será agendado em breve para complementar a avaliação.\n\n'
+                f'Obrigado pela sua participação!'
+            )
+
+        ok = enviar_texto(func.celular, msg, func_id=func.id, tipo='avaliacao_resultado')
+        if ok:
+            sc.resultado_enviado_em = datetime.utcnow()
+            db.session.commit()
+            enviados += 1
+            log.info(f'[avaliacao] Resultado enviado para {func.nome} (ciclo {ciclo_id})')
+        else:
+            log.warning(f'[avaliacao] Falha ao enviar resultado para {func.nome}')
+
+    return enviados
+
+
 def fechar_ciclo(ciclo_id: int) -> dict:
-    """Calcula scores finais e marca o ciclo como fechado."""
+    """Calcula scores finais, marca o ciclo como fechado,
+    envia resultado a cada colaborador e notifica gerentes do próximo ciclo.
+    PRD §4 Etapa 6.
+    """
     from extensions import db
     from models import CicloAvaliacao
 
@@ -390,6 +513,12 @@ def fechar_ciclo(ciclo_id: int) -> dict:
         ciclo.status = 'fechado'
         ciclo.fechado_em = datetime.utcnow()
         db.session.commit()
+        # PRD §4 Etapa 6: envia resultado individual a cada colaborador
+        enviados = _enviar_resultado_colaborador(ciclo_id)
+        log.info(f'[avaliacao] Ciclo {ciclo_id} fechado. Resultados enviados: {enviados}')
+        # PRD §7: notifica gerentes sobre o próximo ciclo sorteado
+        if ciclo.proximo_ciclo_data:
+            _notificar_gerentes_proximo_ciclo(ciclo)
     return {'scores': scores, 'ciclo_id': ciclo_id}
 
 

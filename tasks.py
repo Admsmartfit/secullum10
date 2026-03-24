@@ -364,9 +364,14 @@ def register_tasks(celery):
 
     @celery.task(name='tasks.avaliacao_fechar_expirados')
     def avaliacao_fechar_expirados():
-        """Fecha automaticamente ciclos cujo prazo de coleta expirou."""
-        from models import CicloAvaliacao
-        from services.avaliacao_service import fechar_ciclo
+        """Fecha automaticamente ciclos cujo prazo de coleta expirou.
+        PRD §7: se amostra de alunos < 10, reagenda novo disparo em 7 dias.
+        """
+        from models import CicloAvaliacao, TokenAvaliacao, ScoreAvaliacao
+        from extensions import db
+        from services.avaliacao_service import (fechar_ciclo, calcular_scores_ciclo,
+                                                 criar_ciclo, gerar_tokens_ciclo,
+                                                 enviar_convites_ciclo)
 
         hoje = date.today()
         ciclos = CicloAvaliacao.query.filter(
@@ -374,16 +379,37 @@ def register_tasks(celery):
             CicloAvaliacao.data_fim_coleta < hoje,
         ).all()
 
-        fechados = 0
+        fechados = reagendados = 0
         for ciclo in ciclos:
             try:
+                # Calcula scores antes de fechar para verificar amostra
+                scores = calcular_scores_ciclo(ciclo.id)
+
+                # PRD §7: verifica se algum professor ficou com amostra insuficiente
+                scores_inconclusivos = [s for s in scores if not s.get('conclusivo')]
+                if scores_inconclusivos:
+                    # Reagenda novo disparo em 7 dias conforme PRD §7
+                    novo_ciclo = criar_ciclo(departamento=ciclo.departamento)
+                    # Sobrescreve data_inicio e data_fim_coleta para 7 dias à frente
+                    novo_ciclo.data_inicio = hoje + timedelta(days=7)
+                    novo_ciclo.data_fim_coleta = hoje + timedelta(days=10)
+                    db.session.commit()
+                    gerar_tokens_ciclo(novo_ciclo.id)
+                    enviar_convites_ciclo(novo_ciclo.id)
+                    reagendados += 1
+                    logger.info(
+                        f'[avaliacao] Ciclo {ciclo.id} inconclusivo '
+                        f'({len(scores_inconclusivos)} prof.) — reagendado ciclo {novo_ciclo.id} '
+                        f'para {novo_ciclo.data_inicio}'
+                    )
+
                 fechar_ciclo(ciclo.id)
                 fechados += 1
                 logger.info(f'[avaliacao] Ciclo {ciclo.id} fechado automaticamente.')
             except Exception as e:
                 logger.error(f'[avaliacao] Erro ao fechar ciclo {ciclo.id}: {e}')
 
-        return {'fechados': fechados}
+        return {'fechados': fechados, 'reagendados': reagendados}
 
     return {
         'sync_secullum': celery.tasks.get('tasks.sync_secullum'),

@@ -226,6 +226,32 @@ def importar_alunos():
     return redirect(url_for('avaliacoes.alunos'))
 
 
+# ── Resultado público do colaborador (PRD §4 Etapa 6) ────────────────────────
+
+@avaliacoes_public_bp.route('/r/resultado/<token_resultado>')
+def ver_resultado(token_resultado):
+    """Tela pessoal do colaborador com seu score, nível e feedback.
+    Acessível via link enviado por WhatsApp ao fechar o ciclo (sem login).
+    """
+    sc = ScoreAvaliacao.query.filter_by(token_resultado=token_resultado).first_or_404()
+    ciclo = CicloAvaliacao.query.get_or_404(sc.ciclo_id)
+
+    from services.avaliacao_service import MENSAGENS_FEEDBACK, ACOES_RH, NIVEIS
+    nivel = sc.nivel or 'bronze'
+    emoji_map = {'diamante': '💎', 'ouro': '🥇', 'prata': '🥈', 'bronze': '🥉'}
+    bonus_map = {'diamante': '15%', 'ouro': '10%', 'prata': '5%', 'bronze': '—'}
+
+    return render_template(
+        'avaliacoes/resultado.html',
+        sc=sc,
+        ciclo=ciclo,
+        nivel_emoji=emoji_map.get(nivel, ''),
+        bonus=bonus_map.get(nivel, '—') if sc.conclusivo else '—',
+        mensagem_feedback=MENSAGENS_FEEDBACK.get(nivel, ''),
+        acao_rh=ACOES_RH.get(nivel, ''),
+    )
+
+
 # ── Formulário público (sem login) ────────────────────────────────────────────
 
 @avaliacoes_public_bp.route('/r/<token>')
