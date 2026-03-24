@@ -151,62 +151,58 @@ def _buscar_func_por_celular(digits: str) -> 'Funcionario | None':
 
 
 def _processar_mensagem(data: dict):
-    """Processa mensagem inbound da Mega-API.
-
-    Cenários suportados:
-    1. Interactive reply (button_reply / list_reply) — clique num botão ou lista
-    2. Mídia (image/document) — atestado médico quando estado == AGUARDANDO_ATESTADO
-    3. Áudio — transcreve via Whisper e reprocessa como texto
-    4. Texto:
-       a. Saudações ("oi", "menu"…) → Menu Principal
-       b. Estado AGUARDANDO_MINUTOS_ATRASO → número de minutos
-       c. SIM/NÃO (botão de check-in prévio)
-       d. Justificativa automática de batida inconsistente
-       e. Texto livre → transbordo ao gestor
-    """
     from services.whatsapp_bot import enviar_texto, enviar_botoes, baixar_midia
+    from models import TokenAvaliacao, RespostaAvaliacao
 
     celular = data.get('from', '').replace('@s.whatsapp.net', '')
-    tipo_msg = data.get('type', 'text')  # text | audio | ptt | image | document | interactive
+    tipo_msg = data.get('type', 'text')
 
-    # ── Identificar funcionário ───────────────────────────────────────────────
+    if not celular: return
+
+    # Tenta identificar o funcionário
     digits = ''.join(c for c in celular if c.isdigit())[-11:]
-    func = _buscar_func_por_celular(digits)
+    func = Funcionario.query.filter(Funcionario.celular.like(f'%{digits[-8:]}%')).first()
 
-    # ── Log de entrada ────────────────────────────────────────────────────────
+    # Verifica se há um Token de Avaliação ativo para este número (seja Funcionário, Líder ou Cliente)
+    active_token = None
+    if func:
+        active_token = TokenAvaliacao.query.filter_by(avaliador_id=func.id, respondido=False).filter(TokenAvaliacao.enviado_em.isnot(None)).order_by(TokenAvaliacao.enviado_em.desc()).first()
+    if not active_token:
+        active_token = TokenAvaliacao.query.filter(TokenAvaliacao.avaliador_celular.like(f'%{digits[-8:]}%'), TokenAvaliacao.respondido==False).filter(TokenAvaliacao.enviado_em.isnot(None)).order_by(TokenAvaliacao.enviado_em.desc()).first()
+
+    # 🔴 NOVA REGRA: Só recusa a mensagem se não for funcionário E não tiver avaliação pendente
+    if not func and not active_token:
+        return
+
+    # Log de entrada
     log_mensagem = data.get('body') or data.get('text') or tipo_msg
     log = WhatsappLog(
         funcionario_id=func.id if func else None,
-        tipo='entrada',
-        mensagem=str(log_mensagem)[:500],
-        celular=celular,
-        status='recebido',
-        criado_em=datetime.utcnow(),
+        tipo='entrada', mensagem=str(log_mensagem)[:500],
+        celular=celular, status='recebido', criado_em=datetime.utcnow()
     )
     db.session.add(log)
     db.session.commit()
 
-    if not func or not celular:
-        return
+    # Carrega estado APENAS se for funcionário
+    estado_atual = 'IDLE'
+    ctx = {}
+    if func:
+        state = _get_or_create_state(func.id)
+        estado_atual = state.estado or 'IDLE'
+        ctx = json.loads(state.contexto or '{}')
 
-    state = _get_or_create_state(func.id)
-    estado_atual = state.estado or 'IDLE'
-    ctx = json.loads(state.contexto or '{}')
-
-    # ══════════════════════════════════════════════════════════════════════════
     # 1. Interactive reply (button_reply ou list_reply)
-    # ══════════════════════════════════════════════════════════════════════════
     interactive = data.get('interactive') or data.get('buttonResponse') or {}
     btn_id = (
         (interactive.get('button_reply') or {}).get('id')
         or (interactive.get('list_reply') or {}).get('id')
         or interactive.get('selectedButtonId')
-        or interactive.get('selectedRowId')
-        or ''
+        or interactive.get('selectedRowId') or ''
     )
 
     if btn_id:
-        _processar_interactive(func, btn_id, estado_atual, ctx)
+        _processar_interactive(func, celular, btn_id, estado_atual, ctx)
         return
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -243,41 +239,29 @@ def _processar_mensagem(data: dict):
     resposta_upper = texto.upper().strip()
 
     # ══════════════════════════════════════════════════════════════════════════
-    # 4a. Estado CONVITE_AVALIACAO → fallback textual quando enviar_botoes
-    #     não suporta botões interativos (envia "1 - Sim / 2 - Não" em texto)
+    # INTERCETAR RESPOSTAS DE TEXTO PARA AVALIAÇÃO (Funciona p/ Clientes)
     # ══════════════════════════════════════════════════════════════════════════
-    if estado_atual == 'CONVITE_AVALIACAO':
-        token_id = ctx.get('token_id')
-        if resposta_upper in ('1', 'SIM', 'S'):
-            _processar_interactive(func, f'avaliacao_iniciar_{token_id}', estado_atual, ctx)
-        elif resposta_upper in ('2', 'NÃO', 'NAO', 'N'):
-            _processar_interactive(func, f'avaliacao_recusar_{token_id}', estado_atual, ctx)
-        else:
-            enviar_texto(
-                celular=func.celular,
-                mensagem='Responda *1* para iniciar a avaliação ou *2* para recusar.',
-                func_id=func.id,
-                tipo='bot_instrucao',
-            )
-        return
+    if active_token:
+        respostas_dadas = RespostaAvaliacao.query.filter_by(token_id=active_token.id).count()
+        
+        # Iniciar Avaliação (SIM / 1)
+        if respostas_dadas == 0 and resposta_upper in ('1', '2', 'SIM', 'NAO', 'NÃO', 'S', 'N'):
+            if resposta_upper in ('1', 'SIM', 'S'):
+                btn_sim = f'avaliacao_iniciar_{active_token.id}'
+            else:
+                btn_sim = f'avaliacao_recusar_{active_token.id}'
+            _processar_interactive(func, celular, btn_sim, estado_atual, ctx)
+            return
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # 4b. Estado AVALIACAO_QUESTAO_* → fallback numérico (1-5) quando botões
-    #     não são suportados pelo dispositivo do usuário
-    # ══════════════════════════════════════════════════════════════════════════
-    if estado_atual.startswith('AVALIACAO_QUESTAO_'):
+        # Responder Likert (1 a 5)
         if resposta_upper in ('1', '2', '3', '4', '5'):
-            nota = int(texto.strip())
-            questao_num = ctx.get('questao_atual', 1)
-            _processar_resposta_avaliacao(func, questao_num, nota, ctx)
-        else:
-            enviar_texto(
-                celular=func.celular,
-                mensagem='Por favor, responda com um número de *1 a 5*.\n1 — Nunca / 5 — Sempre',
-                func_id=func.id,
-                tipo='bot_instrucao',
-            )
-        return
+            nota = int(resposta_upper)
+            q_num = respostas_dadas + 1
+            btn_sim = f'avaliacao_likert_{active_token.id}_{q_num}_{nota}'
+            _processar_interactive(func, celular, btn_sim, estado_atual, ctx)
+            return
+            
+    if not func: return # Se chegou aqui e é cliente (texto livre sem sentido), ignora
 
     # ══════════════════════════════════════════════════════════════════════════
     # 4b. Estado AGUARDANDO_MINUTOS_ATRASO → recebe número
@@ -443,14 +427,59 @@ def _processar_mensagem(data: dict):
         )
 
 
-def _processar_interactive(func: 'Funcionario', btn_id: str, _estado: str, _ctx: dict):
-    """Processa clique em botão ou seleção de lista."""
-    from services.whatsapp_bot import enviar_texto, enviar_botoes
+# Mude a assinatura para receber o celular
+def _processar_interactive(func: 'Funcionario', celular: str, btn_id: str, _estado: str, _ctx: dict):
+    from services.whatsapp_bot import enviar_texto
+    from models import TokenAvaliacao, RespostaAvaliacao
+    from services.avaliacao_service import enviar_proxima_questao, PERGUNTAS
+
+    func_id = func.id if func else None
+
+    # --- LÓGICA STATELESS DA AVALIAÇÃO ---
+    if btn_id.startswith('avaliacao_iniciar_'):
+        token_id = int(btn_id.split('_')[-1])
+        enviar_proxima_questao(celular, func_id, token_id, 1)
+        return
+
+    elif btn_id.startswith('avaliacao_recusar_'):
+        enviar_texto(celular, "Sem problema! Agradecemos o seu tempo.", func_id=func_id)
+        return
+
+    elif btn_id.startswith('avaliacao_likert_'):
+        partes = btn_id.split('_')
+        token_id = int(partes[2])
+        q_num = int(partes[3])
+        nota = int(partes[4])
+
+        tk = TokenAvaliacao.query.get(token_id)
+        if not tk: return
+
+        # Salva resposta se ainda não existir
+        if not RespostaAvaliacao.query.filter_by(token_id=tk.id, questao_numero=q_num).first():
+            resp = RespostaAvaliacao(token_id=tk.id, questao_numero=q_num, nota=nota)
+            db.session.add(resp)
+            db.session.commit()
+
+        perguntas = PERGUNTAS.get(tk.tipo, [])
+        if q_num < len(perguntas):
+            enviar_proxima_questao(celular, func_id, tk.id, q_num + 1)
+        else:
+            tk.respondido = True
+            tk.respondido_em = datetime.utcnow()
+            db.session.commit()
+            enviar_texto(celular, "✅ Obrigado! A sua avaliação foi registada com sucesso e de forma anónima. 💪", func_id=func_id)
+        return
+
+    # Se a pessoa for cliente/líder externo, não pode aceder ao menu operacional
+    if not func: return 
+
+    from services.whatsapp_bot import enviar_botoes
     from services.notification_processor import _montar_escala
 
     nome = func.nome.split()[0]
 
     if btn_id == 'menu_escala':
+        from services.notification_processor import _montar_escala
         escala = _montar_escala(func, date.today())
         enviar_texto(
             celular=func.celular,
@@ -459,6 +488,7 @@ def _processar_interactive(func: 'Funcionario', btn_id: str, _estado: str, _ctx:
             tipo='escala_solicitada',
         )
         _set_state(func.id, 'IDLE')
+
 
     elif btn_id == 'menu_atraso':
         enviar_texto(
@@ -544,170 +574,10 @@ def _processar_interactive(func: 'Funcionario', btn_id: str, _estado: str, _ctx:
         )
         _set_state(func.id, 'IDLE')
 
-    # ── PRD v3.0: Avaliação 360° WhatsApp-first ──────────────────────────────
-    elif btn_id.startswith('avaliacao_iniciar_'):
-        try:
-            token_id = int(btn_id.replace('avaliacao_iniciar_', ''))
-            _iniciar_avaliacao_whatsapp(func, token_id)
-        except (ValueError, Exception):
-            _enviar_menu_principal(func)
-
-    elif btn_id.startswith('avaliacao_recusar_'):
-        enviar_texto(
-            celular=func.celular,
-            mensagem=(
-                f'Tudo bem, {nome}! 😊 Você ainda pode responder pelo link que enviamos. '
-                f'Obrigado pela compreensão!'
-            ),
-            func_id=func.id,
-            tipo='avaliacao_recusada',
-        )
-        _set_state(func.id, 'IDLE')
-
-    elif btn_id.startswith('avaliacao_likert_'):
-        # Formato: avaliacao_likert_{questao_num}_{nota}
-        try:
-            parts = btn_id.split('_')  # ['avaliacao', 'likert', questao_num, nota]
-            questao_num = int(parts[2])
-            nota = int(parts[3])
-            _processar_resposta_avaliacao(func, questao_num, nota, _ctx)
-        except (ValueError, IndexError):
-            enviar_texto(
-                celular=func.celular,
-                mensagem='Resposta inválida. Por favor, escolha uma opção de 1 a 5.',
-                func_id=func.id,
-                tipo='bot_erro',
-            )
-
     else:
         # ID desconhecido → reapresenta menu
+        from services.whatsapp_bot import enviar_menu_lista
         _enviar_menu_principal(func)
-
-
-def _iniciar_avaliacao_whatsapp(func: 'Funcionario', token_id: int):
-    """PRD v3.0: Inicia o fluxo conversacional de avaliação para o token indicado."""
-    from services.whatsapp_bot import enviar_texto
-    from services.avaliacao_service import enviar_proxima_questao
-    from models import TokenAvaliacao
-
-    # Garante que não há outra avaliação em andamento para este funcionário
-    estado_atual = _get_or_create_state(func.id).estado or 'IDLE'
-    if estado_atual.startswith('AVALIACAO_QUESTAO_'):
-        enviar_texto(
-            func.celular,
-            '⏳ Você já tem uma avaliação em andamento. Responda a pergunta atual antes de iniciar outra.',
-            func_id=func.id,
-            tipo='avaliacao_info',
-        )
-        return
-
-    tk = TokenAvaliacao.query.get(token_id)
-    if not tk:
-        enviar_texto(func.celular, 'Avaliação não encontrada.', func_id=func.id, tipo='avaliacao_erro')
-        return
-    if tk.respondido:
-        enviar_texto(func.celular, 'Esta avaliação já foi respondida. Obrigado! ✅', func_id=func.id, tipo='avaliacao_info')
-        return
-    if tk.expira_em and datetime.utcnow() > tk.expira_em:
-        enviar_texto(func.celular, 'O prazo para esta avaliação encerrou. Obrigado mesmo assim! 😊', func_id=func.id, tipo='avaliacao_expirada')
-        return
-
-    ctx = {'token_id': token_id, 'tipo': tk.tipo, 'questao_atual': 1, 'respostas': {}}
-    _set_state(func.id, 'AVALIACAO_QUESTAO_1', ctx)
-    enviar_proxima_questao(func.celular, func.id, tk.tipo, 1)
-
-
-def _processar_resposta_avaliacao(func: 'Funcionario', questao_num: int, nota: int, ctx: dict):
-    """PRD v3.0: Salva resposta Likert, avança para próxima questão ou finaliza."""
-    from extensions import db
-    from models import TokenAvaliacao, RespostaAvaliacao
-    from services.avaliacao_service import PERGUNTAS, enviar_proxima_questao
-    from services.whatsapp_bot import enviar_texto
-
-    token_id = ctx.get('token_id')
-    tipo = ctx.get('tipo')
-    respostas: dict = ctx.get('respostas', {})
-
-    if not token_id or not tipo:
-        _set_state(func.id, 'IDLE')
-        return
-
-    respostas[str(questao_num)] = nota
-    perguntas = PERGUNTAS.get(tipo, [])
-    total = len(perguntas)
-    proxima = questao_num + 1
-
-    if proxima <= total:
-        novo_ctx = {**ctx, 'questao_atual': proxima, 'respostas': respostas}
-        _set_state(func.id, f'AVALIACAO_QUESTAO_{proxima}', novo_ctx)
-        enviar_proxima_questao(func.celular, func.id, tipo, proxima)
-    else:
-        # Todas as questões respondidas — persiste no banco
-        tk = TokenAvaliacao.query.get(token_id)
-        if tk and not tk.respondido:
-            for q_str, nota_val in respostas.items():
-                db.session.add(RespostaAvaliacao(
-                    token_id=token_id,
-                    questao_numero=int(q_str),
-                    nota=nota_val,
-                ))
-            tk.respondido = True
-            tk.respondido_em = datetime.utcnow()
-            db.session.commit()
-
-        nome_curto = func.nome.split()[0]
-        enviar_texto(
-            celular=func.celular,
-            mensagem=(
-                f'✅ Obrigado, {nome_curto}! Suas respostas foram registradas com sucesso.\n\n'
-                f'Sua avaliação é anônima e contribui para a melhoria contínua da equipe. 💪'
-            ),
-            func_id=func.id,
-            tipo='avaliacao_concluida',
-        )
-        _set_state(func.id, 'IDLE')
-
-        # Verifica se há outros tokens pendentes do mesmo ciclo para este avaliador
-        _oferecer_proximo_token(func, token_id)
-
-
-def _oferecer_proximo_token(func: 'Funcionario', token_id_concluido: int):
-    """Após concluir uma avaliação, oferece o próximo token pendente do mesmo ciclo."""
-    from models import TokenAvaliacao
-    from services.avaliacao_service import TIPO_LABELS
-    from services.whatsapp_bot import enviar_botoes
-
-    tk_atual = TokenAvaliacao.query.get(token_id_concluido)
-    if not tk_atual:
-        return
-
-    proximo = (
-        TokenAvaliacao.query
-        .filter_by(ciclo_id=tk_atual.ciclo_id, avaliador_id=func.id, respondido=False)
-        .filter(TokenAvaliacao.id != token_id_concluido)
-        .filter(TokenAvaliacao.tipo != 'aluno_por_equipe')
-        .first()
-    )
-    if not proximo:
-        return
-
-    label = TIPO_LABELS.get(proximo.tipo, 'Avaliação')
-    from services.avaliacao_service import PERGUNTAS
-    n = len(PERGUNTAS.get(proximo.tipo, []))
-    enviar_botoes(
-        celular=func.celular,
-        texto=(
-            f'Você tem mais uma avaliação pendente: *{label}*.\n'
-            f'São apenas {n} pergunta(s). Deseja responder agora?'
-        ),
-        botoes=[
-            {'id': f'avaliacao_iniciar_{proximo.id}', 'title': '✅ Sim, continuar'},
-            {'id': f'avaliacao_recusar_{proximo.id}', 'title': '❌ Agora não'},
-        ],
-        func_id=func.id,
-        tipo='avaliacao_proximo_convite',
-    )
-
 
 def _processar_atestado(func: 'Funcionario', data: dict):
     """Baixa e salva o atestado enviado pelo funcionário."""

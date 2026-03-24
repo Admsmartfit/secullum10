@@ -534,13 +534,14 @@ def _url_base() -> str:
     return os.getenv('APP_URL_BASE', '').rstrip('/')
 
 
-def enviar_proxima_questao(celular: str, func_id: str, tipo: str, questao_num: int) -> bool:
-    """PRD v3.0: Envia questão N da avaliação como menu_lista (Likert 1-5).
-    Fallback automático para texto numerado se lista não suportada.
-    """
+def enviar_proxima_questao(celular: str, func_id: Optional[str], token_id: int, questao_num: int) -> bool:
+    from models import TokenAvaliacao
     from services.whatsapp_bot import enviar_menu_lista, enviar_texto
 
-    perguntas = PERGUNTAS.get(tipo, [])
+    tk = TokenAvaliacao.query.get(token_id)
+    if not tk: return False
+
+    perguntas = PERGUNTAS.get(tk.tipo, [])
     pergunta = next((p for p in perguntas if p['num'] == questao_num), None)
     if not pergunta:
         return False
@@ -551,28 +552,23 @@ def enviar_proxima_questao(celular: str, func_id: str, tipo: str, questao_num: i
     secoes = [{
         'title': 'Sua nota',
         'rows': [
-            {'id': f'avaliacao_likert_{questao_num}_1', 'title': '1 — Nunca',          'description': ''},
-            {'id': f'avaliacao_likert_{questao_num}_2', 'title': '2 — Raramente',       'description': ''},
-            {'id': f'avaliacao_likert_{questao_num}_3', 'title': '3 — Às vezes',        'description': ''},
-            {'id': f'avaliacao_likert_{questao_num}_4', 'title': '4 — Frequentemente',  'description': ''},
-            {'id': f'avaliacao_likert_{questao_num}_5', 'title': '5 — Sempre',          'description': ''},
+            {'id': f'avaliacao_likert_{tk.id}_{questao_num}_1', 'title': '1 — Nunca',          'description': ''},
+            {'id': f'avaliacao_likert_{tk.id}_{questao_num}_2', 'title': '2 — Raramente',       'description': ''},
+            {'id': f'avaliacao_likert_{tk.id}_{questao_num}_3', 'title': '3 — Às vezes',        'description': ''},
+            {'id': f'avaliacao_likert_{tk.id}_{questao_num}_4', 'title': '4 — Frequentemente',  'description': ''},
+            {'id': f'avaliacao_likert_{tk.id}_{questao_num}_5', 'title': '5 — Sempre',          'description': ''},
         ],
     }]
 
     ok = enviar_menu_lista(
-        celular=celular,
-        texto=texto_msg,
-        titulo_botao='Escolher nota',
-        secoes=secoes,
-        func_id=func_id,
-        tipo='avaliacao_questao',
+        celular=celular, texto=texto_msg, titulo_botao='Escolher nota',
+        secoes=secoes, func_id=func_id, tipo='avaliacao_questao'
     )
 
     if not ok:
         fallback = (
             f'*Pergunta {questao_num}/{total}*\n\n{pergunta["texto"]}\n\n'
-            f'Responda digitando um número:\n'
-            f'1 — Nunca\n2 — Raramente\n3 — Às vezes\n4 — Frequentemente\n5 — Sempre'
+            f'Responda digitando um número:\n1 — Nunca\n2 — Raramente\n3 — Às vezes\n4 — Frequentemente\n5 — Sempre'
         )
         enviar_texto(celular, fallback, func_id=func_id, tipo='avaliacao_questao_fallback')
 
