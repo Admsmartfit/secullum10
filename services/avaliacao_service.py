@@ -534,10 +534,59 @@ def _url_base() -> str:
     return os.getenv('APP_URL_BASE', '').rstrip('/')
 
 
+def enviar_proxima_questao(celular: str, func_id: str, tipo: str, questao_num: int) -> bool:
+    """PRD v3.0: Envia questão N da avaliação como menu_lista (Likert 1-5).
+    Fallback automático para texto numerado se lista não suportada.
+    """
+    from services.whatsapp_bot import enviar_menu_lista, enviar_texto
+
+    perguntas = PERGUNTAS.get(tipo, [])
+    pergunta = next((p for p in perguntas if p['num'] == questao_num), None)
+    if not pergunta:
+        return False
+
+    total = len(perguntas)
+    texto_msg = f'*Pergunta {questao_num}/{total}*\n\n{pergunta["texto"]}'
+
+    secoes = [{
+        'title': 'Sua nota',
+        'rows': [
+            {'id': f'avaliacao_likert_{questao_num}_1', 'title': '1 — Nunca',          'description': ''},
+            {'id': f'avaliacao_likert_{questao_num}_2', 'title': '2 — Raramente',       'description': ''},
+            {'id': f'avaliacao_likert_{questao_num}_3', 'title': '3 — Às vezes',        'description': ''},
+            {'id': f'avaliacao_likert_{questao_num}_4', 'title': '4 — Frequentemente',  'description': ''},
+            {'id': f'avaliacao_likert_{questao_num}_5', 'title': '5 — Sempre',          'description': ''},
+        ],
+    }]
+
+    ok = enviar_menu_lista(
+        celular=celular,
+        texto=texto_msg,
+        titulo_botao='Escolher nota',
+        secoes=secoes,
+        func_id=func_id,
+        tipo='avaliacao_questao',
+    )
+
+    if not ok:
+        fallback = (
+            f'*Pergunta {questao_num}/{total}*\n\n{pergunta["texto"]}\n\n'
+            f'Responda digitando um número:\n'
+            f'1 — Nunca\n2 — Raramente\n3 — Às vezes\n4 — Frequentemente\n5 — Sempre'
+        )
+        enviar_texto(celular, fallback, func_id=func_id, tipo='avaliacao_questao_fallback')
+
+    return True
+
+
 def enviar_convites_ciclo(ciclo_id: int) -> dict:
-    """Envia convites WhatsApp para todos os respondentes do ciclo."""
+    """PRD v3.0: Envia convites WhatsApp para todos os respondentes do ciclo.
+
+    - Funcionários: convite interativo via enviar_botoes (Sim/Não) — fluxo WhatsApp-first.
+    - Alunos: link web (alunos não possuem ChatState no sistema).
+    """
     from models import TokenAvaliacao, Funcionario
-    from services.whatsapp_bot import enviar_texto
+    from services.whatsapp_bot import enviar_texto, enviar_botoes
 
     tokens = TokenAvaliacao.query.filter_by(ciclo_id=ciclo_id, enviado_em=None).all()
     url_base = _url_base()
@@ -547,6 +596,7 @@ def enviar_convites_ciclo(ciclo_id: int) -> dict:
     for tk in tokens:
         celular = None
         nome = None
+        func_id = tk.avaliador_id
 
         if tk.tipo == 'aluno_por_equipe':
             celular = tk.avaliador_celular
@@ -560,10 +610,11 @@ def enviar_convites_ciclo(ciclo_id: int) -> dict:
         if not celular:
             continue
 
-        link = f'{url_base}/r/{tk.token}'
         label = TIPO_LABELS.get(tk.tipo, 'Avaliação')
 
         if tk.tipo == 'aluno_por_equipe':
+            # Alunos continuam com link web
+            link = f'{url_base}/r/{tk.token}'
             msg = (
                 f'Olá, {nome}! 👋\n'
                 f'Gostaríamos da sua opinião sobre o treino de hoje. '
@@ -572,16 +623,29 @@ def enviar_convites_ciclo(ciclo_id: int) -> dict:
                 f'👉 Clique para avaliar: {link}\n\n'
                 f'Disponível por 48h. Obrigado pela parceria! 💪'
             )
+            ok = enviar_texto(celular, msg, func_id=func_id, tipo='avaliacao')
         else:
-            msg = (
-                f'Olá, {nome}! 👋\n'
-                f'É hora da {label}. Leva menos de 2 minutos e é muito importante '
-                f'para o desenvolvimento da equipe.\n\n'
-                f'👉 Responder agora: {link}\n\n'
-                f'Disponível por 72h. Obrigado!'
+            # Funcionários: fluxo interativo via botões
+            primeiro_nome = nome.split()[0] if nome else nome
+            msg_convite = (
+                f'Olá, {primeiro_nome}! 👋\n\n'
+                f'Chegou a hora da *{label}*.\n'
+                f'São {len(PERGUNTAS.get(tk.tipo, []))} perguntas rápidas — '
+                f'leva menos de 2 minutos e é muito importante para o desenvolvimento da equipe.\n\n'
+                f'Deseja responder agora pelo WhatsApp?'
+            )
+            botoes = [
+                {'id': f'avaliacao_iniciar_{tk.id}', 'title': '✅ Sim, vamos lá'},
+                {'id': f'avaliacao_recusar_{tk.id}', 'title': '❌ Agora não'},
+            ]
+            ok = enviar_botoes(
+                celular=celular,
+                texto=msg_convite,
+                botoes=botoes,
+                func_id=func_id,
+                tipo='avaliacao_convite',
             )
 
-        ok = enviar_texto(celular, msg, func_id=tk.avaliador_id, tipo='avaliacao')
         if ok:
             from extensions import db
             tk.enviado_em = datetime.utcnow()

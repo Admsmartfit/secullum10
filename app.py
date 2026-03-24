@@ -177,6 +177,10 @@ def create_app():
             'task': 'tasks.avaliacao_fechar_expirados',
             'schedule': crontab(hour=0, minute=30),  # 00:30 — fecha ciclos com prazo vencido
         },
+        'avaliacao-timeout-12h': {
+            'task': 'tasks.avaliacao_timeout_12h',
+            'schedule': crontab(minute=0),  # a cada hora — reseta estados AVALIACAO_* parados há 12h
+        },
     }
     celery.conf.timezone = 'America/Sao_Paulo'
     app.extensions['celery'] = celery

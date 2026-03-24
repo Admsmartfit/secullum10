@@ -411,6 +411,28 @@ def register_tasks(celery):
 
         return {'fechados': fechados, 'reagendados': reagendados}
 
+    @celery.task(name='tasks.avaliacao_timeout_12h')
+    def avaliacao_timeout_12h():
+        """PRD v3.0 §5: Cancela estados AVALIACAO_* com mais de 12h sem interação."""
+        try:
+            with app.app_context():
+                from models import ChatState
+                from extensions import db
+                limite = datetime.utcnow() - timedelta(hours=12)
+                expirados = ChatState.query.filter(
+                    ChatState.estado.like('AVALIACAO_%'),
+                    ChatState.atualizado_em < limite,
+                ).all()
+                for s in expirados:
+                    s.estado = 'IDLE'
+                    s.contexto = '{}'
+                db.session.commit()
+                logger.info(f'[avaliacao] Timeout 12h: {len(expirados)} estado(s) resetado(s).')
+                return {'resetados': len(expirados)}
+        except Exception as e:
+            logger.error(f'[avaliacao] Erro no timeout 12h: {e}')
+            return {'erro': str(e)}
+
     return {
         'sync_secullum': celery.tasks.get('tasks.sync_secullum'),
         'verificar_incons': celery.tasks.get('tasks.verificar_inconsistencias_dia_anterior')

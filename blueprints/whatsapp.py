@@ -206,7 +206,25 @@ def _processar_mensagem(data: dict):
     resposta_upper = texto.upper().strip()
 
     # ══════════════════════════════════════════════════════════════════════════
-    # 4a. Estado AGUARDANDO_MINUTOS_ATRASO → recebe número
+    # 4a. Estado AVALIACAO_QUESTAO_* → fallback numérico (1-5) quando botões
+    #     não são suportados pelo dispositivo do usuário
+    # ══════════════════════════════════════════════════════════════════════════
+    if estado_atual.startswith('AVALIACAO_QUESTAO_'):
+        if resposta_upper in ('1', '2', '3', '4', '5'):
+            nota = int(texto.strip())
+            questao_num = ctx.get('questao_atual', 1)
+            _processar_resposta_avaliacao(func, questao_num, nota, ctx)
+        else:
+            enviar_texto(
+                celular=func.celular,
+                mensagem='Por favor, responda com um número de *1 a 5*.\n1 — Nunca / 5 — Sempre',
+                func_id=func.id,
+                tipo='bot_instrucao',
+            )
+        return
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # 4b. Estado AGUARDANDO_MINUTOS_ATRASO → recebe número
     # ══════════════════════════════════════════════════════════════════════════
     if estado_atual == 'AGUARDANDO_MINUTOS_ATRASO':
         try:
@@ -239,7 +257,7 @@ def _processar_mensagem(data: dict):
         return
 
     # ══════════════════════════════════════════════════════════════════════════
-    # 4b. Palavras-chave personalizadas (banco de dados) — verificadas antes do menu
+    # 4c. Palavras-chave personalizadas (banco de dados) — verificadas antes do menu
     # ══════════════════════════════════════════════════════════════════════════
     from models import BotKeywordRule
     from services.whatsapp_bot import enviar_msg as _enviar_msg
@@ -470,9 +488,117 @@ def _processar_interactive(func: 'Funcionario', btn_id: str, _estado: str, _ctx:
         )
         _set_state(func.id, 'IDLE')
 
+    # ── PRD v3.0: Avaliação 360° WhatsApp-first ──────────────────────────────
+    elif btn_id.startswith('avaliacao_iniciar_'):
+        try:
+            token_id = int(btn_id.replace('avaliacao_iniciar_', ''))
+            _iniciar_avaliacao_whatsapp(func, token_id)
+        except (ValueError, Exception):
+            _enviar_menu_principal(func)
+
+    elif btn_id.startswith('avaliacao_recusar_'):
+        enviar_texto(
+            celular=func.celular,
+            mensagem=(
+                f'Tudo bem, {nome}! 😊 Você ainda pode responder pelo link que enviamos. '
+                f'Obrigado pela compreensão!'
+            ),
+            func_id=func.id,
+            tipo='avaliacao_recusada',
+        )
+        _set_state(func.id, 'IDLE')
+
+    elif btn_id.startswith('avaliacao_likert_'):
+        # Formato: avaliacao_likert_{questao_num}_{nota}
+        try:
+            parts = btn_id.split('_')  # ['avaliacao', 'likert', questao_num, nota]
+            questao_num = int(parts[2])
+            nota = int(parts[3])
+            _processar_resposta_avaliacao(func, questao_num, nota, _ctx)
+        except (ValueError, IndexError):
+            enviar_texto(
+                celular=func.celular,
+                mensagem='Resposta inválida. Por favor, escolha uma opção de 1 a 5.',
+                func_id=func.id,
+                tipo='bot_erro',
+            )
+
     else:
         # ID desconhecido → reapresenta menu
         _enviar_menu_principal(func)
+
+
+def _iniciar_avaliacao_whatsapp(func: 'Funcionario', token_id: int):
+    """PRD v3.0: Inicia o fluxo conversacional de avaliação para o token indicado."""
+    from services.whatsapp_bot import enviar_texto
+    from services.avaliacao_service import enviar_proxima_questao
+    from models import TokenAvaliacao
+
+    tk = TokenAvaliacao.query.get(token_id)
+    if not tk:
+        enviar_texto(func.celular, 'Avaliação não encontrada.', func_id=func.id, tipo='avaliacao_erro')
+        return
+    if tk.respondido:
+        enviar_texto(func.celular, 'Esta avaliação já foi respondida. Obrigado! ✅', func_id=func.id, tipo='avaliacao_info')
+        return
+    if tk.expira_em and datetime.utcnow() > tk.expira_em:
+        enviar_texto(func.celular, 'O prazo para esta avaliação encerrou. Obrigado mesmo assim! 😊', func_id=func.id, tipo='avaliacao_expirada')
+        return
+
+    ctx = {'token_id': token_id, 'tipo': tk.tipo, 'questao_atual': 1, 'respostas': {}}
+    _set_state(func.id, 'AVALIACAO_QUESTAO_1', ctx)
+    enviar_proxima_questao(func.celular, func.id, tk.tipo, 1)
+
+
+def _processar_resposta_avaliacao(func: 'Funcionario', questao_num: int, nota: int, ctx: dict):
+    """PRD v3.0: Salva resposta Likert, avança para próxima questão ou finaliza."""
+    from extensions import db
+    from models import TokenAvaliacao, RespostaAvaliacao
+    from services.avaliacao_service import PERGUNTAS, enviar_proxima_questao
+    from services.whatsapp_bot import enviar_texto
+
+    token_id = ctx.get('token_id')
+    tipo = ctx.get('tipo')
+    respostas: dict = ctx.get('respostas', {})
+
+    if not token_id or not tipo:
+        _set_state(func.id, 'IDLE')
+        return
+
+    respostas[str(questao_num)] = nota
+    perguntas = PERGUNTAS.get(tipo, [])
+    total = len(perguntas)
+    proxima = questao_num + 1
+
+    if proxima <= total:
+        novo_ctx = {**ctx, 'questao_atual': proxima, 'respostas': respostas}
+        _set_state(func.id, f'AVALIACAO_QUESTAO_{proxima}', novo_ctx)
+        enviar_proxima_questao(func.celular, func.id, tipo, proxima)
+    else:
+        # Todas as questões respondidas — persiste no banco
+        tk = TokenAvaliacao.query.get(token_id)
+        if tk and not tk.respondido:
+            for q_str, nota_val in respostas.items():
+                db.session.add(RespostaAvaliacao(
+                    token_id=token_id,
+                    questao_numero=int(q_str),
+                    nota=nota_val,
+                ))
+            tk.respondido = True
+            tk.respondido_em = datetime.utcnow()
+            db.session.commit()
+
+        nome_curto = func.nome.split()[0]
+        enviar_texto(
+            celular=func.celular,
+            mensagem=(
+                f'✅ Obrigado, {nome_curto}! Suas respostas foram registradas com sucesso.\n\n'
+                f'Sua avaliação é anônima e contribui para a melhoria contínua da equipe. 💪'
+            ),
+            func_id=func.id,
+            tipo='avaliacao_concluida',
+        )
+        _set_state(func.id, 'IDLE')
 
 
 def _processar_atestado(func: 'Funcionario', data: dict):
