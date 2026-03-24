@@ -379,7 +379,7 @@ def teste():
         criar_ciclo, PERGUNTAS, TIPO_LABELS, _url_base, _novo_token
     )
     from models import TokenAvaliacao, Funcionario as Func
-    from services.whatsapp_bot import enviar_texto
+    from services.whatsapp_bot import enviar_texto, enviar_botoes
     from datetime import timedelta
 
     # 1. Cria ciclo de teste (marcado no status para fácil identificação)
@@ -421,7 +421,9 @@ def teste():
 
     db.session.commit()
 
-    # 3. Envia UMA mensagem de teste para o celular informado com todos os links
+    # 3. Envia convite de teste para o celular informado
+    #    - Funcionários: botões interativos (fluxo WhatsApp-first, igual ao envio real)
+    #    - Alunos: link web (alunos não têm ChatState)
     links_html = []
     enviados = 0
     for tk in tokens_criados:
@@ -429,12 +431,30 @@ def teste():
         label = TIPO_LABELS.get(tk.tipo, tk.tipo)
         links_html.append({'label': label, 'link': link, 'token': tk.token, 'tipo': tk.tipo})
 
-        msg = (
-            f'🧪 *[TESTE] {label}*\n\n'
-            f'Este é um envio de teste. Preencha o formulário para validar:\n'
-            f'👉 {link}'
-        )
-        ok = enviar_texto(celular_teste, msg, tipo='avaliacao_teste')
+        if tk.tipo == 'aluno_por_equipe':
+            msg = (
+                f'🧪 *[TESTE] {label}*\n\n'
+                f'Este é um envio de teste. Preencha o formulário para validar:\n'
+                f'👉 {link}'
+            )
+            ok = enviar_texto(celular_teste, msg, tipo='avaliacao_teste')
+        else:
+            n_perguntas = len(PERGUNTAS.get(tk.tipo, []))
+            msg_convite = (
+                f'🧪 *[TESTE] {label}*\n\n'
+                f'São {n_perguntas} perguntas rápidas pelo WhatsApp.\n'
+                f'Clique em *Sim* para iniciar o fluxo de teste.'
+            )
+            ok = enviar_botoes(
+                celular=celular_teste,
+                texto=msg_convite,
+                botoes=[
+                    {'id': f'avaliacao_iniciar_{tk.id}', 'title': '✅ Sim, vamos lá'},
+                    {'id': f'avaliacao_recusar_{tk.id}', 'title': '❌ Agora não'},
+                ],
+                tipo='avaliacao_teste_convite',
+            )
+
         if ok:
             tk.enviado_em = datetime.utcnow()
             enviados += 1
