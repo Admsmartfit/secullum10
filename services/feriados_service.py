@@ -140,94 +140,113 @@ def sincronizar_feriados(ano: int, usuario_id: int = None) -> Dict:
     """
     from models import Feriado, UnidadeLider, Configuracao
     from extensions import db
+    from flask import current_app
 
     criados = 0
     avisos: List[str] = []
 
-    # ── Nacionais via BrasilAPI ───────────────────────────────────────────────
-    nacionais = _brasil_api(ano)
-    if not nacionais:
-        nacionais = _holidays_python(ano)
-        avisos.append('BrasilAPI indisponível — fallback biblioteca holidays para nacionais.')
-
-    for item in nacionais:
-        try:
-            d = date.fromisoformat(item['data'])
-        except ValueError:
-            continue
-        if not Feriado.query.filter_by(data=d, tipo='nacional').first():
-            db.session.add(Feriado(
-                data=d, descricao=item['descricao'], tipo='nacional',
-                fonte='brasilapi', ativo=True, criado_por_id=usuario_id,
-            ))
-            criados += 1
-
-    # ── Token para Calendario.com.br ─────────────────────────────────────────
-    token = None
     try:
-        cfg = Configuracao.query.filter_by(chave='calendario_api_token').first()
-        if cfg:
-            token = cfg.valor
-    except Exception:
-        pass
+        # ── Nacionais via BrasilAPI ───────────────────────────────────────────────
+        nacionais = _brasil_api(ano)
+        if not nacionais:
+            nacionais = _holidays_python(ano)
+            avisos.append('BrasilAPI indisponível — fallback biblioteca holidays para nacionais.')
 
-    # ── Municipais por cada cidade/UF ativa em UnidadeLider ──────────────────
-    unidades = UnidadeLider.query.filter(
-        UnidadeLider.empresa_uf.isnot(None),
-        UnidadeLider.empresa_cidade.isnot(None),
-    ).all()
-
-    seen: set = set()
-    for u in unidades:
-        key = (u.empresa_uf, u.empresa_cidade)
-        if key in seen:
-            continue
-        seen.add(key)
-        ibge = getattr(u, 'cidade_ibge', None)
-
-        if token:
-            municipais = _calendario_api(ano, u.empresa_uf, u.empresa_cidade, token, ibge)
-            if not municipais:
-                municipais = _holidays_python(ano, u.empresa_uf)
-                if municipais:
-                    avisos.append(
-                        f'Calendario.com.br indisponível para {u.empresa_cidade}/{u.empresa_uf}'
-                        f' — fallback holidays (apenas estaduais).'
-                    )
-        else:
-            municipais = _holidays_python(ano, u.empresa_uf)
-            if municipais:
-                avisos.append(
-                    f'Token Calendario.com.br não configurado para {u.empresa_cidade}/{u.empresa_uf}'
-                    f' — usando holidays (apenas estaduais).'
-                )
-
-        for item in municipais:
+        # Converte usuario_id para int se possível (Flask-Login costuma retornar string)
+        u_id = None
+        if usuario_id is not None:
             try:
-                ds = item['data']
-                if '/' in ds:
-                    dd, mm, yy = ds.split('/')
-                    d = date(int(yy), int(mm), int(dd))
-                else:
-                    d = date.fromisoformat(ds)
+                u_id = int(usuario_id)
             except (ValueError, TypeError):
+                u_id = None
+
+        for item in nacionais:
+            try:
+                d = date.fromisoformat(item['data'])
+            except ValueError:
                 continue
-
-            tipo = item.get('tipo', 'municipal')
-            ibge_val = item.get('cidade_ibge') or ibge
-            uf_val = item.get('uf') or u.empresa_uf
-
-            if not Feriado.query.filter_by(
-                data=d, tipo=tipo, uf=uf_val, cidade_ibge=ibge_val
-            ).first():
+            if not Feriado.query.filter_by(data=d, tipo='nacional').first():
                 db.session.add(Feriado(
-                    data=d, descricao=item['descricao'], tipo=tipo,
-                    uf=uf_val, cidade_ibge=ibge_val,
-                    fonte='calendario' if token else 'holidays',
-                    ativo=True, criado_por_id=usuario_id,
+                    data=d, descricao=item['descricao'], tipo='nacional',
+                    fonte='brasilapi', ativo=True, criado_por_id=u_id,
                 ))
                 criados += 1
 
-    db.session.commit()
-    clear_cache()
+        # ── Token para Calendario.com.br ─────────────────────────────────────────
+        token = None
+        try:
+            cfg = Configuracao.query.filter_by(chave='calendario_api_token').first()
+            if cfg:
+                token = cfg.valor
+        except Exception:
+            pass
+
+        # ── Municipais por cada cidade/UF ativa em UnidadeLider ──────────────────
+        unidades = UnidadeLider.query.filter(
+            UnidadeLider.empresa_uf.isnot(None),
+            UnidadeLider.empresa_cidade.isnot(None),
+        ).all()
+
+        seen: set = set()
+        for u in unidades:
+            key = (u.empresa_uf, u.empresa_cidade)
+            if key in seen:
+                continue
+            seen.add(key)
+            ibge = getattr(u, 'cidade_ibge', None)
+
+            if token:
+                municipais = _calendario_api(ano, u.empresa_uf, u.empresa_cidade, token, ibge)
+                if not municipais:
+                    municipais = _holidays_python(ano, u.empresa_uf)
+                    if municipais:
+                        avisos.append(
+                            f'Calendario.com.br indisponível para {u.empresa_cidade}/{u.empresa_uf}'
+                            f' — fallback holidays (apenas estaduais).'
+                        )
+            else:
+                municipais = _holidays_python(ano, u.empresa_uf)
+                if municipais:
+                    avisos.append(
+                        f'Token Calendario.com.br não configurado para {u.empresa_cidade}/{u.empresa_uf}'
+                        f' — usando holidays (apenas estaduais).'
+                    )
+
+            for item in municipais:
+                try:
+                    ds = item['data']
+                    if '/' in ds:
+                        dd, mm, yy = ds.split('/')
+                        d = date(int(yy), int(mm), int(dd))
+                    else:
+                        d = date.fromisoformat(ds)
+                except (ValueError, TypeError):
+                    continue
+
+                tipo = item.get('tipo', 'municipal')
+                ibge_val = item.get('cidade_ibge') or ibge
+                uf_val = item.get('uf') or u.empresa_uf
+
+                if not Feriado.query.filter_by(
+                    data=d, tipo=tipo, uf=uf_val, cidade_ibge=ibge_val
+                ).first():
+                    db.session.add(Feriado(
+                        data=d, descricao=item['descricao'], tipo=tipo,
+                        uf=uf_val, cidade_ibge=ibge_val,
+                        fonte='calendario' if token else 'holidays',
+                        ativo=True, criado_por_id=u_id,
+                    ))
+                    criados += 1
+
+        db.session.commit()
+        clear_cache()
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        err_msg = f'ERRO em sincronizar_feriados: {str(e)}\n{traceback.format_exc()}'
+        print(err_msg)
+        if current_app:
+            current_app.logger.error(err_msg)
+        return {'criados': 0, 'avisos': [f'Erro crítico na sincronização: {str(e)}']}
+
     return {'criados': criados, 'avisos': avisos}
