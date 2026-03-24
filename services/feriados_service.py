@@ -146,6 +146,7 @@ def sincronizar_feriados(ano: int, usuario_id: int = None) -> Dict:
     avisos: List[str] = []
 
     try:
+        from sqlalchemy import or_, and_
         # ── Nacionais via BrasilAPI ───────────────────────────────────────────────
         nacionais = _brasil_api(ano)
         if not nacionais:
@@ -171,6 +172,7 @@ def sincronizar_feriados(ano: int, usuario_id: int = None) -> Dict:
                     fonte='brasilapi', ativo=True, criado_por_id=u_id,
                 ))
                 criados += 1
+        db.session.flush()
 
         # ── Token para Calendario.com.br ─────────────────────────────────────────
         token = None
@@ -181,62 +183,80 @@ def sincronizar_feriados(ano: int, usuario_id: int = None) -> Dict:
         except Exception:
             pass
 
-        # ── Municipais por cada cidade/UF ativa em UnidadeLider ──────────────────
+        # ── Municipais e Estaduais por cada cidade/UF ativa em UnidadeLider ────────
         unidades = UnidadeLider.query.filter(
             UnidadeLider.empresa_uf.isnot(None),
             UnidadeLider.empresa_cidade.isnot(None),
         ).all()
 
-        seen: set = set()
+        vistos_uf: set = set()
+        vistos_mun: set = set()
+
         for u in unidades:
-            key = (u.empresa_uf, u.empresa_cidade)
-            if key in seen:
-                continue
-            seen.add(key)
+            uf = u.empresa_uf
+            cidade = u.empresa_cidade
             ibge = getattr(u, 'cidade_ibge', None)
 
-            if token:
-                municipais = _calendario_api(ano, u.empresa_uf, u.empresa_cidade, token, ibge)
-                if not municipais:
-                    municipais = _holidays_python(ano, u.empresa_uf)
-                    if municipais:
-                        avisos.append(
-                            f'Calendario.com.br indisponível para {u.empresa_cidade}/{u.empresa_uf}'
-                            f' — fallback holidays (apenas estaduais).'
+            # --- Sincroniza ESTADUAL uma vez por UF ---
+            if uf not in vistos_uf:
+                vistos_uf.add(uf)
+                # Biblioteca holidays é mais precisa para estaduais brasileiros
+                estaduais = [h for h in _holidays_python(ano, uf) if h.get('tipo') == 'estadual']
+                for h in estaduais:
+                    try: d = date.fromisoformat(h['data'])
+                    except: continue
+                    # Evita duplicar se for feriado nacional (hierarquia)
+                    if not Feriado.query.filter_by(data=d, tipo='nacional').first():
+                        if not Feriado.query.filter_by(data=d, tipo='estadual', uf=uf).first():
+                            db.session.add(Feriado(
+                                data=d, descricao=h['descricao'], tipo='estadual',
+                                uf=uf, fonte='holidays', ativo=True, criado_por_id=u_id,
+                            ))
+                            criados += 1
+                db.session.flush()
+
+            # --- Sincroniza MUNICIPAL uma vez por Município (se tiver token) ---
+            if ibge and ibge not in vistos_mun and token:
+                vistos_mun.add(ibge)
+                municipais_raw = _calendario_api(ano, uf, cidade, token, ibge)
+                for item in municipais_raw:
+                    try:
+                        ds = item['data']
+                        if '/' in ds:
+                            dd, mm, yy = ds.split('/')
+                            d = date(int(yy), int(mm), int(dd))
+                        else: d = date.fromisoformat(ds)
+                    except: continue
+
+                    tipo = item.get('tipo', 'municipal')
+                    if tipo == 'nacional': continue
+                    if tipo == 'estadual':
+                        # Respeita hierarquia estadual também
+                        if not Feriado.query.filter_by(data=d, tipo='nacional').first():
+                            if not Feriado.query.filter_by(data=d, tipo='estadual', uf=uf).first():
+                                db.session.add(Feriado(
+                                    data=d, descricao=item['descricao'], tipo='estadual',
+                                    uf=uf, fonte='calendario', ativo=True, criado_por_id=u_id,
+                                ))
+                                criados += 1
+                        continue
+                    
+                    # Municipal puro
+                    if not Feriado.query.filter(
+                        Feriado.data == d,
+                        or_(
+                            Feriado.tipo == 'nacional',
+                            and_(Feriado.tipo == 'estadual', Feriado.uf == uf),
+                            and_(Feriado.tipo == 'municipal', Feriado.cidade_ibge == ibge)
                         )
-            else:
-                municipais = _holidays_python(ano, u.empresa_uf)
-                if municipais:
-                    avisos.append(
-                        f'Token Calendario.com.br não configurado para {u.empresa_cidade}/{u.empresa_uf}'
-                        f' — usando holidays (apenas estaduais).'
-                    )
-
-            for item in municipais:
-                try:
-                    ds = item['data']
-                    if '/' in ds:
-                        dd, mm, yy = ds.split('/')
-                        d = date(int(yy), int(mm), int(dd))
-                    else:
-                        d = date.fromisoformat(ds)
-                except (ValueError, TypeError):
-                    continue
-
-                tipo = item.get('tipo', 'municipal')
-                ibge_val = item.get('cidade_ibge') or ibge
-                uf_val = item.get('uf') or u.empresa_uf
-
-                if not Feriado.query.filter_by(
-                    data=d, tipo=tipo, uf=uf_val, cidade_ibge=ibge_val
-                ).first():
-                    db.session.add(Feriado(
-                        data=d, descricao=item['descricao'], tipo=tipo,
-                        uf=uf_val, cidade_ibge=ibge_val,
-                        fonte='calendario' if token else 'holidays',
-                        ativo=True, criado_por_id=u_id,
-                    ))
-                    criados += 1
+                    ).first():
+                        db.session.add(Feriado(
+                            data=d, descricao=item['descricao'], tipo='municipal',
+                            uf=uf, cidade_ibge=ibge, fonte='calendario',
+                            ativo=True, criado_por_id=u_id,
+                        ))
+                        criados += 1
+                db.session.flush()
 
         db.session.commit()
         clear_cache()
