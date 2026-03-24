@@ -717,13 +717,28 @@ def quadro_dados():
                 break
         domingo_counts[f.id] = count
 
-    # ── feriados do mês ───────────────────────────────────────────────────────
-    from models import Feriado
+    # ── feriados do mês (filtrados pela localidade do departamento) ───────────
+    from models import Feriado, UnidadeLider
+    from sqlalchemy import or_, and_
+    
+    # Busca localização do departamento para filtrar feriados
+    ul = UnidadeLider.query.filter_by(departamento=dept).first()
+    ibge_f = getattr(ul, 'cidade_ibge', None) if ul else None
+    uf_f   = getattr(ul, 'empresa_uf', None) if ul else None
+
+    conds = [Feriado.tipo == 'nacional']
+    if uf_f:
+        conds.append(and_(Feriado.tipo == 'estadual', Feriado.uf == uf_f))
+    if ibge_f:
+        conds.append(and_(Feriado.tipo == 'municipal', Feriado.cidade_ibge == ibge_f))
+
     feriados_mes = Feriado.query.filter(
         Feriado.data >= data_ini,
         Feriado.data <= data_fim,
         Feriado.ativo == True,
+        or_(*conds)
     ).all()
+    
     feriados = {
         f.data.day: {'descricao': f.descricao or '', 'tipo': f.tipo or ''}
         for f in feriados_mes

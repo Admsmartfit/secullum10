@@ -228,6 +228,12 @@ def _gerar_relatorio_inconsistencias(data_ref: date) -> str:
 
     # {nome: {'tipos': set, 'batidas': str, 'turno': str}}
     por_func = {}
+    from services.feriados_service import is_feriado
+    from models import UnidadeLider
+    
+    # Cache de unidades por departamento
+    unidades_map = {u.departamento: u for u in UnidadeLider.query.all()}
+
     for fid, lista in batidas_por_fid.items():
         if lista:
             func = lista[0].funcionario
@@ -245,11 +251,20 @@ def _gerar_relatorio_inconsistencias(data_ref: date) -> str:
 
     ausentes = []
     for aloc in alocacoes:
-        if aloc.funcionario and aloc.funcionario_id not in batidas_por_fid:
+        func = aloc.funcionario
+        if func and func.id not in batidas_por_fid:
+            # Verifica se é feriado para a unidade do funcionário
+            ul = unidades_map.get(func.departamento)
+            ibge = getattr(ul, 'cidade_ibge', None) if ul else None
+            uf   = getattr(ul, 'empresa_uf', None) if ul else None
+            
+            if is_feriado(data_ref, ibge, uf):
+                continue # Pula se for feriado na localidade dele
+
             turno_str = ''
             if aloc.turno:
                 turno_str = f'{aloc.turno.hora_inicio.strftime("%H:%M")}–{aloc.turno.hora_fim.strftime("%H:%M")}'
-            ausentes.append({'nome': aloc.funcionario.nome, 'turno': turno_str})
+            ausentes.append({'nome': func.nome, 'turno': turno_str})
 
     linhas = [f'📋 Inconsistências — {data_ref.strftime("%d/%m/%Y")}']
 
@@ -285,6 +300,9 @@ def _gerar_relatorio_por_departamento(data_ref: date) -> dict:
     """
     from blueprints.inconsistencias import _analisar_dia
     from models import UnidadeLider
+    
+    # Cache de unidades por departamento
+    unidades_map = {u.departamento: u for u in UnidadeLider.query.all()}
     
     batidas = (
         Batida.query
@@ -328,6 +346,14 @@ def _gerar_relatorio_por_departamento(data_ref: date) -> dict:
     for aloc in alocacoes:
         func = aloc.funcionario
         if func and func.id not in batidas_por_fid:
+            # Verifica feriado para ausência
+            ul = unidades_map.get(func.departamento)
+            ibge = getattr(ul, 'cidade_ibge', None) if ul else None
+            uf   = getattr(ul, 'empresa_uf', None) if ul else None
+            from services.feriados_service import is_feriado
+            if is_feriado(data_ref, ibge, uf):
+                continue
+
             dept = func.departamento or 'Sem Departamento'
             turno_str = ''
             if aloc.turno:
