@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}Resultado do Teste — Avaliação 360°{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">🧪 Teste Enviado — Ciclo #{{ ciclo.id }}</h1>
+    <a href="{{ url_for('avaliacoes.teste') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-redo me-1"></i>Novo Teste
+    </a>
+</div>
+
+{% if enviados > 0 %}
+<div class="alert alert-success">
+    <i class="fas fa-check-circle me-2"></i>
+    <strong>{{ enviados }} mensagem(ns) enviada(s)</strong> via WhatsApp para <code>{{ celular_teste }}</code>.
+</div>
+{% else %}
+<div class="alert alert-warning">
+    <i class="fas fa-exclamation-triangle me-2"></i>
+    Nenhuma mensagem foi enviada. Verifique se o WhatsApp está configurado
+    (<a href="/config/">Parâmetros do Sistema</a>).
+</div>
+{% endif %}
+
+<h5 class="mb-3">Links gerados — clique para testar diretamente no navegador</h5>
+<div class="row g-3">
+    {% set tipo_icons = {
+        'gerente_por_professor':  ('fas fa-user-tie',   'primary',   'Avaliação do Gerente'),
+        'professor_por_gerente':  ('fas fa-chalkboard-teacher', 'success', 'Avaliação do Professor'),
+        'par_por_professor':      ('fas fa-users',       'warning',   'Avaliação entre Pares'),
+        'aluno_por_equipe':       ('fas fa-dumbbell',    'info',      'Avaliação do Aluno'),
+    } %}
+    {% for item in links %}
+    {% set icon, cor, label = tipo_icons.get(item.tipo, ('fas fa-link', 'secondary', item.label)) %}
+    <div class="col-md-6">
+        <div class="card p-3 h-100 border-{{ cor }} border-opacity-50">
+            <div class="d-flex align-items-start gap-3">
+                <div class="rounded-circle bg-{{ cor }} bg-opacity-10 p-2 flex-shrink-0">
+                    <i class="{{ icon }} text-{{ cor }}"></i>
+                </div>
+                <div class="flex-grow-1 min-w-0">
+                    <div class="fw-semibold small mb-1">{{ label }}</div>
+                    <div class="text-muted" style="font-size:.75rem; word-break:break-all">
+                        {% if url_base %}{{ url_base }}{% endif %}/r/{{ item.token }}
+                    </div>
+                    <div class="d-flex gap-2 mt-2 flex-wrap">
+                        <a href="/r/{{ item.token }}" target="_blank"
+                           class="btn btn-{{ cor }} btn-sm">
+                            <i class="fas fa-external-link-alt me-1"></i>Abrir formulário
+                        </a>
+                        <button class="btn btn-outline-secondary btn-sm"
+                                onclick="copiar('{% if url_base %}{{ url_base }}{% endif %}/r/{{ item.token }}', this)">
+                            <i class="fas fa-copy me-1"></i>Copiar link
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="card p-3 mt-4 border-0" style="background:#fff3cd">
+    <i class="fas fa-trash-alt me-2 text-warning"></i>
+    <small>O ciclo de teste <strong>#{{ ciclo.id }}</strong> está marcado como <code>teste</code> e
+    <strong>não gera bonificação nem aparece nos relatórios de RH</strong>.
+    Você pode excluí-lo via painel de ciclos quando quiser.</small>
+</div>
+
+<script>
+function copiar(url, btn) {
+    navigator.clipboard.writeText(url).then(() => {
+        btn.innerHTML = '<i class="fas fa-check me-1"></i>Copiado!';
+        btn.classList.replace('btn-outline-secondary', 'btn-success');
+        setTimeout(() => {
+            btn.innerHTML = '<i class="fas fa-copy me-1"></i>Copiar link';
+            btn.classList.replace('btn-success', 'btn-outline-secondary');
+        }, 2500);
+    });
+}
+</script>
+{% endblock %}

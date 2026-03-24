@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}Modo Teste — Avaliação 360°{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <a href="{{ url_for('avaliacoes.index') }}" class="text-muted small me-2">
+            <i class="fas fa-arrow-left me-1"></i>Ciclos
+        </a>
+        <h1 class="h3 mb-0 d-inline">🧪 Modo Teste — Avaliação 360°</h1>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ cat }} alert-dismissible fade show">
+    {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card p-4">
+            <div class="alert alert-info mb-4">
+                <i class="fas fa-info-circle me-2"></i>
+                O sistema criará um ciclo de teste e enviará <strong>todos os 4 tipos de formulário</strong>
+                para o número informado via WhatsApp. Nenhum funcionário real será notificado.
+            </div>
+
+            <form method="POST">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Número WhatsApp para receber o teste</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fab fa-whatsapp text-success"></i></span>
+                        <input type="text" name="celular_teste" class="form-control"
+                               placeholder="5511999999999  (com DDI + DDD)" required
+                               pattern="[0-9]+" title="Somente dígitos">
+                    </div>
+                    <div class="form-text">Formato: <code>55</code> + DDD + número. Ex: <code>5511987654321</code></div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-semibold">Departamento <span class="text-muted fw-normal">(opcional)</span></label>
+                    <select name="departamento" class="form-select">
+                        <option value="">— Todos os departamentos —</option>
+                        {% for dep in departamentos %}
+                        <option value="{{ dep }}">{{ dep }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Usado para buscar funcionários reais como referência nos tokens.</div>
+                </div>
+
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-warning fw-semibold" id="btnTeste">
+                        <i class="fas fa-paper-plane me-2"></i>Gerar Ciclo de Teste e Enviar
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="card p-4 mt-3 border-0" style="background:#f8f9fa">
+            <h6 class="fw-semibold mb-2">O que será enviado?</h6>
+            <ul class="small text-muted mb-0">
+                <li><strong>Avaliação do Gerente</strong> — formulário que professor responderia sobre o gerente</li>
+                <li><strong>Avaliação do Professor</strong> — formulário que gerente responderia sobre o professor</li>
+                <li><strong>Avaliação entre Pares</strong> — formulário de colega avaliando colega</li>
+                <li><strong>Avaliação do Aluno</strong> — formulário de aluno avaliando a equipe</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+document.querySelector('form').addEventListener('submit', function() {
+    const btn = document.getElementById('btnTeste');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enviando...';
+});
+</script>
+{% endblock %}

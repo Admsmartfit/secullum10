@@ -131,11 +131,21 @@
                 <td class="text-center">
                     {{ bonus_map.get(sc.nivel, '—') if sc.conclusivo else '—' }}
                 </td>
-                <td>
+                <td class="d-flex gap-1 align-items-center">
                     <a href="{{ url_for('avaliacoes.relatorio_pdf', ciclo_id=ciclo.id, func_id=sc.funcionario_id) }}"
-                       class="btn btn-link btn-sm p-0 me-1" title="Baixar PDF">
+                       class="btn btn-link btn-sm p-0" title="Baixar PDF">
                         <i class="fas fa-file-pdf text-danger"></i>
                     </a>
+                    {% if sc.token_resultado %}
+                    <a href="/r/resultado/{{ sc.token_resultado }}" target="_blank"
+                       class="btn btn-link btn-sm p-0" title="Ver resultado do colaborador">
+                        <i class="fas fa-external-link-alt text-primary"></i>
+                    </a>
+                    <button class="btn btn-link btn-sm p-0" title="Copiar link do resultado"
+                            onclick="copiarLink('/r/resultado/{{ sc.token_resultado }}', this)">
+                        <i class="fas fa-copy text-secondary"></i>
+                    </button>
+                    {% endif %}
                     {% if sc.nivel %}
                     <button class="btn btn-link btn-sm p-0"
                             data-bs-toggle="modal" data-bs-target="#feedbackModal"
@@ -194,6 +204,15 @@ document.getElementById('feedbackModal').addEventListener('show.bs.modal', e => 
     badge.textContent  = btn.dataset.nivel.charAt(0).toUpperCase() + btn.dataset.nivel.slice(1);
     badge.className = 'badge fs-6 bg-' + (corMap[btn.dataset.nivel] || 'secondary');
 });
+
+function copiarLink(path, btn) {
+    const url = window.location.origin + path;
+    navigator.clipboard.writeText(url).then(() => {
+        const icon = btn.querySelector('i');
+        icon.className = 'fas fa-check text-success';
+        setTimeout(() => icon.className = 'fas fa-copy text-secondary', 2000);
+    });
+}
 
 function recalcular() {
     fetch('{{ url_for("avaliacoes.recalcular", ciclo_id=ciclo.id) }}', {method:'POST'})

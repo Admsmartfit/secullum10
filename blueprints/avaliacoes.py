@@ -343,6 +343,114 @@ def relatorio_pdf(ciclo_id, func_id):
     return response
 
 
+# ── Modo Teste ───────────────────────────────────────────────────────────────
+
+@avaliacoes_bp.route('/teste', methods=['GET', 'POST'])
+@login_required
+def teste():
+    """Gera um ciclo de teste e redireciona TODOS os envios WhatsApp para
+    um único número informado. Útil para validar formulários e mensagens
+    antes do disparo real.
+    """
+    if not _admin_ou_gerente():
+        flash('Acesso restrito.', 'danger')
+        return redirect(url_for('avaliacoes.index'))
+
+    deps = db.session.query(Funcionario.departamento).filter(
+        Funcionario.ativo == True, Funcionario.departamento.isnot(None)
+    ).distinct().all()
+    departamentos = sorted({d[0] for d in deps if d[0]})
+
+    if request.method == 'GET':
+        return render_template('avaliacoes/teste.html', departamentos=departamentos)
+
+    # ── POST: executa o teste ──────────────────────────────────────────────────
+    celular_teste = request.form.get('celular_teste', '').strip()
+    departamento  = request.form.get('departamento') or None
+
+    if not celular_teste:
+        flash('Informe o número de telefone para teste.', 'danger')
+        return render_template('avaliacoes/teste.html', departamentos=departamentos)
+
+    # Normaliza: remove tudo que não for dígito
+    celular_teste = ''.join(c for c in celular_teste if c.isdigit())
+
+    from services.avaliacao_service import (
+        criar_ciclo, PERGUNTAS, TIPO_LABELS, _url_base, _novo_token
+    )
+    from models import TokenAvaliacao, Funcionario as Func
+    from services.whatsapp_bot import enviar_texto
+    from datetime import timedelta
+
+    # 1. Cria ciclo de teste (marcado no status para fácil identificação)
+    ciclo = criar_ciclo(departamento=departamento)
+    ciclo.status = 'teste'
+    db.session.commit()
+
+    url_base = _url_base()
+    expira_em = datetime.utcnow() + timedelta(hours=72)
+
+    # 2. Busca um professor e um gerente reais para montar tokens representativos
+    from models import Usuario
+    emails_gerentes = {u.email for u in Usuario.query.filter_by(nivel_acesso='gerente').all()}
+    q = Func.query.filter_by(ativo=True)
+    if departamento:
+        q = q.filter_by(departamento=departamento)
+    todos = q.limit(10).all()
+    gerentes    = [f for f in todos if f.email and f.email in emails_gerentes]
+    professores = [f for f in todos if f not in gerentes]
+
+    avaliado_ref  = professores[0] if professores else (todos[0] if todos else None)
+    avaliador_ref = gerentes[0] if gerentes else (todos[1] if len(todos) > 1 else avaliado_ref)
+
+    tokens_criados = []
+    for tipo in TIPO_LABELS:
+        t = TokenAvaliacao(
+            ciclo_id=ciclo.id,
+            token=_novo_token(),
+            tipo=tipo,
+            avaliado_id=avaliado_ref.id if avaliado_ref else None,
+            avaliador_id=avaliador_ref.id if avaliador_ref else None,
+            avaliador_nome='Aluno Teste' if tipo == 'aluno_por_equipe' else None,
+            avaliador_celular=celular_teste if tipo == 'aluno_por_equipe' else None,
+            expira_em=expira_em,
+        )
+        db.session.add(t)
+        db.session.flush()
+        tokens_criados.append(t)
+
+    db.session.commit()
+
+    # 3. Envia UMA mensagem de teste para o celular informado com todos os links
+    links_html = []
+    enviados = 0
+    for tk in tokens_criados:
+        link = f'{url_base}/r/{tk.token}' if url_base else f'/r/{tk.token}'
+        label = TIPO_LABELS.get(tk.tipo, tk.tipo)
+        links_html.append({'label': label, 'link': link, 'token': tk.token, 'tipo': tk.tipo})
+
+        msg = (
+            f'🧪 *[TESTE] {label}*\n\n'
+            f'Este é um envio de teste. Preencha o formulário para validar:\n'
+            f'👉 {link}'
+        )
+        ok = enviar_texto(celular_teste, msg, tipo='avaliacao_teste')
+        if ok:
+            tk.enviado_em = datetime.utcnow()
+            enviados += 1
+
+    db.session.commit()
+
+    return render_template(
+        'avaliacoes/teste_resultado.html',
+        ciclo=ciclo,
+        celular_teste=celular_teste,
+        links=links_html,
+        enviados=enviados,
+        url_base=url_base,
+    )
+
+
 # ── API JSON ──────────────────────────────────────────────────────────────────
 
 @avaliacoes_bp.route('/api/ciclos')

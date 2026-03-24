@@ -4,9 +4,12 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 mb-0">💎 Avaliação 360° Aleatória</h1>
     {% if current_user.nivel_acesso in ('administrador', 'gerente') %}
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 flex-wrap">
         <a href="{{ url_for('avaliacoes.alunos') }}" class="btn btn-outline-secondary btn-sm">
             <i class="fas fa-users me-1"></i>Base de Alunos
+        </a>
+        <a href="{{ url_for('avaliacoes.teste') }}" class="btn btn-outline-warning btn-sm">
+            <i class="fas fa-flask me-1"></i>Modo Teste
         </a>
         <a href="{{ url_for('avaliacoes.novo_ciclo') }}" class="btn btn-primary btn-sm">
             <i class="fas fa-plus me-1"></i>Novo Ciclo
