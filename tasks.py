@@ -222,18 +222,6 @@ def register_tasks(celery):
         logger.info(f'[regras_evento_sync] {result}')
         return result
 
-    @celery.task(name='tasks.sync_horarios_e_alocacoes')
-    def sync_horarios_e_alocacoes():
-        from datetime import date, timedelta
-        from services.sync_service import sync_horarios, sync_alocacoes
-        ok_h, msg_h = sync_horarios()
-        logger.info(f'[sync_horarios] {msg_h}')
-        data_ini = date.today().strftime('%Y-%m-%d')
-        data_fim = (date.today() + timedelta(days=60)).strftime('%Y-%m-%d')
-        ok_a, msg_a = sync_alocacoes(data_ini, data_fim)
-        logger.info(f'[sync_alocacoes] {msg_a}')
-        return {'horarios': msg_h, 'alocacoes': msg_a}
-
     @celery.task(name='tasks.alerta_documentos_vencendo')
     def alerta_documentos_vencendo():
         import os

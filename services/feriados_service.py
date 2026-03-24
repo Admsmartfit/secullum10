@@ -177,15 +177,19 @@ def sincronizar_feriados(ano: int, usuario_id: int = None) -> Dict:
 
         if token:
             municipais = _calendario_api(ano, u.empresa_uf, u.empresa_cidade, token, ibge)
+            if not municipais:
+                municipais = _holidays_python(ano, u.empresa_uf)
+                if municipais:
+                    avisos.append(
+                        f'Calendario.com.br indisponível para {u.empresa_cidade}/{u.empresa_uf}'
+                        f' — fallback holidays (apenas estaduais).'
+                    )
         else:
-            municipais = []
-
-        if not municipais:
             municipais = _holidays_python(ano, u.empresa_uf)
             if municipais:
                 avisos.append(
-                    f'Calendario.com.br indisponível para {u.empresa_cidade}/{u.empresa_uf}'
-                    f' — fallback holidays (apenas estaduais).'
+                    f'Token Calendario.com.br não configurado para {u.empresa_cidade}/{u.empresa_uf}'
+                    f' — usando holidays (apenas estaduais).'
                 )
 
         for item in municipais:

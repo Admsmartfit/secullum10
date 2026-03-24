@@ -1,7 +1,7 @@
-from datetime import date, timedelta
+from datetime import date
 from flask import Blueprint, redirect, url_for, flash, request, jsonify
 from flask_login import login_required
-from services.sync_service import sync_funcionarios, sync_batidas, sync_horarios, sync_alocacoes, sync_batidas_incremental
+from services.sync_service import sync_funcionarios, sync_batidas, sync_batidas_incremental
 
 api_sync_bp = Blueprint('api_sync', __name__)
 
@@ -70,23 +70,3 @@ def redirect_batidas(rest=''):
     return redirect(target, 301)
 
 
-@api_sync_bp.route('/sync-horarios')
-@login_required
-def sync_horarios_route():
-    """Sincroniza horários e gera alocações para os próximos 60 dias."""
-    ok_h, msg_h = sync_horarios()
-    data_ini = date.today().strftime('%Y-%m-%d')
-    data_fim = (date.today() + timedelta(days=60)).strftime('%Y-%m-%d')
-    ok_a, msg_a = sync_alocacoes(data_ini, data_fim)
-    flash(f'Horários: {msg_h} | Alocações: {msg_a}', 'success' if ok_h and ok_a else 'warning')
-    return redirect(url_for('escalas.index'))
-
-
-@api_sync_bp.route('/api/sync-horarios')
-@login_required
-def api_sync_horarios():
-    ok_h, msg_h = sync_horarios()
-    data_ini = date.today().strftime('%Y-%m-%d')
-    data_fim = (date.today() + timedelta(days=60)).strftime('%Y-%m-%d')
-    ok_a, msg_a = sync_alocacoes(data_ini, data_fim)
-    return jsonify({'horarios': msg_h, 'alocacoes': msg_a, 'success': ok_h and ok_a})

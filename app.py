@@ -115,11 +115,7 @@ def create_app():
             'task': 'tasks.processar_regras_agendadas',
             'schedule': crontab(minute=5),  # :05 de cada hora
         },
-        'sync-horarios-daily': {
-            'task': 'tasks.sync_horarios_e_alocacoes',
-            'schedule': crontab(hour=2, minute=0),  # 02:00 – gera alocações dos próximos 60 dias
-        },
-        'sync-batidas-rapida': {
+'sync-batidas-rapida': {
             'task': 'tasks.sync_batidas_rapida',
             'schedule': crontab(minute='*'),  # verifica a cada minuto, self-limita por config
         },

@@ -409,6 +409,16 @@
         'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
     const DIAS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
+    /** Returns '#fff' or '#1f2937' depending on background luminance */
+    function textColorForBg(hex) {
+        const c = hex.replace('#', '');
+        const r = parseInt(c.length === 3 ? c[0]+c[0] : c.slice(0,2), 16);
+        const g = parseInt(c.length === 3 ? c[1]+c[1] : c.slice(2,4), 16);
+        const b = parseInt(c.length === 3 ? c[2]+c[2] : c.slice(4,6), 16);
+        const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
+        return lum > 0.55 ? '#1f2937' : '#fff';
+    }
+
     let mesAtual = new Date();
     mesAtual.setDate(1);
     { const p = '{{ mes_atual }}'.split('-'); mesAtual = new Date(+p[0], +p[1] - 1, 1); }
@@ -476,6 +486,7 @@
             d.dataset.color     = t.color;
             d.dataset.tipoTurno = t.tipo;
             d.style.background  = t.color;
+            d.style.color = textColorForBg(t.color);
             d.title = `${t.nome} — ${t.hora}`;
             d.innerHTML = (t.tipo ? `<span style="opacity:.8;font-size:.6rem;">[${t.tipo}]</span> ` : '') + esc(t.nome);
             body.appendChild(d);
@@ -581,7 +592,7 @@
         let b = cell.querySelector('.turno-badge');
         if (!b) { b = document.createElement('div'); cell.appendChild(b); }
         b.className = 'turno-badge pendente';
-        b.style.background = color; b.style.color = '#fff';
+        b.style.background = color; b.style.color = textColorForBg(color);
         b.textContent = turnoNome; b.title = turnoNome;
         b.draggable = true;
         b.dataset.turnoId = turnoId; b.dataset.turnoNome = turnoNome;
@@ -668,7 +679,7 @@
                 const wCls = aloc.warning ? ' clt-warn' : '';
                 const style = aloc.base
                     ? `background:transparent;color:${aloc.color};border:2px solid ${aloc.color};`
-                    : `background:${aloc.color};color:#fff;`;
+                    : `background:${aloc.color};color:${textColorForBg(aloc.color)};`;
                 const tip = esc(aloc.turno) + (aloc.base ? ' (horário base)' : '');
                 const tipoHtml = aloc.tipo_turno
                     ? `<span class="tipo-badge">${esc(aloc.tipo_turno)}</span>`
