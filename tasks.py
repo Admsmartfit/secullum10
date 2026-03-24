@@ -315,6 +315,76 @@ def register_tasks(celery):
     def task_verificar_inconsistencias():
         return verificar_inconsistencias_dia_anterior()
 
+    # ── Avaliação 360° ─────────────────────────────────────────────────────────
+
+    @celery.task(name='tasks.avaliacao_verificar_disparo')
+    def avaliacao_verificar_disparo():
+        """Verifica diariamente se algum ciclo pendente deve ser disparado hoje.
+        Cria e dispara automaticamente quando `proximo_ciclo_data` == hoje.
+        """
+        from models import CicloAvaliacao
+        from services.avaliacao_service import criar_ciclo, gerar_tokens_ciclo, enviar_convites_ciclo
+
+        hoje = date.today()
+        # Encontra o último ciclo de cada departamento com proximo_ciclo_data == hoje
+        ciclos_trigger = CicloAvaliacao.query.filter(
+            CicloAvaliacao.proximo_ciclo_data == hoje,
+            CicloAvaliacao.status.in_(['fechado', 'inconclusivo']),
+        ).all()
+
+        disparados = 0
+        for ciclo_anterior in ciclos_trigger:
+            try:
+                novo = criar_ciclo(departamento=ciclo_anterior.departamento)
+                gerar_tokens_ciclo(novo.id)
+                enviar_convites_ciclo(novo.id)
+                disparados += 1
+                logger.info(f'[avaliacao] Ciclo automático {novo.id} criado (departamento={novo.departamento})')
+            except Exception as e:
+                logger.error(f'[avaliacao] Erro ao disparar ciclo automático: {e}')
+
+        return {'disparados': disparados, 'data': str(hoje)}
+
+    @celery.task(name='tasks.avaliacao_lembretes')
+    def avaliacao_lembretes():
+        """Envia lembretes de 24h e 48h para tokens não respondidos."""
+        from models import CicloAvaliacao
+        from services.avaliacao_service import enviar_lembretes
+
+        ciclos_ativos = CicloAvaliacao.query.filter_by(status='ativo').all()
+        total_24h = total_48h = 0
+
+        for ciclo in ciclos_ativos:
+            r24 = enviar_lembretes(ciclo.id, horas=24)
+            r48 = enviar_lembretes(ciclo.id, horas=48)
+            total_24h += r24.get('lembretes_enviados', 0)
+            total_48h += r48.get('lembretes_enviados', 0)
+
+        return {'lembretes_24h': total_24h, 'lembretes_48h': total_48h}
+
+    @celery.task(name='tasks.avaliacao_fechar_expirados')
+    def avaliacao_fechar_expirados():
+        """Fecha automaticamente ciclos cujo prazo de coleta expirou."""
+        from models import CicloAvaliacao
+        from services.avaliacao_service import fechar_ciclo
+
+        hoje = date.today()
+        ciclos = CicloAvaliacao.query.filter(
+            CicloAvaliacao.status == 'ativo',
+            CicloAvaliacao.data_fim_coleta < hoje,
+        ).all()
+
+        fechados = 0
+        for ciclo in ciclos:
+            try:
+                fechar_ciclo(ciclo.id)
+                fechados += 1
+                logger.info(f'[avaliacao] Ciclo {ciclo.id} fechado automaticamente.')
+            except Exception as e:
+                logger.error(f'[avaliacao] Erro ao fechar ciclo {ciclo.id}: {e}')
+
+        return {'fechados': fechados}
+
     return {
         'sync_secullum': celery.tasks.get('tasks.sync_secullum'),
         'verificar_incons': celery.tasks.get('tasks.verificar_inconsistencias_dia_anterior')

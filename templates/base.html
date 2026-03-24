@@ -542,6 +542,11 @@
                     <i class="fas fa-file-pdf"></i>
                     <span class="nav-link-text">Relatórios Técnicos</span>
                 </a>
+                <a class="nav-link {% if request.path.startswith('/avaliacoes') %}active{% endif %}"
+                   href="/avaliacoes/" data-tooltip="Avaliação 360°">
+                    <i class="fas fa-star-half-alt"></i>
+                    <span class="nav-link-text">Avaliação 360°</span>
+                </a>
                 <a class="nav-link {% if request.path.startswith('/marketplace') %}active{% endif %}"
                    href="/marketplace/" data-tooltip="Marketplace / Trocas">
                     <i class="fas fa-random"></i>

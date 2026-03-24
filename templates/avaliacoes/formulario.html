@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ titulo }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body { background: #f8f9fa; }
+        .card { border-radius: 16px; border: none; box-shadow: 0 2px 16px rgba(0,0,0,.08); }
+        .likert-btn { cursor: pointer; }
+        .likert-btn input[type=radio] { display: none; }
+        .likert-btn label {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 4px; padding: 10px 14px; border-radius: 10px;
+            border: 2px solid #dee2e6; cursor: pointer; transition: all .2s;
+            font-size: .85rem; color: #6c757d; min-width: 52px;
+        }
+        .likert-btn input:checked + label {
+            border-color: #0d6efd; background: #0d6efd; color: #fff;
+        }
+        .likert-btn label:hover { border-color: #86b7fe; }
+        .scale-legend { display: flex; justify-content: space-between; font-size: .75rem; color: #adb5bd; }
+    </style>
+</head>
+<body>
+<div class="container py-5" style="max-width:640px">
+    <div class="text-center mb-4">
+        <div class="fs-1">💎</div>
+        <h4 class="fw-bold">{{ titulo }}</h4>
+        {% if avaliado %}
+        <p class="text-muted mb-0">Avaliando: <strong>{{ avaliado.nome }}</strong></p>
+        {% endif %}
+        <p class="text-muted small mt-1">Escala: 1 = Nunca &nbsp;·&nbsp; 5 = Sempre</p>
+    </div>
+
+    <div class="card p-4">
+        <form method="POST" action="/r/{{ token }}/submit" id="formAvaliacao">
+            {% for p in perguntas %}
+            <div class="mb-4 pb-3 {{ 'border-bottom' if not loop.last }}">
+                <p class="fw-semibold mb-3">{{ loop.index }}. {{ p.texto }}</p>
+                <div class="d-flex gap-2 justify-content-center flex-wrap">
+                    {% for nota in [1,2,3,4,5] %}
+                    <div class="likert-btn">
+                        <input type="radio" name="q{{ p.num }}" id="q{{ p.num }}_{{ nota }}" value="{{ nota }}" required>
+                        <label for="q{{ p.num }}_{{ nota }}">
+                            <span class="fw-bold">{{ nota }}</span>
+                            <span>{{ ['Nunca','Raramente','Às vezes','Frequente','Sempre'][nota-1] }}</span>
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+
+            <div class="d-grid mt-4">
+                <button type="submit" class="btn btn-primary btn-lg" id="btnEnviar">
+                    Enviar Avaliação
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <p class="text-center text-muted small mt-3">
+        🔒 Suas respostas são anônimas e confidenciais.
+    </p>
+</div>
+
+<script>
+document.getElementById('formAvaliacao').addEventListener('submit', function() {
+    document.getElementById('btnEnviar').disabled = true;
+    document.getElementById('btnEnviar').textContent = 'Enviando...';
+});
+</script>
+</body>
+</html>

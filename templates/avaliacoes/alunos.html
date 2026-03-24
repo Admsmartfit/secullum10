@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+{% block title %}Base de Alunos — Avaliação 360°{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">Base de Alunos</h1>
+    <a href="{{ url_for('avaliacoes.index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left me-1"></i>Voltar
+    </a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ cat }} alert-dismissible fade show">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+  {% endfor %}
+{% endwith %}
+
+<div class="row g-4 mb-4">
+    <!-- Adicionar individual -->
+    <div class="col-md-5">
+        <div class="card p-4">
+            <h6 class="mb-3">Adicionar Aluno</h6>
+            <form method="POST" action="{{ url_for('avaliacoes.adicionar_aluno') }}">
+                <div class="mb-2">
+                    <input type="text" name="nome" class="form-control form-control-sm" placeholder="Nome completo" required>
+                </div>
+                <div class="mb-2">
+                    <input type="text" name="celular" class="form-control form-control-sm" placeholder="Celular (ex: 5511999999999)" required>
+                </div>
+                <div class="mb-2">
+                    <input type="text" name="horario" class="form-control form-control-sm" placeholder="Horário (ex: 06:00-08:00)">
+                </div>
+                <div class="mb-3">
+                    <select name="departamento" class="form-select form-select-sm">
+                        <option value="">— Departamento (opcional) —</option>
+                        {% for dep in departamentos %}
+                        <option value="{{ dep }}">{{ dep }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button class="btn btn-primary btn-sm w-100">
+                    <i class="fas fa-plus me-1"></i>Adicionar
+                </button>
+            </form>
+        </div>
+    </div>
+    <!-- Importar CSV -->
+    <div class="col-md-7">
+        <div class="card p-4">
+            <h6 class="mb-3">Importar via CSV / Excel</h6>
+            <p class="small text-muted mb-3">
+                Arquivo CSV com colunas: <code>NOME</code>, <code>CELULAR</code>, <code>HORARIO</code> (opcional).
+            </p>
+            <form method="POST" action="{{ url_for('avaliacoes.importar_alunos') }}" enctype="multipart/form-data">
+                <div class="mb-2">
+                    <input type="file" name="arquivo" class="form-control form-control-sm" accept=".csv,.txt" required>
+                </div>
+                <div class="mb-3">
+                    <select name="departamento" class="form-select form-select-sm">
+                        <option value="">— Departamento (opcional) —</option>
+                        {% for dep in departamentos %}
+                        <option value="{{ dep }}">{{ dep }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button class="btn btn-outline-primary btn-sm">
+                    <i class="fas fa-upload me-1"></i>Importar
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Lista de alunos -->
+{% if alunos %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Nome</th>
+                    <th>Celular</th>
+                    <th>Horário</th>
+                    <th>Departamento</th>
+                    <th class="text-center">Ativo</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for aluno in alunos %}
+            <tr class="{{ '' if aluno.ativo else 'table-secondary text-muted' }}">
+                <td>{{ aluno.nome }}</td>
+                <td>{{ aluno.celular }}</td>
+                <td>{{ aluno.horario or '—' }}</td>
+                <td>{{ aluno.departamento or '—' }}</td>
+                <td class="text-center">
+                    <button class="btn btn-link btn-sm p-0" onclick="toggleAluno({{ aluno.id }}, this)">
+                        <i class="fas fa-{{ 'check-circle text-success' if aluno.ativo else 'times-circle text-danger' }}"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card p-4 text-center text-muted">
+    <p class="mb-0">Nenhum aluno cadastrado. Adicione individualmente ou importe via CSV.</p>
+</div>
+{% endif %}
+
+<script>
+function toggleAluno(id, btn) {
+    fetch(`/avaliacoes/alunos/${id}/toggle`, {method: 'POST'})
+        .then(r => r.json())
+        .then(d => {
+            const icon = btn.querySelector('i');
+            icon.className = d.ativo ? 'fas fa-check-circle text-success' : 'fas fa-times-circle text-danger';
+            btn.closest('tr').className = d.ativo ? '' : 'table-secondary text-muted';
+        });
+}
+</script>
+{% endblock %}

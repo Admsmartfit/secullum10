@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}Novo Ciclo de Avaliação{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">Novo Ciclo 360°</h1>
+    <a href="{{ url_for('avaliacoes.index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left me-1"></i>Voltar
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card p-4">
+            <p class="text-muted small mb-4">
+                O sistema criará os tokens para gerente, professores, pares e alunos cadastrados.
+                A data do próximo ciclo será sorteada automaticamente entre 30 e 90 dias.
+            </p>
+            <form method="POST">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Departamento <span class="text-muted fw-normal">(opcional)</span></label>
+                    <select name="departamento" class="form-select">
+                        <option value="">— Todos os departamentos —</option>
+                        {% for dep in departamentos %}
+                        <option value="{{ dep }}">{{ dep }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Deixe em branco para incluir todos os funcionários ativos.</div>
+                </div>
+                <div class="d-grid mt-4">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-play me-2"></i>Criar Ciclo e Gerar Tokens
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

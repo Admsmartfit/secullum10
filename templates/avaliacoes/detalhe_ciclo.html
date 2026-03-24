@@ -1,0 +1,205 @@
+{% extends 'base.html' %}
+{% block title %}Ciclo #{{ ciclo.id }} — Avaliação 360°{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <a href="{{ url_for('avaliacoes.index') }}" class="text-muted small me-2"><i class="fas fa-arrow-left me-1"></i>Ciclos</a>
+        <h1 class="h3 mb-0 d-inline">Ciclo #{{ ciclo.id }}</h1>
+        {% if ciclo.departamento %}<span class="text-muted ms-2">— {{ ciclo.departamento }}</span>{% endif %}
+    </div>
+    {% set badge = {'ativo': 'success', 'fechado': 'secondary', 'inconclusivo': 'warning', 'cancelado': 'danger'} %}
+    <span class="badge bg-{{ badge.get(ciclo.status, 'secondary') }} fs-6">{{ ciclo.status.upper() }}</span>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ cat }} alert-dismissible fade show">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+  {% endfor %}
+{% endwith %}
+
+<!-- Resumo -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card p-3 text-center">
+            <div class="text-muted small mb-1">Período de Coleta</div>
+            <strong>{{ ciclo.data_inicio.strftime('%d/%m') }} → {{ ciclo.data_fim_coleta.strftime('%d/%m/%Y') }}</strong>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card p-3 text-center">
+            <div class="text-muted small mb-1">Respostas</div>
+            <strong>{{ respondidos }} / {{ total_tokens }}</strong>
+            <div class="progress mt-2" style="height:6px">
+                <div class="progress-bar bg-success" style="width:{{ taxa_resposta }}%"></div>
+            </div>
+            <div class="text-muted small mt-1">{{ taxa_resposta }}% de taxa</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card p-3 text-center">
+            <div class="text-muted small mb-1">Próximo Ciclo</div>
+            <strong>{{ ciclo.proximo_ciclo_data.strftime('%d/%m/%Y') if ciclo.proximo_ciclo_data else '—' }}</strong>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card p-3 text-center">
+            <div class="text-muted small mb-1">Scores Calculados</div>
+            <strong>{{ scores | length }}</strong>
+        </div>
+    </div>
+</div>
+
+<!-- Ações -->
+{% if ciclo.status == 'ativo' and current_user.nivel_acesso in ('administrador', 'gerente') %}
+<div class="d-flex gap-2 mb-4 flex-wrap">
+    <form method="POST" action="{{ url_for('avaliacoes.enviar_convites', ciclo_id=ciclo.id) }}">
+        <button class="btn btn-outline-primary btn-sm">
+            <i class="fab fa-whatsapp me-1"></i>Enviar/Reenviar Convites WhatsApp
+        </button>
+    </form>
+    <button class="btn btn-outline-info btn-sm" onclick="recalcular()">
+        <i class="fas fa-calculator me-1"></i>Recalcular Scores
+    </button>
+    <form method="POST" action="{{ url_for('avaliacoes.fechar', ciclo_id=ciclo.id) }}"
+          onsubmit="return confirm('Fechar este ciclo? O cálculo final será executado.')">
+        <button class="btn btn-danger btn-sm">
+            <i class="fas fa-lock me-1"></i>Fechar Ciclo
+        </button>
+    </form>
+</div>
+{% endif %}
+
+<!-- Tabela de scores -->
+{% if scores %}
+<h5 class="mb-3">Scores por Colaborador</h5>
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Colaborador</th>
+                    <th class="text-center">Gerente (40%)</th>
+                    <th class="text-center">Alunos (30%)</th>
+                    <th class="text-center">Pares (30%)</th>
+                    <th class="text-center">Score Global</th>
+                    <th class="text-center">Nível</th>
+                    <th class="text-center">Bônus</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for sc in scores %}
+            {% set emoji_map = {'diamante': '💎', 'ouro': '🥇', 'prata': '🥈', 'bronze': '🥉'} %}
+            {% set bonus_map = {'diamante': '15%', 'ouro': '10%', 'prata': '5%', 'bronze': '—'} %}
+            {% set cor_map = {'diamante': 'primary', 'ouro': 'warning', 'prata': 'secondary', 'bronze': 'danger'} %}
+            <tr>
+                <td>{{ sc.funcionario.nome if sc.funcionario else sc.funcionario_id }}</td>
+                <td class="text-center">
+                    {% if sc.score_gerente is not none %}
+                        {{ '%.1f'|format(sc.score_gerente) }}
+                        <span class="text-muted small">({{ sc.respostas_gerente }})</span>
+                    {% else %}—{% endif %}
+                </td>
+                <td class="text-center">
+                    {% if sc.score_alunos is not none %}
+                        {{ '%.1f'|format(sc.score_alunos) }}
+                        <span class="text-muted small">({{ sc.respostas_alunos }})</span>
+                    {% else %}—{% endif %}
+                </td>
+                <td class="text-center">
+                    {% if sc.score_pares is not none %}
+                        {{ '%.1f'|format(sc.score_pares) }}
+                        <span class="text-muted small">({{ sc.respostas_pares }})</span>
+                    {% else %}—{% endif %}
+                </td>
+                <td class="text-center fw-bold">
+                    {% if sc.score_global is not none %}
+                        <span class="{{ 'text-success' if sc.score_global >= 85 else ('text-warning' if sc.score_global >= 75 else 'text-danger') }}">
+                            {{ '%.1f'|format(sc.score_global) }}
+                        </span>
+                    {% else %}—{% endif %}
+                </td>
+                <td class="text-center">
+                    {% if sc.nivel %}
+                        <span class="badge bg-{{ cor_map.get(sc.nivel, 'secondary') }}">
+                            {{ emoji_map.get(sc.nivel, '') }} {{ sc.nivel.title() }}
+                        </span>
+                    {% elif not sc.conclusivo %}
+                        <span class="badge bg-light text-muted">Inconclusivo</span>
+                    {% else %}—{% endif %}
+                </td>
+                <td class="text-center">
+                    {{ bonus_map.get(sc.nivel, '—') if sc.conclusivo else '—' }}
+                </td>
+                <td>
+                    <a href="{{ url_for('avaliacoes.relatorio_pdf', ciclo_id=ciclo.id, func_id=sc.funcionario_id) }}"
+                       class="btn btn-link btn-sm p-0 me-1" title="Baixar PDF">
+                        <i class="fas fa-file-pdf text-danger"></i>
+                    </a>
+                    {% if sc.nivel %}
+                    <button class="btn btn-link btn-sm p-0"
+                            data-bs-toggle="modal" data-bs-target="#feedbackModal"
+                            data-nome="{{ sc.funcionario.nome if sc.funcionario else sc.funcionario_id }}"
+                            data-nivel="{{ sc.nivel }}"
+                            data-score="{{ '%.1f'|format(sc.score_global) }}"
+                            data-msg="{{ mensagens_feedback.get(sc.nivel, '') }}"
+                            data-acao="{{ acoes_rh.get(sc.nivel, '') }}">
+                        <i class="fas fa-comment-dots"></i>
+                    </button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card p-4 text-center text-muted">
+    <p class="mb-0">Nenhum score calculado ainda. Clique em "Recalcular Scores" após as respostas chegarem.</p>
+</div>
+{% endif %}
+
+<!-- Modal feedback -->
+<div class="modal fade" id="feedbackModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Feedback — <span id="fbNome"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <span class="badge fs-6" id="fbBadge"></span>
+                    <span class="ms-2 fw-bold" id="fbScore"></span>
+                </div>
+                <p id="fbMsg" class="mb-3"></p>
+                <div class="alert alert-info mb-0">
+                    <strong>Ação do RH:</strong> <span id="fbAcao"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const corMap = {diamante:'primary', ouro:'warning', prata:'secondary', bronze:'danger'};
+document.getElementById('feedbackModal').addEventListener('show.bs.modal', e => {
+    const btn = e.relatedTarget;
+    document.getElementById('fbNome').textContent  = btn.dataset.nome;
+    document.getElementById('fbScore').textContent = 'Score: ' + btn.dataset.score;
+    document.getElementById('fbMsg').textContent   = btn.dataset.msg;
+    document.getElementById('fbAcao').textContent  = btn.dataset.acao;
+    const badge = document.getElementById('fbBadge');
+    badge.textContent  = btn.dataset.nivel.charAt(0).toUpperCase() + btn.dataset.nivel.slice(1);
+    badge.className = 'badge fs-6 bg-' + (corMap[btn.dataset.nivel] || 'secondary');
+});
+
+function recalcular() {
+    fetch('{{ url_for("avaliacoes.recalcular", ciclo_id=ciclo.id) }}', {method:'POST'})
+        .then(r => r.json())
+        .then(d => { alert('Scores recalculados: ' + d.scores.length + ' funcionários.'); location.reload(); })
+        .catch(() => alert('Erro ao recalcular.'));
+}
+</script>
+{% endblock %}

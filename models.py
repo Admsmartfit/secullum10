@@ -661,3 +661,135 @@ class Feriado(db.Model):
 
     def __repr__(self):
         return f'<Feriado {self.data} [{self.tipo}]: {self.descricao}>'
+
+
+# ── Módulo Avaliação 360° ──────────────────────────────────────────────────────
+
+class CicloAvaliacao(db.Model):
+    """Um ciclo completo de avaliação 360° para um departamento/unidade.
+    Disparado aleatoriamente entre 30 e 90 dias após o ciclo anterior.
+    """
+    __tablename__ = 'ciclos_avaliacao'
+    id = db.Column(db.Integer, primary_key=True)
+    departamento = db.Column(db.String(200), nullable=True)   # None = todos os departamentos
+    data_inicio = db.Column(db.Date, nullable=False)
+    data_fim_coleta = db.Column(db.Date, nullable=False)      # data_inicio + 3 dias (72h)
+    # ativo | fechado | inconclusivo | cancelado
+    status = db.Column(db.String(20), default='ativo', nullable=False)
+    proximo_ciclo_data = db.Column(db.Date, nullable=True)    # próxima data sorteada
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    fechado_em = db.Column(db.DateTime, nullable=True)
+
+    tokens = db.relationship('TokenAvaliacao', backref='ciclo', lazy=True,
+                             cascade='all, delete-orphan')
+    scores = db.relationship('ScoreAvaliacao', backref='ciclo', lazy=True,
+                              cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<CicloAvaliacao {self.id} [{self.status}] {self.data_inicio}>'
+
+
+class AlunoUnidade(db.Model):
+    """Base de alunos importados via CSV/Excel para disparo de pesquisa.
+    Cada aluno está vinculado a um horário/turno de frequência.
+    """
+    __tablename__ = 'alunos_unidade'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(200), nullable=False)
+    celular = db.Column(db.String(20), nullable=False)
+    # horário de frequência — deve coincidir com o turno do professor avaliado
+    horario = db.Column(db.String(100), nullable=True)
+    departamento = db.Column(db.String(200), nullable=True)
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<AlunoUnidade {self.nome} [{self.horario}]>'
+
+
+class TokenAvaliacao(db.Model):
+    """Token único para cada respondente em um ciclo.
+    O link /r/<token> é enviado via WhatsApp e não exige login.
+    """
+    __tablename__ = 'tokens_avaliacao'
+    id = db.Column(db.Integer, primary_key=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey('ciclos_avaliacao.id'), nullable=False)
+    token = db.Column(db.String(64), unique=True, nullable=False)  # UUID hex
+
+    # Tipo de avaliação:
+    # professor_por_gerente  → gerente avalia o professor   (peso 40%)
+    # par_por_professor      → colega avalia o professor    (peso 30%)
+    # aluno_por_equipe       → aluno avalia a equipe        (peso 30%)
+    # gerente_por_professor  → professor avalia o gerente   (score separado)
+    tipo = db.Column(db.String(30), nullable=False)
+
+    # Quem está sendo avaliado (funcionario_id)
+    avaliado_id = db.Column(db.String(50), db.ForeignKey('funcionarios.id'), nullable=True)
+    # Quem responde (funcionario_id — null para alunos)
+    avaliador_id = db.Column(db.String(50), db.ForeignKey('funcionarios.id'), nullable=True)
+
+    # Dados do avaliador quando não é funcionário (aluno)
+    avaliador_nome = db.Column(db.String(200), nullable=True)
+    avaliador_celular = db.Column(db.String(20), nullable=True)
+
+    respondido = db.Column(db.Boolean, default=False)
+    respondido_em = db.Column(db.DateTime, nullable=True)
+    enviado_em = db.Column(db.DateTime, nullable=True)
+    lembrete_24h_em = db.Column(db.DateTime, nullable=True)
+    lembrete_48h_em = db.Column(db.DateTime, nullable=True)
+    expira_em = db.Column(db.DateTime, nullable=True)  # data_inicio + 72h
+
+    avaliado = db.relationship('Funcionario', foreign_keys=[avaliado_id],
+                               backref=db.backref('tokens_recebidos', lazy=True))
+    avaliador = db.relationship('Funcionario', foreign_keys=[avaliador_id],
+                                backref=db.backref('tokens_enviados', lazy=True))
+    respostas = db.relationship('RespostaAvaliacao', backref='token_obj', lazy=True,
+                                cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<TokenAvaliacao {self.token[:8]}… tipo={self.tipo} respondido={self.respondido}>'
+
+
+class RespostaAvaliacao(db.Model):
+    """Resposta individual de uma questão (nota Likert 1-5) por token."""
+    __tablename__ = 'respostas_avaliacao'
+    id = db.Column(db.Integer, primary_key=True)
+    token_id = db.Column(db.Integer, db.ForeignKey('tokens_avaliacao.id'), nullable=False)
+    questao_numero = db.Column(db.Integer, nullable=False)  # 1 a 4 conforme banco de perguntas
+    nota = db.Column(db.Integer, nullable=False)            # 1 (Nunca) a 5 (Sempre)
+
+    def __repr__(self):
+        return f'<Resposta token={self.token_id} q={self.questao_numero} nota={self.nota}>'
+
+
+class ScoreAvaliacao(db.Model):
+    """Score consolidado por funcionário em um ciclo.
+    Calculado ao fechar o ciclo ou via endpoint manual.
+    """
+    __tablename__ = 'scores_avaliacao'
+    id = db.Column(db.Integer, primary_key=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey('ciclos_avaliacao.id'), nullable=False)
+    funcionario_id = db.Column(db.String(50), db.ForeignKey('funcionarios.id'), nullable=False)
+
+    # Scores por perspectiva (0–100 normalizados)
+    score_gerente = db.Column(db.Float, nullable=True)   # visão superior  — peso 40%
+    score_alunos  = db.Column(db.Float, nullable=True)   # visão externa   — peso 30%
+    score_pares   = db.Column(db.Float, nullable=True)   # visão lateral   — peso 30%
+    score_global  = db.Column(db.Float, nullable=True)   # média ponderada 0–100
+
+    # Nível: bronze | prata | ouro | diamante
+    nivel = db.Column(db.String(20), nullable=True)
+
+    # Contadores de respostas recebidas
+    respostas_gerente = db.Column(db.Integer, default=0)
+    respostas_alunos  = db.Column(db.Integer, default=0)
+    respostas_pares   = db.Column(db.Integer, default=0)
+
+    # False quando amostra de alunos < 10 → ciclo inconclusivo para este professor
+    conclusivo = db.Column(db.Boolean, default=True)
+    calculado_em = db.Column(db.DateTime, nullable=True)
+
+    funcionario = db.relationship('Funcionario', backref=db.backref('scores_avaliacao', lazy=True))
+
+    def __repr__(self):
+        return f'<ScoreAvaliacao ciclo={self.ciclo_id} func={self.funcionario_id} global={self.score_global}>'

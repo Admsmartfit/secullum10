@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}Avaliação 360°{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">💎 Avaliação 360° Aleatória</h1>
+    {% if current_user.nivel_acesso in ('administrador', 'gerente') %}
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('avaliacoes.alunos') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-users me-1"></i>Base de Alunos
+        </a>
+        <a href="{{ url_for('avaliacoes.novo_ciclo') }}" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus me-1"></i>Novo Ciclo
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ cat }} alert-dismissible fade show" role="alert">
+    {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+{% if not ciclos %}
+<div class="card p-5 text-center text-muted">
+    <i class="fas fa-chart-bar fa-3x mb-3 opacity-50"></i>
+    <p class="mb-1 fw-semibold">Nenhum ciclo de avaliação cadastrado.</p>
+    <p class="small">Crie um novo ciclo para iniciar o processo 360°.</p>
+</div>
+{% else %}
+<div class="row g-3">
+    {% for ciclo in ciclos %}
+    {% set badge = {'ativo': 'success', 'fechado': 'secondary', 'inconclusivo': 'warning', 'cancelado': 'danger'} %}
+    <div class="col-12">
+        <div class="card p-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <span class="badge bg-{{ badge.get(ciclo.status, 'secondary') }} me-2">{{ ciclo.status.upper() }}</span>
+                    <strong>Ciclo #{{ ciclo.id }}</strong>
+                    {% if ciclo.departamento %}<span class="text-muted ms-2 small">— {{ ciclo.departamento }}</span>{% endif %}
+                </div>
+                <div class="small text-muted">
+                    <i class="fas fa-calendar me-1"></i>{{ ciclo.data_inicio.strftime('%d/%m/%Y') }}
+                    → {{ ciclo.data_fim_coleta.strftime('%d/%m/%Y') }}
+                    {% if ciclo.proximo_ciclo_data %}
+                    <span class="ms-3"><i class="fas fa-clock me-1"></i>Próximo: {{ ciclo.proximo_ciclo_data.strftime('%d/%m/%Y') }}</span>
+                    {% endif %}
+                </div>
+                <a href="{{ url_for('avaliacoes.detalhe_ciclo', ciclo_id=ciclo.id) }}" class="btn btn-outline-primary btn-sm">
+                    <i class="fas fa-eye me-1"></i>Ver Detalhes
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

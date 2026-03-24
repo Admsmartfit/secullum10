@@ -36,6 +36,12 @@ def _run_safe_migrations(db):
         "ALTER TABLE unidades_lideres ADD COLUMN IF NOT EXISTS empresa_cep VARCHAR(15)",
         "ALTER TABLE unidades_lideres ADD COLUMN IF NOT EXISTS cidade_ibge VARCHAR(10)",
         "ALTER TABLE unidades_lideres ADD COLUMN IF NOT EXISTS experiencia_dias INTEGER DEFAULT 45",
+        # Avaliação 360° — novas colunas adicionadas em v2
+        "ALTER TABLE ciclos_avaliacao ADD COLUMN IF NOT EXISTS departamento VARCHAR(200)",
+        "ALTER TABLE ciclos_avaliacao ADD COLUMN IF NOT EXISTS proximo_ciclo_data DATE",
+        "ALTER TABLE tokens_avaliacao ADD COLUMN IF NOT EXISTS lembrete_24h_em TIMESTAMP",
+        "ALTER TABLE tokens_avaliacao ADD COLUMN IF NOT EXISTS lembrete_48h_em TIMESTAMP",
+        "ALTER TABLE tokens_avaliacao ADD COLUMN IF NOT EXISTS expira_em TIMESTAMP",
     ]
     for sql in migrations:
         try:
@@ -84,6 +90,7 @@ def create_app():
     from blueprints.notificacoes import notificacoes_bp
     from blueprints.trocas import trocas_bp
     from blueprints.inconsistencias import inconsistencias_bp
+    from blueprints.avaliacoes import avaliacoes_bp, avaliacoes_public_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -100,6 +107,8 @@ def create_app():
     app.register_blueprint(notificacoes_bp)
     app.register_blueprint(trocas_bp)
     app.register_blueprint(inconsistencias_bp)
+    app.register_blueprint(avaliacoes_bp)
+    app.register_blueprint(avaliacoes_public_bp)
 
     # ── Celery beat schedule ───────────────────────────────────────────────────
     from extensions import make_celery
@@ -152,6 +161,19 @@ def create_app():
         'sincronizar-feriados-anuais': {
             'task': 'tasks.sincronizar_feriados_anuais',
             'schedule': crontab(hour=6, minute=0),  # 06:00 diário; self-limita para 1º de Janeiro
+        },
+        # Avaliação 360°
+        'avaliacao-verificar-disparo-daily': {
+            'task': 'tasks.avaliacao_verificar_disparo',
+            'schedule': crontab(hour=8, minute=30),  # 08:30 — verifica ciclos para disparar hoje
+        },
+        'avaliacao-lembretes-hourly': {
+            'task': 'tasks.avaliacao_lembretes',
+            'schedule': crontab(minute=20),  # :20 de cada hora — envia lembretes 24h/48h pendentes
+        },
+        'avaliacao-fechar-expirados-daily': {
+            'task': 'tasks.avaliacao_fechar_expirados',
+            'schedule': crontab(hour=0, minute=30),  # 00:30 — fecha ciclos com prazo vencido
         },
     }
     celery.conf.timezone = 'America/Sao_Paulo'
