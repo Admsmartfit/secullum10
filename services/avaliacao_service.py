@@ -649,6 +649,22 @@ def enviar_convites_ciclo(ciclo_id: int) -> dict:
         if ok:
             from extensions import db
             tk.enviado_em = datetime.utcnow()
+            # Set CONVITE_AVALIACAO state so text fallback ("1"/"2") works
+            if func_id:
+                try:
+                    import json as _json
+                    from models import ChatState
+                    state = ChatState.query.filter_by(funcionario_id=func_id).first()
+                    if not state:
+                        state = ChatState(funcionario_id=func_id, estado='CONVITE_AVALIACAO',
+                                          contexto=_json.dumps({'token_id': tk.id}))
+                        db.session.add(state)
+                    else:
+                        state.estado = 'CONVITE_AVALIACAO'
+                        state.contexto = _json.dumps({'token_id': tk.id})
+                        state.atualizado_em = datetime.utcnow()
+                except Exception:
+                    pass
             db.session.commit()
             enviados += 1
         else:

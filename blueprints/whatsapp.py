@@ -243,7 +243,26 @@ def _processar_mensagem(data: dict):
     resposta_upper = texto.upper().strip()
 
     # ══════════════════════════════════════════════════════════════════════════
-    # 4a. Estado AVALIACAO_QUESTAO_* → fallback numérico (1-5) quando botões
+    # 4a. Estado CONVITE_AVALIACAO → fallback textual quando enviar_botoes
+    #     não suporta botões interativos (envia "1 - Sim / 2 - Não" em texto)
+    # ══════════════════════════════════════════════════════════════════════════
+    if estado_atual == 'CONVITE_AVALIACAO':
+        token_id = ctx.get('token_id')
+        if resposta_upper in ('1', 'SIM', 'S'):
+            _processar_interactive(func, f'avaliacao_iniciar_{token_id}', estado_atual, ctx)
+        elif resposta_upper in ('2', 'NÃO', 'NAO', 'N'):
+            _processar_interactive(func, f'avaliacao_recusar_{token_id}', estado_atual, ctx)
+        else:
+            enviar_texto(
+                celular=func.celular,
+                mensagem='Responda *1* para iniciar a avaliação ou *2* para recusar.',
+                func_id=func.id,
+                tipo='bot_instrucao',
+            )
+        return
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # 4b. Estado AVALIACAO_QUESTAO_* → fallback numérico (1-5) quando botões
     #     não são suportados pelo dispositivo do usuário
     # ══════════════════════════════════════════════════════════════════════════
     if estado_atual.startswith('AVALIACAO_QUESTAO_'):

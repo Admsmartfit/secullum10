@@ -460,6 +460,9 @@ def teste():
         if ok:
             tk_interativo.enviado_em = datetime.utcnow()
             enviados += 1
+            if func_teste:
+                from blueprints.whatsapp import _set_state
+                _set_state(func_teste.id, 'CONVITE_AVALIACAO', {'token_id': tk_interativo.id})
             db.session.commit()
 
     return render_template(
