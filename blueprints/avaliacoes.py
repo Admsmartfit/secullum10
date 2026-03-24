@@ -390,18 +390,27 @@ def teste():
     url_base = _url_base()
     expira_em = datetime.utcnow() + timedelta(hours=72)
 
-    # 2. Busca um professor e um gerente reais para montar tokens representativos
+    # 2. Identifica o funcionário do celular de teste (necessário para o fluxo WhatsApp-first)
+    #    O webhook identifica o respondente pelo celular; os tokens precisam ter avaliador_id
+    #    apontando para ESTE funcionário para que _oferecer_proximo_token funcione em cadeia.
+    digits_teste = celular_teste[-8:]
+    func_teste = Func.query.filter(
+        Func.celular.like(f'%{digits_teste}%'), Func.ativo == True
+    ).first()
+
     from models import Usuario
     emails_gerentes = {u.email for u in Usuario.query.filter_by(nivel_acesso='gerente').all()}
     q = Func.query.filter_by(ativo=True)
     if departamento:
         q = q.filter_by(departamento=departamento)
     todos = q.limit(10).all()
-    gerentes    = [f for f in todos if f.email and f.email in emails_gerentes]
-    professores = [f for f in todos if f not in gerentes]
+    professores = [f for f in todos if not (f.email and f.email in emails_gerentes)]
 
-    avaliado_ref  = professores[0] if professores else (todos[0] if todos else None)
-    avaliador_ref = gerentes[0] if gerentes else (todos[1] if len(todos) > 1 else avaliado_ref)
+    avaliado_ref = professores[0] if professores else (todos[0] if todos else func_teste)
+
+    # avaliador_id = o funcionário do celular_teste (para a cadeia funcionar)
+    # Se o número não está cadastrado como funcionário, usa referência genérica
+    avaliador_id_teste = func_teste.id if func_teste else None
 
     tokens_criados = []
     for tipo in TIPO_LABELS:
@@ -410,7 +419,7 @@ def teste():
             token=_novo_token(),
             tipo=tipo,
             avaliado_id=avaliado_ref.id if avaliado_ref else None,
-            avaliador_id=avaliador_ref.id if avaliador_ref else None,
+            avaliador_id=avaliador_id_teste if tipo != 'aluno_por_equipe' else None,
             avaliador_nome='Aluno Teste' if tipo == 'aluno_por_equipe' else None,
             avaliador_celular=celular_teste if tipo == 'aluno_por_equipe' else None,
             expira_em=expira_em,
@@ -422,10 +431,14 @@ def teste():
     db.session.commit()
 
     # 3. Envia convite de teste para o celular informado
-    #    - Funcionários: botões interativos (fluxo WhatsApp-first, igual ao envio real)
-    #    - Alunos: link web (alunos não têm ChatState)
+    #    - Aluno: link web (sem ChatState)
+    #    - Funcionários: envia APENAS o convite do primeiro token não-aluno.
+    #      Os demais são encadeados automaticamente via _oferecer_proximo_token
+    #      após cada avaliação concluída.
     links_html = []
     enviados = 0
+    primeiro_func_enviado = False
+
     for tk in tokens_criados:
         link = f'{url_base}/r/{tk.token}' if url_base else f'/r/{tk.token}'
         label = TIPO_LABELS.get(tk.tipo, tk.tipo)
@@ -438,22 +451,30 @@ def teste():
                 f'👉 {link}'
             )
             ok = enviar_texto(celular_teste, msg, tipo='avaliacao_teste')
-        else:
+        elif not primeiro_func_enviado:
+            # Envia convite interativo apenas para o 1º token de funcionário.
+            # Os demais serão oferecidos em cadeia após cada conclusão.
             n_perguntas = len(PERGUNTAS.get(tk.tipo, []))
             msg_convite = (
                 f'🧪 *[TESTE] {label}*\n\n'
-                f'São {n_perguntas} perguntas rápidas pelo WhatsApp.\n'
-                f'Clique em *Sim* para iniciar o fluxo de teste.'
+                f'São {n_perguntas} pergunta(s) pelo WhatsApp — uma de cada vez.\n'
+                f'Ao terminar este formulário, o próximo será enviado automaticamente.\n\n'
+                f'Deseja iniciar o teste agora?'
             )
             ok = enviar_botoes(
                 celular=celular_teste,
                 texto=msg_convite,
                 botoes=[
-                    {'id': f'avaliacao_iniciar_{tk.id}', 'title': '✅ Sim, vamos lá'},
+                    {'id': f'avaliacao_iniciar_{tk.id}', 'title': '✅ Sim, iniciar'},
                     {'id': f'avaliacao_recusar_{tk.id}', 'title': '❌ Agora não'},
                 ],
                 tipo='avaliacao_teste_convite',
             )
+            if ok:
+                primeiro_func_enviado = True
+        else:
+            # Demais tokens: criados no banco mas convite enviado pela cadeia automática
+            ok = True  # não conta como erro, apenas aguarda a cadeia
 
         if ok:
             tk.enviado_em = datetime.utcnow()
