@@ -18,6 +18,24 @@ def _run_safe_migrations(db):
         "ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS horario_base_id INTEGER",
         "ALTER TABLE turnos ADD COLUMN IF NOT EXISTS funcao VARCHAR(100)",
         "ALTER TABLE alocacoes_diarias ADD COLUMN IF NOT EXISTS is_excecao BOOLEAN DEFAULT TRUE",
+        # Added for feriados estaduais/municipais
+        "ALTER TABLE feriados ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) NOT NULL DEFAULT 'personalizado'",
+        "ALTER TABLE feriados ADD COLUMN IF NOT EXISTS uf VARCHAR(2)",
+        "ALTER TABLE feriados ADD COLUMN IF NOT EXISTS cidade_ibge VARCHAR(10)",
+        "ALTER TABLE feriados ADD COLUMN IF NOT EXISTS fonte VARCHAR(50)",
+        "ALTER TABLE feriados ADD COLUMN IF NOT EXISTS criado_por_id INTEGER",
+        "ALTER TABLE feriados ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE",
+        # Added for UnidadeLider empresa fields
+        "ALTER TABLE unidades_lideres ADD COLUMN IF NOT EXISTS empresa_nome VARCHAR(300)",
+        "ALTER TABLE unidades_lideres ADD COLUMN IF NOT EXISTS empresa_cnpj VARCHAR(30)",
+        "ALTER TABLE unidades_lideres ADD COLUMN IF NOT EXISTS empresa_socio VARCHAR(300)",
+        "ALTER TABLE unidades_lideres ADD COLUMN IF NOT EXISTS socio_cpf VARCHAR(20)",
+        "ALTER TABLE unidades_lideres ADD COLUMN IF NOT EXISTS empresa_endereco VARCHAR(400)",
+        "ALTER TABLE unidades_lideres ADD COLUMN IF NOT EXISTS empresa_cidade VARCHAR(200)",
+        "ALTER TABLE unidades_lideres ADD COLUMN IF NOT EXISTS empresa_uf VARCHAR(5)",
+        "ALTER TABLE unidades_lideres ADD COLUMN IF NOT EXISTS empresa_cep VARCHAR(15)",
+        "ALTER TABLE unidades_lideres ADD COLUMN IF NOT EXISTS cidade_ibge VARCHAR(10)",
+        "ALTER TABLE unidades_lideres ADD COLUMN IF NOT EXISTS experiencia_dias INTEGER DEFAULT 45",
     ]
     for sql in migrations:
         try:
