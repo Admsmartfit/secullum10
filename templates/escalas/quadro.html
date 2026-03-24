@@ -95,14 +95,41 @@
         outline: 2px solid #dc2626;
     }
 
+    /* ── Feriado cell ──────────────────────────────────────────────────────────── */
+    .cal-cell.feriado {
+        background: #fef9c3 !important;
+    }
+    .cal-cell.feriado .cal-day-num {
+        color: #92400e;
+    }
+    .feriado-label {
+        font-size: .55rem;
+        color: #92400e;
+        font-weight: 700;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 100%;
+        margin-bottom: 1px;
+    }
+    .feriado-tipo {
+        display: inline-block;
+        font-size: .5rem;
+        padding: 0 3px;
+        border-radius: 3px;
+        background: #f59e0b;
+        color: #fff;
+        margin-bottom: 2px;
+    }
+
     /* ── Palette ───────────────────────────────────────────────────────────────── */
     #paleta {
         position: fixed;
         right: 14px;
-        top: 68px;
+        bottom: 20px;
         z-index: 1050;
-        width: 140px;
-        max-height: calc(100vh - 82px);
+        width: 150px;
+        max-height: 55vh;
         overflow-y: auto;
         box-shadow: 0 4px 16px rgba(0, 0, 0, .18);
     }
@@ -237,7 +264,7 @@
 
 {% block content %}
 
-<!-- Serialize employee data for JS filtering -->
+<!-- Serialize employee and turno data for JS filtering -->
 <script>
     const GRUPOS_MAP = {{ grupos_map | tojson | safe if grupos_map else '{}' }};
 
@@ -250,6 +277,18 @@
 
     const TODOS_FUNCIONARIOS = [
         {% for f in funcionarios %}{ id: "{{ f.id }}", nome: {{ f.nome | tojson }}, dept: {{ (f.departamento or '') | tojson }}, funcao: {{ (f.funcao or '') | tojson }} }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+
+    const TODOS_TURNOS = [
+        {% for t in turnos %}
+        { id: {{ t.id }}, nome: {{ t.nome | tojson }},
+          color: {{ (t.color or '#4f46e5') | tojson }},
+          tipo: {{ (t.tipo_turno or '') | tojson }},
+          dept: {{ (t.departamento or '') | tojson }},
+          funcao: {{ (t.funcao or '') | tojson }},
+          hora: {{ (t.hora_inicio.strftime('%H:%M') + '–' + t.hora_fim.strftime('%H:%M')) | tojson }}
+        }{% if not loop.last %},{% endif %}
         {% endfor %}
     ];
 </script>
@@ -325,20 +364,11 @@
     <div class="card-header py-2 px-2 d-flex justify-content-between align-items-center">
         <span class="small fw-bold">Turnos</span>
         <button class="btn btn-link btn p-0" onclick="togglePaleta()" id="btnTogglePaleta">
-            <i class="fas fa-chevron-right small text-muted"></i>
+            <i class="fas fa-chevron-up small text-muted"></i>
         </button>
     </div>
     <div class="card-body p-2" id="paletaBody">
-        {% for t in turnos %}
-        <div class="palette-badge" draggable="true" data-turno-id="{{ t.id }}" data-turno-nome="{{ t.nome }}"
-            data-color="{{ t.color or '#4f46e5' }}" data-tipo-turno="{{ t.tipo_turno or '' }}"
-            style="background:{{ t.color or '#4f46e5' }};"
-            title="{{ t.nome }} — {{ t.hora_inicio.strftime('%H:%M') }}–{{ t.hora_fim.strftime('%H:%M') }}">
-            {% if t.tipo_turno %}<span style="opacity:.8;font-size:.6rem;">[{{ t.tipo_turno }}]</span> {% endif %}{{
-            t.nome }}
-        </div>
-        {% endfor %}
-        {% if not turnos %}<span class="small text-muted">Nenhum turno.</span>{% endif %}
+        <span class="small text-muted" id="paletaEmpty" style="display:none;">Nenhum turno.</span>
     </div>
 </div>
 
@@ -406,10 +436,50 @@
         });
 
         _populateTodos();
+        filtrarPaleta();
     }
 
     function onGlobalFuncaoChange() {
         _populateTodos();
+        filtrarPaleta();
+    }
+
+    // ── Palette filtering ─────────────────────────────────────────────────────────
+
+    function filtrarPaleta() {
+        const dept   = document.getElementById('gDept').value;
+        const funcao = document.getElementById('gFuncao').value;
+        const body   = document.getElementById('paletaBody');
+        const empty  = document.getElementById('paletaEmpty');
+
+        // Remove old badges (keep the empty span)
+        body.querySelectorAll('.palette-badge').forEach(el => el.remove());
+
+        const filtered = TODOS_TURNOS.filter(t => {
+            const deptOk   = !t.dept   || !dept   || matchesDept(t.dept, dept)   || dept === '';
+            const funcaoOk = !t.funcao || !funcao || t.funcao === funcao || funcao === '';
+            return deptOk && funcaoOk;
+        });
+
+        if (!filtered.length) {
+            empty.style.display = '';
+            return;
+        }
+        empty.style.display = 'none';
+
+        filtered.forEach(t => {
+            const d = document.createElement('div');
+            d.className = 'palette-badge';
+            d.draggable = true;
+            d.dataset.turnoId   = t.id;
+            d.dataset.turnoNome = t.nome;
+            d.dataset.color     = t.color;
+            d.dataset.tipoTurno = t.tipo;
+            d.style.background  = t.color;
+            d.title = `${t.nome} — ${t.hora}`;
+            d.innerHTML = (t.tipo ? `<span style="opacity:.8;font-size:.6rem;">[${t.tipo}]</span> ` : '') + esc(t.nome);
+            body.appendChild(d);
+        });
     }
 
     function _populateTodos() {
@@ -570,8 +640,9 @@
     // ── Calendar rendering ────────────────────────────────────────────────────────
 
     function renderCalendar(idx, func, data) {
-        const { dias_no_mes, ano, mes, sabados, domingos, cobertura_tipos, domingo_counts } = data;
+        const { dias_no_mes, ano, mes, sabados, domingos, cobertura_tipos, domingo_counts, feriados } = data;
         const dom = new Set(domingos);
+        const ferMap = feriados || {};
         const fw = new Date(ano, mes - 1, 1).getDay();
         const domCt = (domingo_counts || {})[func.id] || 0;
         const ultimoDomingo = domingos.length ? Math.max(...domingos) : -1;
@@ -583,10 +654,16 @@
 
         for (let d = 1; d <= dias_no_mes; d++) {
             const wd = new Date(ano, mes - 1, d).getDay();
-            const cls = wd === 0 ? 'domingo' : (wd === 6 ? 'sabado' : '');
+            const feriado = ferMap[String(d)];
+            let cls = wd === 0 ? 'domingo' : (wd === 6 ? 'sabado' : '');
+            if (feriado) cls += ' feriado';
             const ds = `${ano}-${String(mes).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const aloc = func.dias[String(d)];
             let inner = `<div class="cal-day-num">${d}</div>`;
+            if (feriado) {
+                const tipoLabel = {'nacional':'Nac','estadual':'Est','municipal':'Mun'}[feriado.tipo] || feriado.tipo || '';
+                inner += `<div class="feriado-label" title="${esc(feriado.descricao)}"><span class="feriado-tipo">${tipoLabel}</span> ${esc(feriado.descricao)}</div>`;
+            }
             if (aloc) {
                 const wCls = aloc.warning ? ' clt-warn' : '';
                 const style = aloc.base
@@ -680,8 +757,8 @@
 
     function togglePaleta() {
         const b = document.getElementById('paletaBody'), btn = document.getElementById('btnTogglePaleta');
-        const h = b.classList.toggle('d-none');
-        btn.innerHTML = `<i class="fas fa-chevron-${h ? 'left' : 'right'} small text-muted"></i>`;
+        const hidden = b.classList.toggle('d-none');
+        btn.innerHTML = `<i class="fas fa-chevron-${hidden ? 'up' : 'down'} small text-muted"></i>`;
     }
 
     function esc(s) {
@@ -740,6 +817,7 @@
 
     // Init
     atualizarMesLabel();
-    _populateTodos();   // populate selects on page load with all employees
+    _populateTodos();
+    filtrarPaleta();
 </script>
 {% endblock %}

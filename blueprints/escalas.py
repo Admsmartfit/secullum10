@@ -717,6 +717,18 @@ def quadro_dados():
                 break
         domingo_counts[f.id] = count
 
+    # ── feriados do mês ───────────────────────────────────────────────────────
+    from models import Feriado
+    feriados_mes = Feriado.query.filter(
+        Feriado.data >= data_ini,
+        Feriado.data <= data_fim,
+        Feriado.ativo == True,
+    ).all()
+    feriados = {
+        f.data.day: {'descricao': f.descricao or '', 'tipo': f.tipo or ''}
+        for f in feriados_mes
+    }
+
     return jsonify({
         'funcionarios':   resultado_funcs,
         'cobertura':      cobertura,
@@ -725,6 +737,7 @@ def quadro_dados():
         'dias_no_mes':    dias_no_mes,
         'sabados':        sabados,
         'domingos':       domingos,
+        'feriados':       feriados,
         'ano':            ano,
         'mes':            mes,
     })
