@@ -111,6 +111,45 @@ def _enviar_menu_principal(func: 'Funcionario'):
     )
 
 
+def _buscar_func_por_celular(digits: str) -> 'Funcionario | None':
+    """Localiza o Funcionario pelo celular usando três estratégias em ordem:
+    1. Busca direta em Funcionario.celular (funcionários comuns)
+    2. Via UnidadeLider.celular_lider → Usuario.email → Funcionario.email (líderes configurados em /config/)
+    3. Via GESTOR_CELULAR global → Usuario nível gestor/administrador → Funcionario.email
+    """
+    # 1. Busca direta
+    func = Funcionario.query.filter(Funcionario.celular.like(f'%{digits[-8:]}%')).first()
+    if func:
+        return func
+
+    # 2. Lider configurado na estrutura organizacional (UnidadeLider)
+    from models import UnidadeLider, Usuario
+    ul = UnidadeLider.query.filter(UnidadeLider.celular_lider.like(f'%{digits[-8:]}%')).first()
+    if ul and ul.lider_id:
+        usuario = Usuario.query.get(ul.lider_id)
+        if usuario and usuario.email:
+            func = Funcionario.query.filter_by(email=usuario.email, ativo=True).first()
+            if func:
+                return func
+
+    # 3. GESTOR_CELULAR global (fallback de último recurso)
+    gestor_cel = _gestor_celular()
+    if gestor_cel:
+        gestor_digits = ''.join(c for c in gestor_cel if c.isdigit())
+        if gestor_digits.endswith(digits[-8:]):
+            from models import Usuario as Usr
+            admin = Usr.query.filter(
+                Usr.nivel_acesso.in_(['gestor', 'administrador', 'gerente']),
+                Usr.ativo == True,
+            ).first()
+            if admin and admin.email:
+                func = Funcionario.query.filter_by(email=admin.email, ativo=True).first()
+                if func:
+                    return func
+
+    return None
+
+
 def _processar_mensagem(data: dict):
     """Processa mensagem inbound da Mega-API.
 
@@ -132,9 +171,7 @@ def _processar_mensagem(data: dict):
 
     # ── Identificar funcionário ───────────────────────────────────────────────
     digits = ''.join(c for c in celular if c.isdigit())[-11:]
-    func = Funcionario.query.filter(
-        Funcionario.celular.like(f'%{digits[-8:]}%')
-    ).first()
+    func = _buscar_func_por_celular(digits)
 
     # ── Log de entrada ────────────────────────────────────────────────────────
     log_mensagem = data.get('body') or data.get('text') or tipo_msg

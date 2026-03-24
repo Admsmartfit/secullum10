@@ -390,13 +390,10 @@ def teste():
     url_base = _url_base()
     expira_em = datetime.utcnow() + timedelta(hours=72)
 
-    # 2. Identifica o funcionário do celular de teste (necessário para o fluxo WhatsApp-first)
-    #    O webhook identifica o respondente pelo celular; os tokens precisam ter avaliador_id
-    #    apontando para ESTE funcionário para que _oferecer_proximo_token funcione em cadeia.
-    digits_teste = celular_teste[-8:]
-    func_teste = Func.query.filter(
-        Func.celular.like(f'%{digits_teste}%'), Func.ativo == True
-    ).first()
+    # 2. Identifica o funcionário do celular de teste usando as mesmas regras do webhook:
+    #    Funcionario.celular → UnidadeLider.celular_lider → GESTOR_CELULAR
+    from blueprints.whatsapp import _buscar_func_por_celular
+    func_teste = _buscar_func_por_celular(celular_teste[-8:])
 
     from models import Usuario
     emails_gerentes = {u.email for u in Usuario.query.filter_by(nivel_acesso='gerente').all()}
