@@ -159,9 +159,9 @@ def _processar_mensagem(data: dict):
 
     if not celular: return
 
-    # Tenta identificar o funcionário
+    # Identifica funcionário/líder/gestor pelo celular (3 estratégias)
     digits = ''.join(c for c in celular if c.isdigit())[-11:]
-    func = Funcionario.query.filter(Funcionario.celular.like(f'%{digits[-8:]}%')).first()
+    func = _buscar_func_por_celular(digits)
 
     # Verifica se há um Token de Avaliação ativo para este número (seja Funcionário, Líder ou Cliente)
     active_token = None
