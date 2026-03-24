@@ -534,6 +534,17 @@ def _iniciar_avaliacao_whatsapp(func: 'Funcionario', token_id: int):
     from services.avaliacao_service import enviar_proxima_questao
     from models import TokenAvaliacao
 
+    # Garante que não há outra avaliação em andamento para este funcionário
+    estado_atual = _get_or_create_state(func.id).estado or 'IDLE'
+    if estado_atual.startswith('AVALIACAO_QUESTAO_'):
+        enviar_texto(
+            func.celular,
+            '⏳ Você já tem uma avaliação em andamento. Responda a pergunta atual antes de iniciar outra.',
+            func_id=func.id,
+            tipo='avaliacao_info',
+        )
+        return
+
     tk = TokenAvaliacao.query.get(token_id)
     if not tk:
         enviar_texto(func.celular, 'Avaliação não encontrada.', func_id=func.id, tipo='avaliacao_erro')
@@ -599,6 +610,47 @@ def _processar_resposta_avaliacao(func: 'Funcionario', questao_num: int, nota: i
             tipo='avaliacao_concluida',
         )
         _set_state(func.id, 'IDLE')
+
+        # Verifica se há outros tokens pendentes do mesmo ciclo para este avaliador
+        _oferecer_proximo_token(func, token_id)
+
+
+def _oferecer_proximo_token(func: 'Funcionario', token_id_concluido: int):
+    """Após concluir uma avaliação, oferece o próximo token pendente do mesmo ciclo."""
+    from models import TokenAvaliacao
+    from services.avaliacao_service import TIPO_LABELS
+    from services.whatsapp_bot import enviar_botoes
+
+    tk_atual = TokenAvaliacao.query.get(token_id_concluido)
+    if not tk_atual:
+        return
+
+    proximo = (
+        TokenAvaliacao.query
+        .filter_by(ciclo_id=tk_atual.ciclo_id, avaliador_id=func.id, respondido=False)
+        .filter(TokenAvaliacao.id != token_id_concluido)
+        .filter(TokenAvaliacao.tipo != 'aluno_por_equipe')
+        .first()
+    )
+    if not proximo:
+        return
+
+    label = TIPO_LABELS.get(proximo.tipo, 'Avaliação')
+    from services.avaliacao_service import PERGUNTAS
+    n = len(PERGUNTAS.get(proximo.tipo, []))
+    enviar_botoes(
+        celular=func.celular,
+        texto=(
+            f'Você tem mais uma avaliação pendente: *{label}*.\n'
+            f'São apenas {n} pergunta(s). Deseja responder agora?'
+        ),
+        botoes=[
+            {'id': f'avaliacao_iniciar_{proximo.id}', 'title': '✅ Sim, continuar'},
+            {'id': f'avaliacao_recusar_{proximo.id}', 'title': '❌ Agora não'},
+        ],
+        func_id=func.id,
+        tipo='avaliacao_proximo_convite',
+    )
 
 
 def _processar_atestado(func: 'Funcionario', data: dict):
