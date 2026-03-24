@@ -430,57 +430,40 @@ def teste():
 
     db.session.commit()
 
-    # 3. Envia convite de teste para o celular informado
-    #    - Aluno: link web (sem ChatState)
-    #    - Funcionários: envia APENAS o convite do primeiro token não-aluno.
-    #      Os demais são encadeados automaticamente via _oferecer_proximo_token
-    #      após cada avaliação concluída.
+    # 3. Monta lista de links para exibição na tela de resultado (navegador)
     links_html = []
-    enviados = 0
-    primeiro_func_enviado = False
-
     for tk in tokens_criados:
         link = f'{url_base}/r/{tk.token}' if url_base else f'/r/{tk.token}'
         label = TIPO_LABELS.get(tk.tipo, tk.tipo)
         links_html.append({'label': label, 'link': link, 'token': tk.token, 'tipo': tk.tipo})
 
-        if tk.tipo == 'aluno_por_equipe':
-            msg = (
-                f'🧪 *[TESTE] {label}*\n\n'
-                f'Este é um envio de teste. Preencha o formulário para validar:\n'
-                f'👉 {link}'
-            )
-            ok = enviar_texto(celular_teste, msg, tipo='avaliacao_teste')
-        elif not primeiro_func_enviado:
-            # Envia convite interativo apenas para o 1º token de funcionário.
-            # Os demais serão oferecidos em cadeia após cada conclusão.
-            n_perguntas = len(PERGUNTAS.get(tk.tipo, []))
-            msg_convite = (
+    # 4. Dispara no WhatsApp APENAS o primeiro convite interativo.
+    #    Os demais tokens ficam no banco aguardando a cadeia automática
+    #    (_oferecer_proximo_token) que é acionada após cada avaliação concluída.
+    enviados = 0
+
+    tk_interativo = next((t for t in tokens_criados if t.tipo != 'aluno_por_equipe'), None)
+    if tk_interativo:
+        label = TIPO_LABELS.get(tk_interativo.tipo, tk_interativo.tipo)
+        n_perguntas = len(PERGUNTAS.get(tk_interativo.tipo, []))
+        ok = enviar_botoes(
+            celular=celular_teste,
+            texto=(
                 f'🧪 *[TESTE] {label}*\n\n'
                 f'São {n_perguntas} pergunta(s) pelo WhatsApp — uma de cada vez.\n'
-                f'Ao terminar este formulário, o próximo será enviado automaticamente.\n\n'
+                f'Ao terminar, o próximo formulário será enviado automaticamente.\n\n'
                 f'Deseja iniciar o teste agora?'
-            )
-            ok = enviar_botoes(
-                celular=celular_teste,
-                texto=msg_convite,
-                botoes=[
-                    {'id': f'avaliacao_iniciar_{tk.id}', 'title': '✅ Sim, iniciar'},
-                    {'id': f'avaliacao_recusar_{tk.id}', 'title': '❌ Agora não'},
-                ],
-                tipo='avaliacao_teste_convite',
-            )
-            if ok:
-                primeiro_func_enviado = True
-        else:
-            # Demais tokens: criados no banco mas convite enviado pela cadeia automática
-            ok = True  # não conta como erro, apenas aguarda a cadeia
-
+            ),
+            botoes=[
+                {'id': f'avaliacao_iniciar_{tk_interativo.id}', 'title': '✅ Sim, iniciar'},
+                {'id': f'avaliacao_recusar_{tk_interativo.id}', 'title': '❌ Agora não'},
+            ],
+            tipo='avaliacao_teste_convite',
+        )
         if ok:
-            tk.enviado_em = datetime.utcnow()
+            tk_interativo.enviado_em = datetime.utcnow()
             enviados += 1
-
-    db.session.commit()
+            db.session.commit()
 
     return render_template(
         'avaliacoes/teste_resultado.html',
