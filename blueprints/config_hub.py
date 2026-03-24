@@ -134,7 +134,7 @@ def index():
         salarios_map=salarios_map,
         experiencia_dias=experiencia_dias,
         integ_cfg=integ_cfg,
-        mapa_cidades={u.cidade_ibge: u.empresa_cidade for u in unidades if u.cidade_ibge},
+        mapa_cidades={u.cidade_ibge: u.empresa_cidade for u in unidades.values() if u.cidade_ibge},
     )
 
 

@@ -447,7 +447,12 @@
                           <span class="badge bg-secondary">P</span>
                         {% endif %}
                       </td>
-                      <td class="text-center small text-muted">{{ f.uf or '—' }}</td>
+                      <td class="text-center small text-muted">
+                        {{ f.uf or '—' }}
+                        {% if f.tipo == 'municipal' and f.cidade_ibge and mapa_cidades and mapa_cidades.get(f.cidade_ibge) %}
+                          <br><small>({{ mapa_cidades.get(f.cidade_ibge) }})</small>
+                        {% endif %}
+                      </td>
                       <td class="text-center">
                         <div class="form-check form-switch d-flex justify-content-center mb-0">
                           <input class="form-check-input feriado-toggle" type="checkbox"
