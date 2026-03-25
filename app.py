@@ -103,6 +103,9 @@ def create_app():
     app.register_blueprint(escalas_bp)
     app.register_blueprint(financeiro_bp)
     app.register_blueprint(whatsapp_bp)
+    # Alias para o webhook configurado no MegaAPI: POST /webhook/whatsapp
+    from blueprints.whatsapp import webhook as _wh_handler
+    app.add_url_rule('/webhook/whatsapp', 'webhook_megaapi_alias', _wh_handler, methods=['POST'])
     app.register_blueprint(marketplace_bp)
     app.register_blueprint(prontuario_bp)
     app.register_blueprint(config_hub_bp)
