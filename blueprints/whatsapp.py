@@ -152,7 +152,7 @@ def _buscar_func_por_celular(digits: str) -> 'Funcionario | None':
 
 def _processar_mensagem(data: dict):
     from services.whatsapp_bot import enviar_texto, enviar_botoes, baixar_midia
-    from models import TokenAvaliacao, RespostaAvaliacao
+    from models import TokenAvaliacao
 
     celular = data.get('from', '').replace('@s.whatsapp.net', '')
     tipo_msg = data.get('type', 'text')
@@ -238,29 +238,14 @@ def _processar_mensagem(data: dict):
 
     resposta_upper = texto.upper().strip()
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # INTERCETAR RESPOSTAS DE TEXTO PARA AVALIAÇÃO (Funciona p/ Clientes)
-    # ══════════════════════════════════════════════════════════════════════════
     if active_token:
-        respostas_dadas = RespostaAvaliacao.query.filter_by(token_id=active_token.id).count()
-        
-        # Iniciar Avaliação (SIM / 1)
-        if respostas_dadas == 0 and resposta_upper in ('1', '2', 'SIM', 'NAO', 'NÃO', 'S', 'N'):
-            if resposta_upper in ('1', 'SIM', 'S'):
-                btn_sim = f'avaliacao_iniciar_{active_token.id}'
-            else:
-                btn_sim = f'avaliacao_recusar_{active_token.id}'
-            _processar_interactive(func, celular, btn_sim, estado_atual, ctx)
+        from services.avaliacao_service import _url_base
+        link = f'{_url_base()}/r/{active_token.token}'
+        from services.whatsapp_bot import enviar_texto
+        enviar_texto(celular, f'Olá! 👋 Clique no link abaixo para responder à sua avaliação:\n\n{link}', func_id=func.id if func else None, tipo='avaliacao_link')
+        if not func:
             return
 
-        # Responder Likert (1 a 5)
-        if resposta_upper in ('1', '2', '3', '4', '5'):
-            nota = int(resposta_upper)
-            q_num = respostas_dadas + 1
-            btn_sim = f'avaliacao_likert_{active_token.id}_{q_num}_{nota}'
-            _processar_interactive(func, celular, btn_sim, estado_atual, ctx)
-            return
-            
     if not func: return # Se chegou aqui e é cliente (texto livre sem sentido), ignora
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -430,48 +415,32 @@ def _processar_mensagem(data: dict):
 # Mude a assinatura para receber o celular
 def _processar_interactive(func: 'Funcionario', celular: str, btn_id: str, _estado: str, _ctx: dict):
     from services.whatsapp_bot import enviar_texto
-    from models import TokenAvaliacao, RespostaAvaliacao
-    from services.avaliacao_service import enviar_proxima_questao, PERGUNTAS
+    from models import TokenAvaliacao
 
     func_id = func.id if func else None
 
-    # --- LÓGICA STATELESS DA AVALIAÇÃO ---
     if btn_id.startswith('avaliacao_iniciar_'):
-        token_id = int(btn_id.split('_')[-1])
-        enviar_proxima_questao(celular, func_id, token_id, 1)
+        try:
+            token_id = int(btn_id.split('_')[-1])
+            tk = TokenAvaliacao.query.get(token_id)
+            if tk and not tk.respondido:
+                from services.avaliacao_service import _url_base
+                link = f'{_url_base()}/r/{tk.token}'
+                enviar_texto(celular, f'✅ Ótimo! Clique no link para responder:\n\n{link}', func_id=func_id)
+            elif tk and tk.respondido:
+                enviar_texto(celular, 'Esta avaliação já foi concluída! ✅', func_id=func_id)
+        except Exception:
+            pass
+        if func_id:
+            _set_state(func_id, 'IDLE')
         return
 
     elif btn_id.startswith('avaliacao_recusar_'):
         enviar_texto(celular, "Sem problema! Agradecemos o seu tempo.", func_id=func_id)
         return
 
-    elif btn_id.startswith('avaliacao_likert_'):
-        partes = btn_id.split('_')
-        token_id = int(partes[2])
-        q_num = int(partes[3])
-        nota = int(partes[4])
-
-        tk = TokenAvaliacao.query.get(token_id)
-        if not tk: return
-
-        # Salva resposta se ainda não existir
-        if not RespostaAvaliacao.query.filter_by(token_id=tk.id, questao_numero=q_num).first():
-            resp = RespostaAvaliacao(token_id=tk.id, questao_numero=q_num, nota=nota)
-            db.session.add(resp)
-            db.session.commit()
-
-        perguntas = PERGUNTAS.get(tk.tipo, [])
-        if q_num < len(perguntas):
-            enviar_proxima_questao(celular, func_id, tk.id, q_num + 1)
-        else:
-            tk.respondido = True
-            tk.respondido_em = datetime.utcnow()
-            db.session.commit()
-            enviar_texto(celular, "✅ Obrigado! A sua avaliação foi registada com sucesso e de forma anónima. 💪", func_id=func_id)
-        return
-
     # Se a pessoa for cliente/líder externo, não pode aceder ao menu operacional
-    if not func: return 
+    if not func: return
 
     from services.whatsapp_bot import enviar_botoes
     from services.notification_processor import _montar_escala

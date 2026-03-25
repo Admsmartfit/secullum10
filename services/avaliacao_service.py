@@ -576,13 +576,9 @@ def enviar_proxima_questao(celular: str, func_id: Optional[str], token_id: int, 
 
 
 def enviar_convites_ciclo(ciclo_id: int) -> dict:
-    """PRD v3.0: Envia convites WhatsApp para todos os respondentes do ciclo.
-
-    - Funcionários: convite interativo via enviar_botoes (Sim/Não) — fluxo WhatsApp-first.
-    - Alunos: link web (alunos não possuem ChatState no sistema).
-    """
+    """PRD v4.0: Envia convite com link directo para TODOS os respondentes."""
     from models import TokenAvaliacao, Funcionario
-    from services.whatsapp_bot import enviar_texto, enviar_botoes
+    from services.whatsapp_bot import enviar_texto
 
     tokens = TokenAvaliacao.query.filter_by(ciclo_id=ciclo_id, enviado_em=None).all()
     url_base = _url_base()
@@ -604,63 +600,28 @@ def enviar_convites_ciclo(ciclo_id: int) -> dict:
                 nome = func.nome
 
         if not celular:
+            erros += 1
             continue
 
+        primeiro_nome = nome.split()[0] if nome else 'Olá'
         label = TIPO_LABELS.get(tk.tipo, 'Avaliação')
+        n_perguntas = len(PERGUNTAS.get(tk.tipo, []))
+        link = f'{url_base}/r/{tk.token}'
 
-        if tk.tipo == 'aluno_por_equipe':
-            # Alunos continuam com link web
-            link = f'{url_base}/r/{tk.token}'
-            msg = (
-                f'Olá, {nome}! 👋\n'
-                f'Gostaríamos da sua opinião sobre o treino de hoje. '
-                f'São apenas 3 perguntas rápidas — sua resposta é anônima e '
-                f'nos ajuda a melhorar cada vez mais!\n\n'
-                f'👉 Clique para avaliar: {link}\n\n'
-                f'Disponível por 48h. Obrigado pela parceria! 💪'
-            )
-            ok = enviar_texto(celular, msg, func_id=func_id, tipo='avaliacao')
-        else:
-            # Funcionários: fluxo interativo via botões
-            primeiro_nome = nome.split()[0] if nome else nome
-            msg_convite = (
-                f'Olá, {primeiro_nome}! 👋\n\n'
-                f'Chegou a hora da *{label}*.\n'
-                f'São {len(PERGUNTAS.get(tk.tipo, []))} perguntas rápidas — '
-                f'leva menos de 2 minutos e é muito importante para o desenvolvimento da equipe.\n\n'
-                f'Deseja responder agora pelo WhatsApp?'
-            )
-            botoes = [
-                {'id': f'avaliacao_iniciar_{tk.id}', 'title': '✅ Sim, vamos lá'},
-                {'id': f'avaliacao_recusar_{tk.id}', 'title': '❌ Agora não'},
-            ]
-            ok = enviar_botoes(
-                celular=celular,
-                texto=msg_convite,
-                botoes=botoes,
-                func_id=func_id,
-                tipo='avaliacao_convite',
-            )
+        msg = (
+            f'Olá, *{primeiro_nome}*! 👋\n\n'
+            f'💎 *{label}*\n\n'
+            f'São apenas *{n_perguntas} perguntas* rápidas — leva menos de 2 minutos '
+            f'e as suas respostas são *100% anónimas*.\n\n'
+            f'👉 *Clique aqui para avaliar:*\n{link}\n\n'
+            f'_Disponível por 72h. Muito obrigado pela sua participação!_ 🙏'
+        )
+
+        ok = enviar_texto(celular, msg, func_id=func_id, tipo='avaliacao_convite')
 
         if ok:
             from extensions import db
             tk.enviado_em = datetime.utcnow()
-            # Set CONVITE_AVALIACAO state so text fallback ("1"/"2") works
-            if func_id:
-                try:
-                    import json as _json
-                    from models import ChatState
-                    state = ChatState.query.filter_by(funcionario_id=func_id).first()
-                    if not state:
-                        state = ChatState(funcionario_id=func_id, estado='CONVITE_AVALIACAO',
-                                          contexto=_json.dumps({'token_id': tk.id}))
-                        db.session.add(state)
-                    else:
-                        state.estado = 'CONVITE_AVALIACAO'
-                        state.contexto = _json.dumps({'token_id': tk.id})
-                        state.atualizado_em = datetime.utcnow()
-                except Exception:
-                    pass
             db.session.commit()
             enviados += 1
         else:

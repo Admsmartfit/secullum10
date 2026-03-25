@@ -372,17 +372,13 @@ def teste():
         flash('Informe o número de telefone para teste.', 'danger')
         return render_template('avaliacoes/teste.html', departamentos=departamentos)
 
-    # Normaliza: remove tudo que não for dígito
     celular_teste = ''.join(c for c in celular_teste if c.isdigit())
 
-    from services.avaliacao_service import (
-        criar_ciclo, PERGUNTAS, TIPO_LABELS, _url_base, _novo_token
-    )
+    from services.avaliacao_service import criar_ciclo, PERGUNTAS, TIPO_LABELS, _url_base, _novo_token
     from models import TokenAvaliacao, Funcionario as Func
-    from services.whatsapp_bot import enviar_texto, enviar_botoes
+    from services.whatsapp_bot import enviar_texto
     from datetime import timedelta
 
-    # 1. Cria ciclo de teste (marcado no status para fácil identificação)
     ciclo = criar_ciclo(departamento=departamento)
     ciclo.status = 'teste'
     db.session.commit()
@@ -390,8 +386,6 @@ def teste():
     url_base = _url_base()
     expira_em = datetime.utcnow() + timedelta(hours=72)
 
-    # 2. Identifica o funcionário do celular de teste usando as mesmas regras do webhook:
-    #    Funcionario.celular → UnidadeLider.celular_lider → GESTOR_CELULAR
     from blueprints.whatsapp import _buscar_func_por_celular
     func_teste = _buscar_func_por_celular(celular_teste[-8:])
 
@@ -402,11 +396,7 @@ def teste():
         q = q.filter_by(departamento=departamento)
     todos = q.limit(10).all()
     professores = [f for f in todos if not (f.email and f.email in emails_gerentes)]
-
     avaliado_ref = professores[0] if professores else (todos[0] if todos else func_teste)
-
-    # avaliador_id = o funcionário do celular_teste (para a cadeia funcionar)
-    # Se o número não está cadastrado como funcionário, usa referência genérica
     avaliador_id_teste = func_teste.id if func_teste else None
 
     tokens_criados = []
@@ -424,46 +414,31 @@ def teste():
         db.session.add(t)
         db.session.flush()
         tokens_criados.append(t)
-
     db.session.commit()
 
-    # 3. Monta lista de links para exibição na tela de resultado (navegador)
+    # Envia o MESMO formato de convite que a produção (texto com link)
+    enviados = 0
     links_html = []
     for tk in tokens_criados:
         link = f'{url_base}/r/{tk.token}' if url_base else f'/r/{tk.token}'
         label = TIPO_LABELS.get(tk.tipo, tk.tipo)
+        n_perguntas = len(PERGUNTAS.get(tk.tipo, []))
         links_html.append({'label': label, 'link': link, 'token': tk.token, 'tipo': tk.tipo})
 
-    # 4. Dispara no WhatsApp APENAS o primeiro convite interativo.
-    #    Os demais tokens ficam no banco aguardando a cadeia automática
-    #    (_oferecer_proximo_token) que é acionada após cada avaliação concluída.
-    enviados = 0
-
-    tk_interativo = next((t for t in tokens_criados if t.tipo != 'aluno_por_equipe'), None)
-    if tk_interativo:
-        label = TIPO_LABELS.get(tk_interativo.tipo, tk_interativo.tipo)
-        n_perguntas = len(PERGUNTAS.get(tk_interativo.tipo, []))
-        ok = enviar_botoes(
-            celular=celular_teste,
-            texto=(
-                f'🧪 *[TESTE] {label}*\n\n'
-                f'São {n_perguntas} pergunta(s) pelo WhatsApp — uma de cada vez.\n'
-                f'Ao terminar, o próximo formulário será enviado automaticamente.\n\n'
-                f'Deseja iniciar o teste agora?'
-            ),
-            botoes=[
-                {'id': f'avaliacao_iniciar_{tk_interativo.id}', 'title': '✅ Sim, iniciar'},
-                {'id': f'avaliacao_recusar_{tk_interativo.id}', 'title': '❌ Agora não'},
-            ],
-            tipo='avaliacao_teste_convite',
+        primeiro_nome = func_teste.nome.split()[0] if func_teste else 'Avaliador'
+        msg = (
+            f'🧪 *[TESTE] {label}*\n\n'
+            f'Olá, *{primeiro_nome}*! 👋\n\n'
+            f'São apenas *{n_perguntas} perguntas* rápidas.\n\n'
+            f'👉 *Clique aqui para avaliar:*\n{link}\n\n'
+            f'_Este é um envio de teste — 72h de validade._ 🔬'
         )
+        ok = enviar_texto(celular_teste, msg, func_id=avaliador_id_teste, tipo='avaliacao_teste')
         if ok:
-            tk_interativo.enviado_em = datetime.utcnow()
+            tk.enviado_em = datetime.utcnow()
             enviados += 1
-            if func_teste:
-                from blueprints.whatsapp import _set_state
-                _set_state(func_teste.id, 'CONVITE_AVALIACAO', {'token_id': tk_interativo.id})
-            db.session.commit()
+
+    db.session.commit()
 
     return render_template(
         'avaliacoes/teste_resultado.html',
@@ -472,6 +447,47 @@ def teste():
         links=links_html,
         enviados=enviados,
         url_base=url_base,
+    )
+
+
+# ── Excluir ciclo ────────────────────────────────────────────────────────────
+
+@avaliacoes_bp.route('/ciclo/<int:ciclo_id>/excluir', methods=['POST'])
+@login_required
+def excluir_ciclo(ciclo_id):
+    if not _admin_ou_gerente():
+        return jsonify({'erro': 'Acesso restrito'}), 403
+    ciclo = CicloAvaliacao.query.get_or_404(ciclo_id)
+    db.session.delete(ciclo)
+    db.session.commit()
+    flash(f'Ciclo #{ciclo_id} e todos os dados associados foram excluídos.', 'success')
+    return redirect(url_for('avaliacoes.index'))
+
+
+# ── Histórico de evolução do funcionário ─────────────────────────────────────
+
+@avaliacoes_bp.route('/historico/<func_id>')
+@login_required
+def historico(func_id):
+    if not _admin_ou_gerente():
+        flash('Acesso restrito.', 'danger')
+        return redirect(url_for('avaliacoes.index'))
+
+    func = Funcionario.query.get_or_404(func_id)
+    scores = (ScoreAvaliacao.query
+              .filter_by(funcionario_id=func_id)
+              .join(CicloAvaliacao, ScoreAvaliacao.ciclo_id == CicloAvaliacao.id)
+              .order_by(CicloAvaliacao.data_inicio.asc())
+              .all())
+
+    todos_funcs = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
+
+    return render_template(
+        'avaliacoes/historico.html',
+        func=func,
+        scores=scores,
+        todos_funcs=todos_funcs,
+        niveis_info={n[0]: {'emoji': n[4]} for n in NIVEIS},
     )
 
 

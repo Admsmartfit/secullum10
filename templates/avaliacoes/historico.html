@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% block title %}Histórico — {{ func.nome }}{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <a href="{{ url_for('avaliacoes.index') }}" class="text-muted small me-2">
+            <i class="fas fa-arrow-left"></i> Avaliações
+        </a>
+        <h1 class="h4 mb-0 d-inline">📈 Histórico — {{ func.nome.split()[0] }}</h1>
+    </div>
+    <form method="GET" class="d-flex gap-2 align-items-center">
+        <select name="func_id" class="form-select form-select-sm" style="max-width:220px"
+                onchange="location.href='/avaliacoes/historico/'+this.value">
+            {% for f in todos_funcs %}
+            <option value="{{ f.id }}" {% if f.id == func.id %}selected{% endif %}>{{ f.nome }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+{% if not scores %}
+<div class="card p-5 text-center text-muted">
+    <i class="fas fa-chart-line fa-3x mb-3 opacity-50"></i>
+    <p class="mb-0">Nenhum ciclo concluído para este colaborador.</p>
+</div>
+{% else %}
+
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="card p-4 text-center">
+            <div class="text-muted small mb-1">Último Score Global</div>
+            <div class="display-5 fw-bold text-primary">{{ '%.1f'|format(scores[-1].score_global or 0) }}</div>
+            <div class="mt-1">{{ niveis_info.get(scores[-1].nivel, {}).get('emoji','') }} <span class="text-capitalize">{{ scores[-1].nivel or '—' }}</span></div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card p-4 text-center">
+            <div class="text-muted small mb-1">Ciclos Avaliados</div>
+            <div class="display-5 fw-bold text-success">{{ scores|length }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card p-4 text-center">
+            <div class="text-muted small mb-1">Melhor Score</div>
+            <div class="display-5 fw-bold text-warning">{{ '%.1f'|format(scores|map(attribute='score_global')|select|max or 0) }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="card p-4 mb-4">
+    <h6 class="fw-semibold mb-3">Evolução do Score</h6>
+    <canvas id="chartEvolucao" height="120"></canvas>
+</div>
+
+<div class="card p-4">
+    <h6 class="fw-semibold mb-3">Histórico de Ciclos</h6>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle small">
+            <thead class="table-light">
+                <tr>
+                    <th>Ciclo</th>
+                    <th>Data</th>
+                    <th class="text-center">Score Global</th>
+                    <th class="text-center">Gerente</th>
+                    <th class="text-center">Pares</th>
+                    <th class="text-center">Alunos</th>
+                    <th class="text-center">Nível</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sc in scores|reverse %}
+                {% set nivel_badge = {'diamante':'primary','ouro':'warning','prata':'secondary','bronze':'danger'} %}
+                <tr>
+                    <td><strong>#{{ sc.ciclo_id }}</strong></td>
+                    <td>{{ sc.ciclo.data_inicio.strftime('%d/%m/%Y') if sc.ciclo else '—' }}</td>
+                    <td class="text-center fw-bold">{{ '%.1f'|format(sc.score_global or 0) }}</td>
+                    <td class="text-center">{{ '%.1f'|format(sc.score_gerente or 0) if sc.score_gerente else '—' }}</td>
+                    <td class="text-center">{{ '%.1f'|format(sc.score_pares or 0) if sc.score_pares else '—' }}</td>
+                    <td class="text-center">{{ '%.1f'|format(sc.score_alunos or 0) if sc.score_alunos else '—' }}</td>
+                    <td class="text-center">
+                        <span class="badge bg-{{ nivel_badge.get(sc.nivel,'secondary') }}">
+                            {{ niveis_info.get(sc.nivel,{}).get('emoji','') }} {{ sc.nivel|capitalize if sc.nivel else '—' }}
+                        </span>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('avaliacoes.detalhe_ciclo', ciclo_id=sc.ciclo_id) }}"
+                           class="btn btn-outline-primary btn-sm">Ver</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const labels = [{% for sc in scores %}'#{{ sc.ciclo_id }}'{% if not loop.last %},{% endif %}{% endfor %}];
+const globalData = [{% for sc in scores %}{{ sc.score_global or 0 }}{% if not loop.last %},{% endif %}{% endfor %}];
+const gerenteData = [{% for sc in scores %}{{ sc.score_gerente or 0 }}{% if not loop.last %},{% endif %}{% endfor %}];
+const paresData = [{% for sc in scores %}{{ sc.score_pares or 0 }}{% if not loop.last %},{% endif %}{% endfor %}];
+
+new Chart(document.getElementById('chartEvolucao'), {
+    type: 'line',
+    data: {
+        labels,
+        datasets: [
+            { label: 'Score Global', data: globalData, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,.1)', tension: .4, fill: true, borderWidth: 2 },
+            { label: 'Gerente (40%)', data: gerenteData, borderColor: '#f59e0b', tension: .4, borderDash: [4,4], borderWidth: 1.5 },
+            { label: 'Pares (30%)', data: paresData, borderColor: '#10b981', tension: .4, borderDash: [4,4], borderWidth: 1.5 },
+        ]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' } },
+        scales: {
+            y: { min: 0, max: 5, ticks: { stepSize: 1 } }
+        }
+    }
+});
+</script>
+{% endif %}
+{% endblock %}

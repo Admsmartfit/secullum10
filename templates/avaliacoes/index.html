@@ -35,7 +35,7 @@
 {% else %}
 <div class="row g-3">
     {% for ciclo in ciclos %}
-    {% set badge = {'ativo': 'success', 'fechado': 'secondary', 'inconclusivo': 'warning', 'cancelado': 'danger'} %}
+    {% set badge = {'ativo': 'success', 'fechado': 'secondary', 'inconclusivo': 'warning', 'cancelado': 'danger', 'teste': 'info'} %}
     <div class="col-12">
         <div class="card p-4">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -47,17 +47,58 @@
                 <div class="small text-muted">
                     <i class="fas fa-calendar me-1"></i>{{ ciclo.data_inicio.strftime('%d/%m/%Y') }}
                     → {{ ciclo.data_fim_coleta.strftime('%d/%m/%Y') }}
-                    {% if ciclo.proximo_ciclo_data %}
-                    <span class="ms-3"><i class="fas fa-clock me-1"></i>Próximo: {{ ciclo.proximo_ciclo_data.strftime('%d/%m/%Y') }}</span>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('avaliacoes.detalhe_ciclo', ciclo_id=ciclo.id) }}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-eye me-1"></i>Ver
+                    </a>
+                    {% if current_user.nivel_acesso in ('administrador', 'gerente') %}
+                    <button type="button" class="btn btn-outline-danger btn-sm"
+                            data-bs-toggle="modal" data-bs-target="#modalExcluir"
+                            data-ciclo-id="{{ ciclo.id }}"
+                            data-ciclo-label="Ciclo #{{ ciclo.id }}{% if ciclo.departamento %} — {{ ciclo.departamento }}{% endif %}">
+                        <i class="fas fa-trash"></i>
+                    </button>
                     {% endif %}
                 </div>
-                <a href="{{ url_for('avaliacoes.detalhe_ciclo', ciclo_id=ciclo.id) }}" class="btn btn-outline-primary btn-sm">
-                    <i class="fas fa-eye me-1"></i>Ver Detalhes
-                </a>
             </div>
         </div>
     </div>
     {% endfor %}
 </div>
 {% endif %}
+
+<!-- Modal de Confirmação de Exclusão -->
+<div class="modal fade" id="modalExcluir" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title text-danger"><i class="fas fa-exclamation-triangle me-2"></i>Excluir Ciclo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem a certeza que deseja excluir <strong id="labelCicloExcluir"></strong>?</p>
+                <p class="text-danger small mb-0">⚠️ Esta ação é irreversível. Todos os tokens, respostas e scores associados serão eliminados permanentemente.</p>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form id="formExcluir" method="POST" style="display:inline">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-1"></i>Sim, excluir
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('modalExcluir').addEventListener('show.bs.modal', function(e) {
+    const btn = e.relatedTarget;
+    const cicloId = btn.dataset.cicloId;
+    const label = btn.dataset.cicloLabel;
+    document.getElementById('labelCicloExcluir').textContent = label;
+    document.getElementById('formExcluir').action = '/avaliacoes/ciclo/' + cicloId + '/excluir';
+});
+</script>
 {% endblock %}

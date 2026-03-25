@@ -2,75 +2,295 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>{{ titulo }}</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <style>
-        body { background: #f8f9fa; }
-        .card { border-radius: 16px; border: none; box-shadow: 0 2px 16px rgba(0,0,0,.08); }
-        .likert-btn { cursor: pointer; }
-        .likert-btn input[type=radio] { display: none; }
-        .likert-btn label {
-            display: flex; flex-direction: column; align-items: center;
-            gap: 4px; padding: 10px 14px; border-radius: 10px;
-            border: 2px solid #dee2e6; cursor: pointer; transition: all .2s;
-            font-size: .85rem; color: #6c757d; min-width: 52px;
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
-        .likert-btn input:checked + label {
-            border-color: #0d6efd; background: #0d6efd; color: #fff;
+
+        /* Progress Bar */
+        .progress-wrap {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+            background: rgba(255,255,255,.15);
+            z-index: 100;
         }
-        .likert-btn label:hover { border-color: #86b7fe; }
-        .scale-legend { display: flex; justify-content: space-between; font-size: .75rem; color: #adb5bd; }
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+            transition: width .4s ease;
+        }
+
+        /* Header */
+        .header {
+            padding: 24px 20px 12px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: .8rem;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+        }
+        .header strong { color: #e2e8f0; font-size: 1rem; display: block; margin-top: 4px; }
+
+        /* Cards wrapper */
+        .cards-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px 20px 100px;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 480px;
+            background: #1e293b;
+            border-radius: 20px;
+            padding: 28px 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,.4);
+        }
+
+        .step { display: none; }
+        .step.active { display: block; }
+
+        .step-num {
+            font-size: .75rem;
+            color: #6366f1;
+            font-weight: 700;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+
+        .question-text {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #f1f5f9;
+            line-height: 1.5;
+            margin-bottom: 28px;
+        }
+
+        /* Rating buttons */
+        .rating-buttons { display: flex; flex-direction: column; gap: 10px; }
+
+        .rating-btn {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 18px;
+            border-radius: 14px;
+            border: 2px solid rgba(255,255,255,.08);
+            background: rgba(255,255,255,.04);
+            cursor: pointer;
+            transition: all .15s ease;
+            text-align: left;
+            width: 100%;
+            color: #cbd5e1;
+            font-size: .95rem;
+        }
+        .rating-btn:active { transform: scale(.97); }
+        .rating-btn:hover { border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.08); }
+
+        .rating-btn.selected {
+            border-color: var(--btn-color);
+            background: color-mix(in srgb, var(--btn-color) 20%, transparent);
+            color: #fff;
+        }
+
+        .rating-num {
+            width: 36px; height: 36px;
+            border-radius: 50%;
+            background: var(--btn-color);
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 700;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .rating-btn[data-val="1"] { --btn-color: #ef4444; }
+        .rating-btn[data-val="2"] { --btn-color: #f97316; }
+        .rating-btn[data-val="3"] { --btn-color: #eab308; }
+        .rating-btn[data-val="4"] { --btn-color: #22c55e; }
+        .rating-btn[data-val="5"] { --btn-color: #6366f1; }
+
+        /* Bottom bar */
+        .bottom-bar {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            padding: 16px 20px;
+            background: linear-gradient(0deg, #0f172a 70%, transparent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,.2);
+            transition: all .3s;
+        }
+        .dot.active { background: #6366f1; width: 24px; border-radius: 4px; }
+
+        /* Finish step */
+        .finish-step {
+            text-align: center;
+            padding: 20px 0;
+        }
+        .finish-step .big-emoji { font-size: 3.5rem; margin-bottom: 16px; }
+        .finish-step h2 { color: #f1f5f9; font-size: 1.4rem; margin-bottom: 8px; }
+        .finish-step p { color: #94a3b8; font-size: .9rem; margin-bottom: 24px; }
+
+        .btn-submit {
+            width: 100%;
+            padding: 16px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: opacity .2s;
+        }
+        .btn-submit:disabled { opacity: .6; cursor: not-allowed; }
+
+        .anon-note {
+            color: #475569;
+            font-size: .75rem;
+            text-align: center;
+            margin-top: 16px;
+        }
+
+        /* Slide animation */
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(40px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
+        .step.active { animation: slideIn .3s ease; }
     </style>
 </head>
 <body>
-<div class="container py-5" style="max-width:640px">
-    <div class="text-center mb-4">
-        <div class="fs-1">💎</div>
-        <h4 class="fw-bold">{{ titulo }}</h4>
-        {% if avaliado %}
-        <p class="text-muted mb-0">Avaliando: <strong>{{ avaliado.nome }}</strong></p>
-        {% endif %}
-        <p class="text-muted small mt-1">Escala: 1 = Nunca &nbsp;·&nbsp; 5 = Sempre</p>
-    </div>
 
-    <div class="card p-4">
-        <form method="POST" action="/r/{{ token }}/submit" id="formAvaliacao">
+<div class="progress-wrap">
+    <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+</div>
+
+<div class="header">
+    {{ titulo }}
+    {% if avaliado %}<strong>Avaliando: {{ avaliado.nome }}</strong>{% endif %}
+</div>
+
+<form method="POST" action="/r/{{ token }}/submit" id="formAvaliacao">
+    <div class="cards-wrapper">
+        <div class="card">
             {% for p in perguntas %}
-            <div class="mb-4 pb-3 {{ 'border-bottom' if not loop.last }}">
-                <p class="fw-semibold mb-3">{{ loop.index }}. {{ p.texto }}</p>
-                <div class="d-flex gap-2 justify-content-center flex-wrap">
-                    {% for nota in [1,2,3,4,5] %}
-                    <div class="likert-btn">
-                        <input type="radio" name="q{{ p.num }}" id="q{{ p.num }}_{{ nota }}" value="{{ nota }}" required>
-                        <label for="q{{ p.num }}_{{ nota }}">
-                            <span class="fw-bold">{{ nota }}</span>
-                            <span>{{ ['Nunca','Raramente','Às vezes','Frequente','Sempre'][nota-1] }}</span>
-                        </label>
-                    </div>
+            <div class="step {% if loop.first %}active{% endif %}" data-step="{{ loop.index }}" data-total="{{ perguntas|length }}">
+                <div class="step-num">Pergunta {{ loop.index }} de {{ perguntas|length }}</div>
+                <div class="question-text">{{ p.texto }}</div>
+                <div class="rating-buttons">
+                    {% for nota, label in [(1,'Nunca'),(2,'Raramente'),(3,'Às vezes'),(4,'Frequentemente'),(5,'Sempre')] %}
+                    <button type="button" class="rating-btn" data-val="{{ nota }}" data-qnum="{{ p.num }}">
+                        <span class="rating-num">{{ nota }}</span>
+                        <span>{{ label }}</span>
+                    </button>
                     {% endfor %}
                 </div>
+                <input type="hidden" name="q{{ p.num }}" id="hidden_q{{ p.num }}" value="">
             </div>
             {% endfor %}
 
-            <div class="d-grid mt-4">
-                <button type="submit" class="btn btn-primary btn-lg" id="btnEnviar">
-                    Enviar Avaliação
-                </button>
+            <div class="step" id="finishStep">
+                <div class="finish-step">
+                    <div class="big-emoji">🎉</div>
+                    <h2>Tudo pronto!</h2>
+                    <p>Revise e confirme o envio das suas respostas.</p>
+                    <button type="submit" class="btn-submit" id="btnEnviar">
+                        Confirmar e Enviar
+                    </button>
+                    <p class="anon-note">🔒 As suas respostas são anónimas e confidenciais.</p>
+                </div>
             </div>
-        </form>
+        </div>
     </div>
+</form>
 
-    <p class="text-center text-muted small mt-3">
-        🔒 Suas respostas são anônimas e confidenciais.
-    </p>
-</div>
+<div class="bottom-bar" id="dotsBar"></div>
 
 <script>
-document.getElementById('formAvaliacao').addEventListener('submit', function() {
-    document.getElementById('btnEnviar').disabled = true;
-    document.getElementById('btnEnviar').textContent = 'Enviando...';
-});
+(function() {
+    const totalSteps = {{ perguntas|length }};
+    const steps = Array.from(document.querySelectorAll('.step[data-step]'));
+    const finishStep = document.getElementById('finishStep');
+    const progressBar = document.getElementById('progressBar');
+    const dotsBar = document.getElementById('dotsBar');
+    let currentStep = 0; // 0-indexed
+
+    // Build dots
+    for (let i = 0; i < totalSteps; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'dot' + (i === 0 ? ' active' : '');
+        dot.dataset.i = i;
+        dotsBar.appendChild(dot);
+    }
+
+    function showStep(idx) {
+        steps.forEach((s, i) => s.classList.toggle('active', i === idx));
+        finishStep.classList.remove('active');
+        document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i === idx));
+        progressBar.style.width = ((idx / totalSteps) * 100) + '%';
+        window.scrollTo(0, 0);
+    }
+
+    function showFinish() {
+        steps.forEach(s => s.classList.remove('active'));
+        finishStep.classList.add('active');
+        progressBar.style.width = '100%';
+        document.querySelectorAll('.dot').forEach(d => d.classList.remove('active'));
+        window.scrollTo(0, 0);
+    }
+
+    document.querySelectorAll('.rating-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const qnum = this.dataset.qnum;
+            const val = this.dataset.val;
+
+            // Mark selected
+            document.querySelectorAll(`.rating-btn[data-qnum="${qnum}"]`)
+                .forEach(b => b.classList.remove('selected'));
+            this.classList.add('selected');
+
+            // Set hidden input
+            document.getElementById('hidden_q' + qnum).value = val;
+
+            // Auto-advance after 300ms
+            setTimeout(() => {
+                if (currentStep < totalSteps - 1) {
+                    currentStep++;
+                    showStep(currentStep);
+                } else {
+                    showFinish();
+                }
+            }, 300);
+        });
+    });
+
+    document.getElementById('btnEnviar').addEventListener('click', function() {
+        this.disabled = true;
+        this.textContent = 'A enviar...';
+    });
+
+    showStep(0);
+})();
 </script>
 </body>
 </html>
