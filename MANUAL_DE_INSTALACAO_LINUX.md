@@ -1,6 +1,6 @@
 # Manual de Instalação e Deploy (Linux + Cloudflare Tunnel)
 
-Este manual cobre a instalação do **Secullum10** no seu servidor Linux local utilizando o **Docker** configurado para rodar na porta `5020`, e seu posterior roteamento através do Cloudflare Tunnel.
+Este manual cobre a instalação do **Secullum10** no seu servidor Linux local utilizando o **Docker** configurado para rodar na porta `5010`, e seu posterior roteamento através do Cloudflare Tunnel.
 
 ## Pré-requisitos
 - Servidor Linux com Ubuntu/Debian (ou similar).
@@ -72,7 +72,7 @@ A aplicação está exposta publicamente através do Cloudflare Tunnel já confi
 | **URL pública** | https://ponto.ricardo.home.nom.br |
 | **DNS (CNAME)** | `ponto.ricardo.home.nom.br` → `101f11c8-d843-456a-8c9f-4936efcfe076.cfargotunnel.com` |
 | **Tunnel ID** | `101f11c8-d843-456a-8c9f-4936efcfe076` |
-| **Porta interna** | `localhost:5020` |
+| **Porta interna** | `localhost:5010` |
 
 ### Verificar se o túnel está ativo
 
@@ -88,7 +88,7 @@ credentials-file: /etc/cloudflared/101f11c8-d843-456a-8c9f-4936efcfe076.json
 
 ingress:
   - hostname: ponto.ricardo.home.nom.br
-    service: http://localhost:5020
+    service: http://localhost:5010
 
   - service: http_status:404
 ```
