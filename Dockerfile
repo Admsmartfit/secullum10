@@ -30,7 +30,7 @@ COPY . /app/
 RUN mkdir -p /app/uploads/prontuario /app/instance
 
 # Expose the application port
-EXPOSE 5010
+EXPOSE 5020
 
 # Command to start the application with Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:5010", "--workers", "3", "--timeout", "120", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5020", "--workers", "3", "--timeout", "120", "app:app"]
