@@ -416,26 +416,31 @@ def teste():
         tokens_criados.append(t)
     db.session.commit()
 
-    # Envia o MESMO formato de convite que a produção (texto com link)
+    # Monta lista de links para exibição no browser
     enviados = 0
     links_html = []
     for tk in tokens_criados:
         link = f'{url_base}/r/{tk.token}' if url_base else f'/r/{tk.token}'
         label = TIPO_LABELS.get(tk.tipo, tk.tipo)
-        n_perguntas = len(PERGUNTAS.get(tk.tipo, []))
         links_html.append({'label': label, 'link': link, 'token': tk.token, 'tipo': tk.tipo})
 
+    # Envia APENAS o primeiro token (não-aluno) via WhatsApp — mesmo formato que produção
+    tk_enviar = next((t for t in tokens_criados if t.tipo != 'aluno_por_equipe'), tokens_criados[0] if tokens_criados else None)
+    if tk_enviar:
+        link = f'{url_base}/r/{tk_enviar.token}' if url_base else f'/r/{tk_enviar.token}'
+        label = TIPO_LABELS.get(tk_enviar.tipo, tk_enviar.tipo)
+        n_perguntas = len(PERGUNTAS.get(tk_enviar.tipo, []))
         primeiro_nome = func_teste.nome.split()[0] if func_teste else 'Avaliador'
         msg = (
             f'🧪 *[TESTE] {label}*\n\n'
             f'Olá, *{primeiro_nome}*! 👋\n\n'
-            f'São apenas *{n_perguntas} perguntas* rápidas.\n\n'
+            f'São apenas *{n_perguntas} perguntas* rápidas e as suas respostas são *100% anónimas*.\n\n'
             f'👉 *Clique aqui para avaliar:*\n{link}\n\n'
             f'_Este é um envio de teste — 72h de validade._ 🔬'
         )
         ok = enviar_texto(celular_teste, msg, func_id=avaliador_id_teste, tipo='avaliacao_teste')
         if ok:
-            tk.enviado_em = datetime.utcnow()
+            tk_enviar.enviado_em = datetime.utcnow()
             enviados += 1
 
     db.session.commit()
