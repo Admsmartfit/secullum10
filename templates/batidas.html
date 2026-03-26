@@ -11,24 +11,27 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 mb-0 font-weight-bold">Espelho de Ponto</h1>
     <div class="d-flex gap-2 flex-wrap">
-        <form method="GET" id="formEspelho" class="d-flex gap-2 flex-wrap">
-            <select name="funcionario_id" id="selectFuncEspelho" class="form-select" style="min-width:220px">
-                <option value="">Todos os funcionários</option>
-                {% if todos_func %}
-                {% for f in todos_func %}
-                <option value="{{ f.id }}" {% if funcionario_id == f.id|string %}selected{% endif %}>{{ f.nome }}</option>
-                {% endfor %}
-                {% else %}
-                {% for fid, fname in funcionarios_com_batida %}
-                <option value="{{ fid }}" {% if funcionario_id == fid|string %}selected{% endif %}>{{ fname }}</option>
-                {% endfor %}
-                {% endif %}
+        <form method="GET" id="formEspelho" class="d-flex gap-2 flex-wrap align-items-center">
+            <!-- 1. Departamento -->
+            <select id="selDep" name="departamento" class="form-select form-select-sm" style="min-width:160px"
+                    title="Selecione o departamento">
+                <option value="">Departamento</option>
             </select>
-            <input type="date" name="data_inicio" class="form-control bg-dark border-secondary text-white"
-                value="{{ data_inicio }}">
-            <input type="date" name="data_fim" class="form-control bg-dark border-secondary text-white"
-                value="{{ data_fim }}">
-            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i></button>
+            <!-- 2. Função -->
+            <select id="selFuncao" name="funcao" class="form-select form-select-sm" style="min-width:160px"
+                    title="Selecione a função" disabled>
+                <option value="">Função</option>
+            </select>
+            <!-- 3. Funcionário -->
+            <select id="selFuncionario" name="funcionario_id" class="form-select form-select-sm" style="min-width:200px"
+                    title="Selecione o funcionário" disabled>
+                <option value="">Todos</option>
+            </select>
+            <input type="date" name="data_inicio" class="form-control form-control-sm bg-dark border-secondary text-white"
+                style="width:140px" value="{{ data_inicio }}">
+            <input type="date" name="data_fim" class="form-control form-control-sm bg-dark border-secondary text-white"
+                style="width:140px" value="{{ data_fim }}">
+            <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i></button>
         </form>
         <button class="btn btn-outline-success" onclick="exportToExcel()">
             <i class="fas fa-file-excel me-2"></i>Excel
@@ -142,27 +145,83 @@
 
 {% block extra_js %}
 <script>
-    $(function() {
-        $('#selectFuncEspelho').select2({
-            placeholder: 'Todos os funcionários',
-            allowClear: true,
-            width: '220px',
-        });
-        // auto-submit on selection
-        $('#selectFuncEspelho').on('select2:select select2:unselect', function() {
-            document.getElementById('formEspelho').submit();
-        });
-    });
+(function() {
+    const ARVORE = {{ arvore_filtros_json | safe }};
+    const depSel    = document.getElementById('selDep');
+    const funcaoSel = document.getElementById('selFuncao');
+    const funcSel   = document.getElementById('selFuncionario');
 
-    function exportToExcel() {
-        window.location.href = window.location.pathname + '?' + new URLSearchParams(new FormData(document.getElementById('formEspelho'))).toString() + '&export=true';
+    // Valores pré-seleccionados vindos do servidor
+    const SEL_DEP     = {{ dep_sel | tojson }};
+    const SEL_FUNCAO  = {{ func_sel | tojson }};
+    const SEL_FUNC_ID = {{ funcionario_id | tojson }};
+
+    // Preenche select com opções, preservando a selecção
+    function preencher(sel, opcoes, valorSel) {
+        const primeiro = sel.options[0];
+        sel.innerHTML = '';
+        sel.appendChild(primeiro);
+        opcoes.forEach(([val, label]) => {
+            const o = new Option(label, val, false, val === valorSel);
+            sel.appendChild(o);
+        });
     }
 
-    // Atualizar link de download do PDF quando funcionário é selecionado
-    const funcSel = document.querySelector('#modalEnviarEspelho select[name="funcionario_id"]');
+    // 1. Popula departamentos (ordem alfabética)
+    const deps = Object.keys(ARVORE).sort();
+    preencher(depSel, deps.map(d => [d, d]), SEL_DEP);
+
+    function popularFuncoes(dep) {
+        funcaoSel.innerHTML = '<option value="">Função</option>';
+        funcSel.innerHTML   = '<option value="">Todos</option>';
+        if (!dep) {
+            funcaoSel.disabled = true;
+            funcSel.disabled   = true;
+            return;
+        }
+        const funcoes = Object.keys(ARVORE[dep] || {}).sort();
+        preencher(funcaoSel, funcoes.map(f => [f, f]), SEL_FUNCAO);
+        funcaoSel.disabled = false;
+        funcSel.disabled   = true;
+    }
+
+    function popularFuncionarios(dep, funcao) {
+        funcSel.innerHTML = '<option value="">Todos</option>';
+        if (!dep || !funcao) { funcSel.disabled = true; return; }
+        const lista = (ARVORE[dep] || {})[funcao] || [];
+        // ordenados por admissão (já vêm ordenados do servidor; mantemos a ordem)
+        lista.forEach(f => {
+            const label = f.admissao ? `${f.nome} (${f.admissao})` : f.nome;
+            const o = new Option(label, f.id, false, f.id === SEL_FUNC_ID);
+            funcSel.appendChild(o);
+        });
+        funcSel.disabled = false;
+    }
+
+    // Inicializa com os valores do servidor
+    popularFuncoes(SEL_DEP);
+    popularFuncionarios(SEL_DEP, SEL_FUNCAO);
+
+    // Eventos
+    depSel.addEventListener('change', function() {
+        popularFuncoes(this.value);
+    });
+    funcaoSel.addEventListener('change', function() {
+        popularFuncionarios(depSel.value, this.value);
+    });
+
+    // Export Excel
+    window.exportToExcel = function() {
+        window.location.href = window.location.pathname + '?' +
+            new URLSearchParams(new FormData(document.getElementById('formEspelho'))).toString() +
+            '&export=true';
+    };
+
+    // Atualizar link de download do PDF no modal
+    const funcSelModal = document.querySelector('#modalEnviarEspelho select[name="funcionario_id"]');
     const btnDown = document.getElementById('btnDownloadPDF');
-    if (funcSel && btnDown) {
-        funcSel.addEventListener('change', function() {
+    if (funcSelModal && btnDown) {
+        funcSelModal.addEventListener('change', function() {
             const ini = document.querySelector('input[name="data_inicio"]').value;
             const fim = document.querySelector('input[name="data_fim"]').value;
             if (this.value) {
@@ -170,6 +229,7 @@
             }
         });
     }
+})();
 </script>
 {% endblock %}
 {% endblock %}

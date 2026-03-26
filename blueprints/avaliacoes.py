@@ -496,6 +496,69 @@ def historico(func_id):
     )
 
 
+# ── Monitor de envios ────────────────────────────────────────────────────────
+
+@avaliacoes_bp.route('/monitor')
+@avaliacoes_bp.route('/monitor/<int:ciclo_id>')
+@login_required
+def monitor(ciclo_id=None):
+    if not _admin_ou_gerente():
+        flash('Acesso restrito.', 'danger')
+        return redirect(url_for('avaliacoes.index'))
+
+    from models import WhatsappLog
+    from services.avaliacao_service import _url_base
+
+    ciclos = CicloAvaliacao.query.order_by(CicloAvaliacao.data_inicio.desc()).limit(30).all()
+    ciclo_sel = CicloAvaliacao.query.get(ciclo_id) if ciclo_id else (ciclos[0] if ciclos else None)
+
+    tokens = []
+    stats = {'nao_enviado': 0, 'enviado': 0, 'respondido': 0, 'expirado': 0}
+    logs_wpp = []
+    url_base = _url_base()
+
+    if ciclo_sel:
+        tokens = (TokenAvaliacao.query
+                  .filter_by(ciclo_id=ciclo_sel.id)
+                  .order_by(TokenAvaliacao.tipo, TokenAvaliacao.id)
+                  .all())
+
+        agora = datetime.utcnow()
+        for tk in tokens:
+            if tk.respondido:
+                stats['respondido'] += 1
+            elif tk.expira_em and agora > tk.expira_em:
+                stats['expirado'] += 1
+            elif tk.enviado_em:
+                stats['enviado'] += 1
+            else:
+                stats['nao_enviado'] += 1
+
+        # Logs WhatsApp relacionados à avaliação (últimas 200 entradas do ciclo)
+        logs_wpp = (WhatsappLog.query
+                    .filter(WhatsappLog.tipo.in_([
+                        'avaliacao_convite', 'avaliacao_teste', 'avaliacao_link',
+                        'avaliacao', 'avaliacao_teste_convite',
+                    ]))
+                    .filter(WhatsappLog.criado_em >= ciclo_sel.data_inicio)
+                    .order_by(WhatsappLog.criado_em.desc())
+                    .limit(200)
+                    .all())
+
+    return render_template(
+        'avaliacoes/monitor.html',
+        ciclos=ciclos,
+        ciclo_sel=ciclo_sel,
+        tokens=tokens,
+        stats=stats,
+        logs_wpp=logs_wpp,
+        url_base=url_base,
+        TIPO_LABELS=TIPO_LABELS,
+        PERGUNTAS=PERGUNTAS,
+        agora=datetime.utcnow(),
+    )
+
+
 # ── API JSON ──────────────────────────────────────────────────────────────────
 
 @avaliacoes_bp.route('/api/ciclos')

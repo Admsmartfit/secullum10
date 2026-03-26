@@ -1,0 +1,223 @@
+{% extends 'base.html' %}
+{% block title %}Monitor de Avaliações{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <a href="{{ url_for('avaliacoes.index') }}" class="text-muted small me-2">
+            <i class="fas fa-arrow-left"></i> Avaliações
+        </a>
+        <h1 class="h4 mb-0 d-inline">📡 Monitor de Envios</h1>
+    </div>
+    {% if ciclos %}
+    <form method="GET" class="d-flex gap-2 align-items-center">
+        <label class="text-muted small me-1">Ciclo:</label>
+        <select class="form-select form-select-sm" style="max-width:240px"
+                onchange="location.href='/avaliacoes/monitor/'+this.value">
+            {% for c in ciclos %}
+            <option value="{{ c.id }}" {% if ciclo_sel and c.id == ciclo_sel.id %}selected{% endif %}>
+                #{{ c.id }} — {{ c.departamento or 'Todos' }} ({{ c.status.upper() }})
+            </option>
+            {% endfor %}
+        </select>
+    </form>
+    {% endif %}
+</div>
+
+{% if not ciclo_sel %}
+<div class="card p-5 text-center text-muted">
+    <i class="fas fa-chart-bar fa-3x mb-3 opacity-50"></i>
+    <p>Nenhum ciclo disponível.</p>
+</div>
+{% else %}
+
+{# ── Cards de estatísticas ────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+    {% set stat_cards = [
+        ('nao_enviado', 'Não enviado', 'secondary', 'fas fa-clock'),
+        ('enviado',     'Enviado',     'primary',   'fas fa-paper-plane'),
+        ('respondido',  'Respondido',  'success',   'fas fa-check-circle'),
+        ('expirado',    'Expirado',    'danger',    'fas fa-times-circle'),
+    ] %}
+    {% for key, label, color, icon in stat_cards %}
+    <div class="col-6 col-md-3">
+        <div class="card p-3 border-{{ color }} border-opacity-25">
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-{{ color }} fs-4"><i class="{{ icon }}"></i></span>
+                <div>
+                    <div class="display-6 fw-bold text-{{ color }}">{{ stats[key] }}</div>
+                    <div class="text-muted small">{{ label }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{# ── Pipeline de Tokens ───────────────────────────────────────── #}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="fas fa-stream me-2"></i>Pipeline de Tokens — Ciclo #{{ ciclo_sel.id }}</span>
+        <span class="badge bg-secondary">{{ tokens|length }} token(s)</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle small mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Tipo</th>
+                    <th>Avaliador</th>
+                    <th>Avaliado</th>
+                    <th class="text-center">Enviado (WPP)</th>
+                    <th class="text-center">Respostas</th>
+                    <th class="text-center">Concluído</th>
+                    <th class="text-center">Expira</th>
+                    <th>Link</th>
+                    <th class="text-center">Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for tk in tokens %}
+            {% set n_respostas = tk.respostas|length %}
+            {% set total_q = PERGUNTAS.get(tk.tipo, [])|length %}
+            {% set expirado = tk.expira_em and agora > tk.expira_em and not tk.respondido %}
+
+            {% if tk.respondido %}
+                {% set estado_badge = 'success' %}
+                {% set estado_label = '✅ Respondido' %}
+            {% elif expirado %}
+                {% set estado_badge = 'danger' %}
+                {% set estado_label = '⌛ Expirado' %}
+            {% elif tk.enviado_em %}
+                {% set estado_badge = 'primary' %}
+                {% set estado_label = '📨 Aguardando' %}
+            {% else %}
+                {% set estado_badge = 'secondary' %}
+                {% set estado_label = '🕐 Pendente' %}
+            {% endif %}
+
+            <tr>
+                <td>
+                    <span class="badge bg-light text-dark border">{{ TIPO_LABELS.get(tk.tipo, tk.tipo) }}</span>
+                </td>
+                <td>
+                    {% if tk.avaliador %}
+                        {{ tk.avaliador.nome.split()[0] }} {{ tk.avaliador.nome.split()[-1] }}
+                        <div class="text-muted" style="font-size:.7rem">{{ tk.avaliador.celular or '—' }}</div>
+                    {% elif tk.avaliador_nome %}
+                        {{ tk.avaliador_nome }}
+                        <div class="text-muted" style="font-size:.7rem">{{ tk.avaliador_celular or '—' }}</div>
+                    {% else %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if tk.avaliado %}
+                        {{ tk.avaliado.nome.split()[0] }} {{ tk.avaliado.nome.split()[-1] }}
+                    {% else %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    {% if tk.enviado_em %}
+                        <span class="text-success"><i class="fas fa-check"></i></span>
+                        <div class="text-muted" style="font-size:.7rem">{{ tk.enviado_em.strftime('%d/%m %H:%M') }}</div>
+                    {% else %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    {% if total_q > 0 %}
+                    <div class="d-flex align-items-center justify-content-center gap-1">
+                        <div class="progress flex-grow-1" style="height:6px;min-width:50px">
+                            <div class="progress-bar bg-success" style="width:{{ (n_respostas/total_q*100)|int }}%"></div>
+                        </div>
+                        <span class="text-muted" style="font-size:.7rem;white-space:nowrap">{{ n_respostas }}/{{ total_q }}</span>
+                    </div>
+                    {% else %}—{% endif %}
+                </td>
+                <td class="text-center">
+                    {% if tk.respondido_em %}
+                        <span class="text-success small">{{ tk.respondido_em.strftime('%d/%m %H:%M') }}</span>
+                    {% else %}—{% endif %}
+                </td>
+                <td class="text-center">
+                    {% if tk.expira_em %}
+                        <span class="{% if expirado %}text-danger{% else %}text-muted{% endif %} small">
+                            {{ tk.expira_em.strftime('%d/%m %H:%M') }}
+                        </span>
+                    {% else %}—{% endif %}
+                </td>
+                <td>
+                    {% set link = (url_base + '/r/' + tk.token) if url_base else ('/r/' + tk.token) %}
+                    <a href="{{ link }}" target="_blank" class="btn btn-outline-secondary btn-sm py-0 px-2" title="{{ link }}">
+                        <i class="fas fa-external-link-alt"></i>
+                    </a>
+                </td>
+                <td class="text-center">
+                    <span class="badge bg-{{ estado_badge }}">{{ estado_label }}</span>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# ── Log de WhatsApp ──────────────────────────────────────────── #}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="fab fa-whatsapp me-2 text-success"></i>Log de Mensagens WhatsApp</span>
+        <span class="badge bg-secondary">{{ logs_wpp|length }} registo(s)</span>
+    </div>
+    {% if not logs_wpp %}
+    <div class="card-body text-center text-muted py-4">
+        <i class="fas fa-inbox fa-2x mb-2 opacity-50"></i>
+        <p class="mb-0 small">Nenhuma mensagem de avaliação registada para este ciclo.</p>
+    </div>
+    {% else %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle small mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Data/Hora</th>
+                    <th>Celular</th>
+                    <th>Tipo</th>
+                    <th>Status</th>
+                    <th>Mensagem</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for log in logs_wpp %}
+            <tr>
+                <td class="text-muted" style="white-space:nowrap">{{ log.criado_em.strftime('%d/%m %H:%M:%S') }}</td>
+                <td style="white-space:nowrap">
+                    {{ log.celular or '—' }}
+                    {% if log.funcionario %}
+                    <div class="text-muted" style="font-size:.7rem">{{ log.funcionario.nome.split()[0] }}</div>
+                    {% endif %}
+                </td>
+                <td><span class="badge bg-light text-dark border">{{ log.tipo or '—' }}</span></td>
+                <td>
+                    {% if log.status == 'enviado' %}
+                        <span class="text-success"><i class="fas fa-check"></i> Enviado</span>
+                    {% elif log.status == 'erro' %}
+                        <span class="text-danger"><i class="fas fa-times"></i> Erro</span>
+                    {% else %}
+                        <span class="text-muted">{{ log.status }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="text-truncate d-inline-block" style="max-width:400px" title="{{ log.mensagem }}">
+                        {{ log.mensagem[:120] }}{% if log.mensagem and log.mensagem|length > 120 %}…{% endif %}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+{% endif %}{# fim ciclo_sel #}
+{% endblock %}

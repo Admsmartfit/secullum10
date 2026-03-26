@@ -16,6 +16,8 @@ def espelho():
     data_fim_str = request.args.get('data_fim', date.today().strftime('%Y-%m-%d'))
     export = request.args.get('export', 'false') == 'true'
     funcionario_id = request.args.get('funcionario_id', '').strip()
+    dep_sel = request.args.get('departamento', '').strip()
+    func_sel = request.args.get('funcao', '').strip()
 
     data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
     data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
@@ -26,13 +28,34 @@ def espelho():
         .join(Funcionario)
         .filter(Funcionario.ativo == True)
     )
+    if dep_sel:
+        q = q.filter(Funcionario.departamento == dep_sel)
+    if func_sel:
+        q = q.filter(Funcionario.funcao == func_sel)
     if funcionario_id:
         q = q.filter(Batida.funcionario_id == funcionario_id)
 
-    batidas_query = q.order_by(Batida.data.desc(), Batida.hora).all()
+    batidas_query = q.order_by(Batida.data.asc(), Batida.hora).all()
 
     funcionario_selecionado = Funcionario.query.get(funcionario_id) if funcionario_id else None
-    todos_func = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
+
+    # Lista completa para a cascata de filtros (dept → funcao → funcionário)
+    todos_func = (Funcionario.query
+                  .filter_by(ativo=True)
+                  .order_by(Funcionario.admissao.asc(), Funcionario.nome)
+                  .all())
+
+    # Dicionário { departamento: { funcao: [funcionarios] } } para JS
+    import json as _json
+    arvore_filtros = {}
+    for f in todos_func:
+        dep = f.departamento or '(sem departamento)'
+        fun = f.funcao or '(sem função)'
+        arvore_filtros.setdefault(dep, {}).setdefault(fun, []).append({
+            'id': f.id, 'nome': f.nome,
+            'admissao': f.admissao.strftime('%d/%m/%Y') if f.admissao else '',
+        })
+    arvore_filtros_json = _json.dumps(arvore_filtros, ensure_ascii=False)
 
     if export:
         rows = [{
@@ -124,7 +147,7 @@ def espelho():
             'tem_turno': tem_turno,
         })
 
-    batidas_agrupadas = sorted(batidas_agrupadas, key=lambda x: x['data'], reverse=True)
+    batidas_agrupadas = sorted(batidas_agrupadas, key=lambda x: x['data'], reverse=False)
 
     funcionarios_com_batida = sorted(
         {b['funcionario_id']: b['funcionario'] for b in batidas_agrupadas}.items(),
@@ -140,6 +163,9 @@ def espelho():
         funcionario_id=funcionario_id,
         funcionario_selecionado=funcionario_selecionado,
         todos_func=todos_func,
+        arvore_filtros_json=arvore_filtros_json,
+        dep_sel=dep_sel,
+        func_sel=func_sel,
     )
 
 
