@@ -174,13 +174,20 @@
                         <div class="d-flex gap-2 align-items-center">
                             <select class="form-select form-select" id="select-horario-base-${id}" style="max-width:300px;">
                                 <option value="">Sem horário base</option>
-                                ${todosTurnos
-                .filter(t => !t.funcao || t.funcao === func.funcao)
-                .map(t => `
-                                        <option value="${t.id}" ${func.horario_base_id == t.id ? 'selected' : ''}>
+                                ${(() => {
+                                    const empDep  = (func.departamento && func.departamento !== '---') ? func.departamento : null;
+                                    const empFunc = (func.funcao && func.funcao !== '---') ? func.funcao : null;
+                                    const filtrados = todosTurnos.filter(t =>
+                                        (!t.departamento || t.departamento === empDep) &&
+                                        (!t.funcao       || t.funcao === empFunc)
+                                    );
+                                    if (!filtrados.length) return '<option disabled>Nenhum horário para este cargo/departamento</option>';
+                                    return filtrados.map(t =>
+                                        `<option value="${t.id}" ${func.horario_base_id == t.id ? 'selected' : ''}>
                                             ${t.nome} (${t.inicio}-${t.fim})
-                                        </option>
-                                    `).join('')}
+                                        </option>`
+                                    ).join('');
+                                })()}
                             </select>
                             <button class="btn btn-primary" onclick="salvarHorarioBase('${id}')">
                                 <i class="fas fa-save me-1"></i>Salvar

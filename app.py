@@ -115,6 +115,29 @@ def create_app():
     app.register_blueprint(avaliacoes_bp)
     app.register_blueprint(avaliacoes_public_bp)
 
+    # ── Controlo de acesso por nível ──────────────────────────────────────────
+    # Rotas permitidas ao nível 'gerente'. Adicione prefixos aqui quando quiser
+    # liberar mais funcionalidades.
+    GERENTE_WHITELIST = (
+        '/auth/',           # login / logout
+        '/static/',         # ficheiros estáticos (CSS, JS, imagens)
+        '/config/espelho',  # Espelho de Ponto (acesso inicial)
+    )
+
+    @app.before_request
+    def restringir_gerente():
+        from flask import request, redirect, url_for, flash
+        from flask_login import current_user
+        if not current_user.is_authenticated:
+            return  # o login_required trata isto
+        if current_user.nivel_acesso != 'gerente':
+            return  # administrador e outros passam sem restrição
+        path = request.path
+        if any(path.startswith(p) for p in GERENTE_WHITELIST):
+            return  # rota permitida
+        flash('Acesso não autorizado para o seu perfil.', 'warning')
+        return redirect(url_for('espelho.espelho'))
+
     # ── Celery beat schedule ───────────────────────────────────────────────────
     from extensions import make_celery
     celery = make_celery(app)

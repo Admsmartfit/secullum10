@@ -42,7 +42,14 @@ def funcionarios():
         }
 
     turnos_data = [
-        {'id': t.id, 'nome': t.nome, 'inicio': t.hora_inicio.strftime('%H:%M'), 'fim': t.hora_fim.strftime('%H:%M'), 'funcao': t.funcao}
+        {
+            'id': t.id,
+            'nome': t.nome,
+            'inicio': t.hora_inicio.strftime('%H:%M'),
+            'fim': t.hora_fim.strftime('%H:%M'),
+            'funcao': t.funcao,
+            'departamento': t.departamento,
+        }
         for t in Turno.query.order_by(Turno.nome).all()
     ]
     return render_template(
