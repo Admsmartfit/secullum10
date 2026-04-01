@@ -192,6 +192,9 @@
                             <button class="btn btn-primary" onclick="salvarHorarioBase('${id}')">
                                 <i class="fas fa-save me-1"></i>Salvar
                             </button>
+                            ${func.horario_base_id ? `<button class="btn btn-outline-danger" onclick="excluirHorarioBase('${id}')" title="Remover horário base">
+                                <i class="fas fa-trash me-1"></i>Excluir
+                            </button>` : ''}
                         </div>
                         <div class="form-text mt-1" style="font-size:0.75rem;">
                             Este turno será aplicado automaticamente nos dias da semana configurados quando não houver exceção manual.
@@ -261,6 +264,28 @@
             .catch(() => {
                 const sec = document.getElementById(`escala-section-${id}`);
                 if (sec) sec.innerHTML = '<div class="small text-muted">Não foi possível carregar a escala.</div>';
+            });
+    }
+
+    function excluirHorarioBase(funcId) {
+        if (!confirm('Remover o horário base deste funcionário?')) return;
+        const select = document.getElementById(`select-horario-base-${funcId}`);
+        select.value = '';
+        const formData = new FormData();
+        formData.append('horario_base_id', '');
+        fetch(`/config/funcionarios/${funcId}/set-horario-base`, {
+            method: 'POST',
+            body: formData
+        })
+            .then(r => r.json())
+            .then(d => {
+                if (d.ok) {
+                    funcionarios[funcId].horario_base_id = null;
+                    // Reabre o modal para esconder o botão Excluir
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('detalhesModal'));
+                    if (modal) modal.hide();
+                    setTimeout(() => abrirDetalhes(funcId), 300);
+                }
             });
     }
 
