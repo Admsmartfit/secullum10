@@ -66,11 +66,16 @@ def funcionarios():
 def set_horario_base(func_id):
     func = Funcionario.query.get_or_404(func_id)
     turno_id = request.form.get('horario_base_id')
-    
-    if turno_id == "" or turno_id is None:
-        func.horario_base_id = None
-    else:
-        func.horario_base_id = int(turno_id)
-        
-    db.session.commit()
-    return jsonify({'ok': True, 'message': 'Horário base atualizado com sucesso!'})
+
+    try:
+        # Verifica se é vazio ou se não é um número (evita o ValueError no backend)
+        if not turno_id or str(turno_id).strip() == "" or not str(turno_id).isdigit():
+            func.horario_base_id = None
+        else:
+            func.horario_base_id = int(turno_id)
+
+        db.session.commit()
+        return jsonify({'ok': True, 'message': 'Horário base atualizado com sucesso!'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'message': str(e)}), 500

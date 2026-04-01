@@ -175,13 +175,22 @@
                             <select class="form-select" id="select-horario-base-${id}" style="max-width:300px;">
                                 <option value="">Sem horário base</option>
                                 ${(() => {
-                                    const empDep  = (func.departamento && func.departamento !== '---') ? func.departamento : null;
-                                    const empFunc = (func.funcao && func.funcao !== '---') ? func.funcao : null;
-                                    const filtrados = todosTurnos.filter(t =>
-                                        (!t.departamento || t.departamento === empDep) &&
-                                        (!t.funcao       || t.funcao === empFunc)
-                                    );
-                                    if (!filtrados.length) return '<option disabled>Nenhum horário para este cargo/departamento</option>';
+                                    // Normaliza as strings para não falhar por espaços ou minúsculas
+                                    const empDep  = (func.departamento && func.departamento !== '---') ? func.departamento.trim().toUpperCase() : '';
+                                    const empFunc = (func.funcao && func.funcao !== '---') ? func.funcao.trim().toUpperCase() : '';
+
+                                    const filtrados = todosTurnos.filter(t => {
+                                        const tDep = t.departamento ? t.departamento.trim().toUpperCase() : '';
+                                        const tFunc = t.funcao ? t.funcao.trim().toUpperCase() : '';
+
+                                        // Turnos do mesmo departamento, da mesma função, ou turnos globais
+                                        const matchDep = (tDep === '' || tDep === empDep);
+                                        const matchFunc = (tFunc === '' || tFunc === empFunc);
+
+                                        return matchDep && matchFunc;
+                                    });
+
+                                    if (!filtrados.length) return '<option disabled value="">Nenhum horário para este cargo/departamento</option>';
                                     return filtrados.map(t =>
                                         `<option value="${t.id}" ${func.horario_base_id == t.id ? 'selected' : ''}>
                                             ${t.nome} (${t.inicio}-${t.fim})
@@ -270,13 +279,10 @@
 
     function excluirHorarioBase(funcId) {
         if (!confirm('Tem certeza que deseja remover o horário base (contrato) deste funcionário? Isso fará com que o sistema não carregue turnos automáticos para ele.')) return;
-        
-        const select = document.getElementById(`select-horario-base-${funcId}`);
-        select.value = '';
-        
+
         const formData = new FormData();
         formData.append('horario_base_id', '');
-        
+
         fetch(`/config/funcionarios/${funcId}/set-horario-base`, {
             method: 'POST',
             body: formData
@@ -285,11 +291,10 @@
             .then(d => {
                 if (d.ok) {
                     funcionarios[funcId].horario_base_id = null;
-                    // Reabre o modal para esconder o botão Excluir
-                    alert('Horário base removido!');
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('detalhesModal'));
-                    if (modal) modal.hide();
-                    setTimeout(() => showDetails(funcId), 300);
+                    // Recarrega o modal instantaneamente para visualizar o novo quadro sem necessidade de fechar
+                    showDetails(funcId);
+                } else {
+                    alert('Erro: ' + d.message);
                 }
             });
     }
@@ -306,11 +311,14 @@
             .then(r => r.json())
             .then(d => {
                 if (d.ok) {
-                    // Atualiza o objeto local para manter o estado no modal
                     funcionarios[funcId].horario_base_id = turnoId ? parseInt(turnoId) : null;
-                    alert('Horário base atualizado!');
+                    // O recarregamento imediato atualizará a barra "Escala" para os horários definidos!
+                    showDetails(funcId);
+                } else {
+                    alert('Erro: ' + d.message);
                 }
-            });
+            })
+            .catch(err => alert("Falha na comunicação com o servidor."));
     }
 
     document.getElementById('filterInput').addEventListener('keyup', function () {
