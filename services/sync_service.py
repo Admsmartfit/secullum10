@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from extensions import db
 from models import Funcionario, Batida, Configuracao
@@ -258,10 +258,8 @@ def sync_batidas_incremental():
 
 
 def sync_horarios():
-    """Sincroniza horários da API Secullum → HorarioSecullum + cria/atualiza Turnos.
-
-    Cada HorarioDia vira um Turno (agrupando dias com mesmo par entrada/saída).
-    """
+    """Sincroniza horários da API Secullum → cria UM Turno por horário usando dias complexos,
+    e já aplica como 'Horário Base' dos funcionários vinculados."""
     from models import HorarioSecullum, Turno
 
     api = get_api()
@@ -280,159 +278,98 @@ def sync_horarios():
         descricao = (h.get('Descricao') or f'Horário {numero}').strip()
         dias_raw = h.get('Dias') or []
 
-        # Build dias dict: dia_semana(str) → {entrada, saida, tipo}
-        dias_dict = {}
+        complex_data = {}
+        dias_list = []
+        primeira_entrada = "00:00"
+        primeira_saida = "00:00"
+
         for d in dias_raw:
             dia = d.get('DiaSemana')
             entrada = (d.get('Entrada1') or '').strip()
-            # Última saída preenchida (Saida2 → Saida1 fallback)
             saida = (d.get('Saida2') or d.get('Saida1') or '').strip()
             tipo = d.get('TipoDia', 0)  # 0=Normal, 1=Extra, 2=Folga
-            if dia is not None:
-                dias_dict[str(dia)] = {'entrada': entrada, 'saida': saida, 'tipo': tipo}
+
+            if dia is not None and entrada and saida and tipo != 2:
+                dias_list.append(str(dia))
+                complex_data[str(dia)] = {
+                    "inicio": entrada,
+                    "fim": saida,
+                    "intervalo": 60
+                }
+                if primeira_entrada == "00:00":
+                    primeira_entrada = entrada
+                    primeira_saida = saida
 
         existing = HorarioSecullum.query.get(numero)
         if existing:
             existing.descricao = descricao
-            existing.dias_json = json.dumps(dias_dict)
+            existing.dias_json = json.dumps(complex_data)
             existing.sincronizado_em = datetime.utcnow()
-            atualizados += 1
         else:
             db.session.add(HorarioSecullum(
                 numero=numero,
                 descricao=descricao,
-                dias_json=json.dumps(dias_dict),
+                dias_json=json.dumps(complex_data),
             ))
+
+        nome_turno = f"{descricao} [Secullum]"
+        turno = Turno.query.filter_by(nome=nome_turno).first()
+
+        try:
+            h_ini = datetime.strptime(primeira_entrada, '%H:%M').time() if primeira_entrada != "00:00" else datetime.strptime('08:00', '%H:%M').time()
+            h_fim = datetime.strptime(primeira_saida, '%H:%M').time() if primeira_saida != "00:00" else datetime.strptime('17:00', '%H:%M').time()
+        except ValueError:
+            continue
+
+        if not turno:
+            turno = Turno(
+                nome=nome_turno,
+                hora_inicio=h_ini,
+                hora_fim=h_fim,
+                intervalo_minutos=60
+            )
+            db.session.add(turno)
             criados += 1
+        else:
+            turno.hora_inicio = h_ini
+            turno.hora_fim = h_fim
+            atualizados += 1
 
-        # Create/update Turnos for each unique (entrada, saida) pair
-        # Group days by their hour pattern
-        padrao_dias: dict[tuple, list] = {}
-        for dia_str, info in dias_dict.items():
-            if not info['entrada'] or not info['saida'] or info['tipo'] == 2:
-                continue
-            key = (info['entrada'], info['saida'])
-            padrao_dias.setdefault(key, []).append(int(dia_str))
+        turno.dias_semana = ','.join(dias_list) if dias_list else ''
+        turno.dias_complexos_json = json.dumps(complex_data)
 
-        for (entrada_str, saida_str), dias_list in padrao_dias.items():
-            try:
-                h_ini = datetime.strptime(entrada_str, '%H:%M').time()
-                h_fim = datetime.strptime(saida_str, '%H:%M').time()
-            except ValueError:
-                continue
+        db.session.flush()  # Garante turno.id disponível antes do update
 
-            turno = Turno.query.filter_by(hora_inicio=h_ini, hora_fim=h_fim).first()
-            if not turno:
-                turno = Turno(
-                    nome=f"{descricao} ({entrada_str}-{saida_str})",
-                    hora_inicio=h_ini,
-                    hora_fim=h_fim,
-                    dias_semana=','.join(map(str, sorted(dias_list))),
-                    intervalo_minutos=60 # Padrão
-                )
-                db.session.add(turno)
-            else:
-                # Atualiza nome se for um turno importado e mescla dias
-                if "Sincronizado" not in (turno.nome or ""):
-                    turno.nome = f"{descricao} ({entrada_str}-{saida_str}) [Sincronizado]"
-                
-                existing_dias = turno.dias_semana_list
-                merged = sorted(set(existing_dias) | set(dias_list))
-                turno.dias_semana = ','.join(map(str, merged))
+        Funcionario.query.filter_by(horario_secullum_numero=numero).update(
+            {'horario_base_id': turno.id}
+        )
 
     try:
         db.session.commit()
-        return True, f"Horários: {criados} criados, {atualizados} atualizados."
+        return True, f"Horários: {criados} turnos criados, {atualizados} atualizados e vinculados aos Contratos."
     except Exception as e:
         db.session.rollback()
         return False, f"Erro ao salvar horários: {str(e)}"
 
 
-def sync_alocacoes(data_inicio_str: str, data_fim_str: str):
-    """Gera AlocacaoDiaria a partir do HorarioSecullum de cada funcionário.
-
-    Para cada dia no intervalo, verifica se o funcionário tem turno naquele
-    dia da semana segundo seu horário Secullum e cria/atualiza a alocação.
+def sync_alocacoes(_data_inicio_str: str, _data_fim_str: str):
     """
-    from models import HorarioSecullum, Turno, AlocacaoDiaria
-
+    Função reformulada.
+    No novo modelo, a sincronização do Secullum atualiza o Horário Base (Contrato),
+    pelo que não geramos mais Alocações Diárias de forma forçada.
+    Esta função agora apenas limpa as alocações antigas bloqueantes para libertar a agenda do RH.
+    """
+    from models import AlocacaoDiaria, Turno
     try:
-        data_ini = date.fromisoformat(data_inicio_str)
-        data_fim = date.fromisoformat(data_fim_str)
-    except ValueError as e:
-        return False, f"Datas inválidas: {e}"
+        turnos_sync = Turno.query.filter(
+            db.or_(Turno.nome.like('%[Secullum]%'), Turno.nome.like('%[Sincronizado]%'))
+        ).all()
+        t_ids = [t.id for t in turnos_sync]
 
-    funcionarios = Funcionario.query.filter(
-        Funcionario.ativo == True,
-        Funcionario.horario_secullum_numero.isnot(None),
-    ).all()
-
-    if not funcionarios:
-        return True, "Nenhum funcionário com horário Secullum vinculado."
-
-    # Cache horarios e turnos para evitar N+1 queries
-    horario_cache: dict[int, dict] = {}
-    turno_cache: dict[tuple, int | None] = {}
-
-    criadas = atualizadas = sem_turno = 0
-
-    for func in funcionarios:
-        num = func.horario_secullum_numero
-        if num not in horario_cache:
-            hs = HorarioSecullum.query.get(num)
-            horario_cache[num] = json.loads(hs.dias_json) if hs and hs.dias_json else {}
-
-        dias_dict = horario_cache[num]
-        if not dias_dict:
-            continue
-
-        d = data_ini
-        while d <= data_fim:
-            dia_str = str(d.weekday())  # 0=Segunda … 6=Domingo
-            info = dias_dict.get(dia_str)
-            if not info or not info.get('entrada') or info.get('tipo') == 2:
-                d += timedelta(days=1)
-                continue
-
-            entrada_str = info['entrada']
-            saida_str = info['saida']
-            cache_key = (entrada_str, saida_str)
-
-            if cache_key not in turno_cache:
-                try:
-                    h_ini = datetime.strptime(entrada_str, '%H:%M').time()
-                    h_fim = datetime.strptime(saida_str, '%H:%M').time()
-                    t = Turno.query.filter_by(hora_inicio=h_ini, hora_fim=h_fim).first()
-                    turno_cache[cache_key] = t.id if t else None
-                except Exception:
-                    turno_cache[cache_key] = None
-
-            turno_id = turno_cache[cache_key]
-            if not turno_id:
-                sem_turno += 1
-                d += timedelta(days=1)
-                continue
-
-            existing = AlocacaoDiaria.query.filter_by(
-                funcionario_id=func.id, data=d
-            ).first()
-            if existing:
-                existing.turno_id = turno_id
-                atualizadas += 1
-            else:
-                db.session.add(AlocacaoDiaria(
-                    funcionario_id=func.id,
-                    turno_id=turno_id,
-                    data=d,
-                ))
-                criadas += 1
-
-            d += timedelta(days=1)
-
-    try:
-        db.session.commit()
-        return True, (f"Alocações: {criadas} criadas, {atualizadas} atualizadas"
-                      + (f", {sem_turno} sem turno" if sem_turno else "") + ".")
-    except Exception as e:
+        if t_ids:
+            AlocacaoDiaria.query.filter(AlocacaoDiaria.turno_id.in_(t_ids)).delete(synchronize_session=False)
+            db.session.commit()
+    except Exception:
         db.session.rollback()
-        return False, f"Erro ao salvar alocações: {str(e)}"
+
+    return True, "Escalas destravadas: Os horários da API estão agora aplicados na base do contrato."
