@@ -88,6 +88,11 @@ def turno_editar(turno_id):
                     "intervalo": int(h_int) if h_int else intervalo
                 }
 
+        # Dias que foram REMOVIDOS em relação ao estado anterior
+        dias_antigos = set(str(d) for d in turno.dias_semana_list)
+        dias_novos = set(dias)
+        dias_removidos = dias_antigos - dias_novos
+
         turno.nome = request.form['nome'].strip()
         turno.hora_inicio = datetime.strptime(request.form['hora_inicio'], '%H:%M').time()
         turno.hora_fim = datetime.strptime(request.form['hora_fim'], '%H:%M').time()
@@ -98,6 +103,15 @@ def turno_editar(turno_id):
         turno.funcao = request.form.get('funcao', '').strip() or None
         turno.color = request.form.get('color', '#4f46e5') or '#4f46e5'
         turno.tipo_turno = request.form.get('tipo_turno') or None
+
+        # Limpa AlocacaoDiaria nos dias removidos para que o horario_base volte a ter efeito
+        if dias_removidos:
+            dias_removidos_int = [int(d) for d in dias_removidos]
+            alocs = AlocacaoDiaria.query.filter_by(turno_id=turno.id).all()
+            for aloc in alocs:
+                if aloc.data.weekday() in dias_removidos_int:
+                    db.session.delete(aloc)
+
         db.session.commit()
         flash(f'Turno "{turno.nome}" atualizado!', 'success')
         return redirect(url_for('escalas.index'))
