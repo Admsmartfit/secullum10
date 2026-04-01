@@ -79,3 +79,34 @@ def set_horario_base(func_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'ok': False, 'message': str(e)}), 500
+
+
+@funcionarios_bp.route('/funcionarios/<func_id>/excluir', methods=['POST'])
+@login_required
+def excluir_funcionario(func_id):
+    from models import (Batida, AlocacaoDiaria, BancoHorasSaldo, Candidatura,
+                        ProntuarioDoc, SolicitacaoTroca, EnvioDocumento,
+                        ChatState, ScoreAvaliacao, WhatsappLog, NotificacaoFila)
+    func = Funcionario.query.get_or_404(func_id)
+    try:
+        # Apaga registos dependentes em ordem segura (FK)
+        SolicitacaoTroca.query.filter(
+            db.or_(SolicitacaoTroca.solicitante_id == func_id,
+                   SolicitacaoTroca.candidato_id == func_id)
+        ).delete(synchronize_session=False)
+        Candidatura.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
+        ScoreAvaliacao.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
+        ChatState.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
+        NotificacaoFila.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
+        WhatsappLog.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
+        EnvioDocumento.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
+        ProntuarioDoc.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
+        AlocacaoDiaria.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
+        BancoHorasSaldo.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
+        Batida.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
+        db.session.delete(func)
+        db.session.commit()
+        return jsonify({'ok': True, 'message': f'Funcionário "{func.nome}" excluído com sucesso.'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'message': str(e)}), 500
