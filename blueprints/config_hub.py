@@ -607,6 +607,7 @@ def verificar_incons_executar():
             regra.ultima_execucao = datetime.utcnow()
         if regras:
             db.session.commit()
+        return total_env
 
     try:
         from services.sync_service import sync_batidas
@@ -620,14 +621,14 @@ def verificar_incons_executar():
         db.session.commit()
         
         # Somente depois de atualizar, dispara o relatório de inconsistências
-        _disparar_relatorio()
+        total_env = _disparar_relatorio()
         
-        flash(resultado, 'success' if ok else 'danger')
+        final_msg = f"{resultado}. Relatórios enviados: {total_env}."
+        return jsonify({'ok': ok, 'resultado': final_msg})
 
     except Exception as e:
-        return jsonify({'ok': False, 'message': str(e)}), 500
-
-    return jsonify({'ok': True, 'message': resultado})
+        current_app.logger.error(f"Erro na verificação manual: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 # ── Políticas de RH ───────────────────────────────────────────────────────────
@@ -729,13 +730,6 @@ def feriados_sync():
     flash(msg, 'success' if not avisos else 'warning')
     return redirect(url_for('config_hub.index') + '#feriados')
 
-
-@config_hub_bp.route('/verificar-inconsistencias/executar', methods=['POST'])
-@login_required
-@_somente_gestor
-def verificar_incons_executar_deprecated():
-    # Esta rota foi mantida para compatibilidade, mas o frontend deve usar JSON
-    pass
 
 
 # ── Integrações (credenciais via DB) ──────────────────────────────────────────

@@ -864,9 +864,9 @@ function executarSyncManual(tipo, btn) {
   .then(r => r.json())
   .then(d => {
     if (d.ok) {
-      cfgToast(`✅ Sync ${tipo} finalizado! ${d.batidas_novas} batidas novas.`, 'bg-success');
+      cfgToast('✅ ' + (d.message || 'Sincronismo finalizado!'), 'bg-success');
     } else {
-      cfgToast('❌ Erro no sincronismo: ' + (d.error || 'Erro desconhecido'), 'bg-danger');
+      cfgToast('❌ Erro no sincronismo: ' + (d.message || d.error || 'Erro desconhecido'), 'bg-danger');
     }
   })
   .catch(e => cfgToast('❌ Falha na comunicação com o servidor.', 'bg-danger'))
