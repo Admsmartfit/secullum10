@@ -198,8 +198,11 @@
                                     ).join('');
                                 })()}
                             </select>
-                            <button class="btn btn-danger" onclick="excluirHorarioBase('${id}')" title="Remover Horário Base">
-                                <i class="fas fa-trash-can me-1"></i>Excluir Horário
+                            <button class="btn btn-warning text-dark" onclick="limparEscalaCompleta('${id}')" title="Remove horário base E todas as alocações diárias">
+                                <i class="fas fa-broom me-1"></i>Limpar Escala
+                            </button>
+                            <button class="btn btn-danger" onclick="excluirHorarioBase('${id}')" title="Remove apenas o horário base (contrato)">
+                                <i class="fas fa-trash-can me-1"></i>Só Horário Base
                             </button>
                             <button class="btn btn-primary" onclick="salvarHorarioBase('${id}')" title="Salvar Alteração">
                                 <i class="fas fa-save me-1"></i>Salvar
@@ -300,6 +303,23 @@
                     alert('Erro: ' + d.message);
                 }
             });
+    }
+
+    function limparEscalaCompleta(funcId) {
+        if (!confirm('Tem certeza? Isso remove o horário base E todas as alocações diárias (escalas) deste funcionário.\n\nUse antes de reimportar do Secullum.')) return;
+
+        fetch(`/config/funcionarios/${funcId}/limpar-escala`, { method: 'POST' })
+            .then(r => r.json())
+            .then(d => {
+                if (d.ok) {
+                    funcionarios[funcId].horario_base_id = null;
+                    alert(d.message);
+                    showDetails(funcId);
+                } else {
+                    alert('Erro: ' + d.message);
+                }
+            })
+            .catch(() => alert('Falha na comunicação com o servidor.'));
     }
 
     function excluirFuncionario(funcId, funcNome) {

@@ -81,6 +81,22 @@ def set_horario_base(func_id):
         return jsonify({'ok': False, 'message': str(e)}), 500
 
 
+@funcionarios_bp.route('/funcionarios/<func_id>/limpar-escala', methods=['POST'])
+@login_required
+def limpar_escala(func_id):
+    """Remove horario_base_id e todas as AlocacaoDiaria do funcionário."""
+    from models import AlocacaoDiaria
+    func = Funcionario.query.get_or_404(func_id)
+    try:
+        removidas = AlocacaoDiaria.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
+        func.horario_base_id = None
+        db.session.commit()
+        return jsonify({'ok': True, 'message': f'Escala limpa: {removidas} alocação(ões) removida(s) e horário base removido.'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'message': str(e)}), 500
+
+
 @funcionarios_bp.route('/funcionarios/<func_id>/excluir', methods=['POST'])
 @login_required
 def excluir_funcionario(func_id):
