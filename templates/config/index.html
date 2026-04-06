@@ -885,10 +885,11 @@ function executarVerificarIncons(btn) {
   fetch('/config/verificar-inconsistencias/executar', { method: 'POST' })
   .then(r => r.json())
   .then(d => {
+    const msg = d.resultado || d.error || 'Verificação concluída.';
     if (d.ok) {
-      cfgToast('✅ Verificação concluída: ' + d.resultado, 'bg-success');
+      cfgToast('✅ ' + msg, 'bg-success');
     } else {
-      cfgToast('❌ Erro: ' + (d.error || 'Falha na verificação'), 'bg-danger');
+      cfgToast('❌ Erro: ' + msg, 'bg-danger');
     }
   })
   .catch(e => cfgToast('❌ Falha na rede.', 'bg-danger'))

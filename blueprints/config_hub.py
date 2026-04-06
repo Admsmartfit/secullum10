@@ -560,24 +560,28 @@ def verificar_incons_executar():
 
     try:
         from services.sync_service import sync_batidas
-
-        # 1. Sincroniza todas as batidas do dia anterior primeiro
         ok, msg = sync_batidas(ontem_str, ontem_str)
-        resultado = f'Sincronização do dia anterior ({ontem_str}) concluída: {msg}'
-        
+        resultado = f'Sincronização de {ontem_str}: {msg}'
         _salvar_cfg('verificar_incons_ultimo_resultado', resultado)
         _salvar_cfg('verificar_incons_ultimo_run', agora.isoformat())
         db.session.commit()
-        
-        # 2. Somente depois de atualizar, dispara o relatório de inconsistências via serviço centralizado
-        total_env = disparar_relatorio_inconsistencias(ontem)
-        
-        final_msg = f"{resultado}. Relatórios enviados: {total_env}."
-        return jsonify({'ok': ok, 'resultado': final_msg})
-
     except Exception as e:
-        current_app.logger.error(f"Erro na verificação manual: {e}")
-        return jsonify({'ok': False, 'error': str(e)}), 500
+        current_app.logger.error(f'[verificar_incons] Erro na sincronização: {e}')
+        return jsonify({'ok': False, 'resultado': f'Erro na sincronização: {e}', 'error': str(e)}), 500
+
+    total_env = 0
+    try:
+        total_env = disparar_relatorio_inconsistencias(ontem)
+    except Exception as e:
+        current_app.logger.error(f'[verificar_incons] Erro ao disparar relatórios: {e}')
+        resultado += f' | Erro no envio: {e}'
+
+    if total_env == 0:
+        resultado += f' | Relatório gerado mas nenhum destinatário configurado (configure o celular do gestor ou líderes de departamento).'
+    else:
+        resultado += f' | Relatórios enviados: {total_env}.'
+
+    return jsonify({'ok': True, 'resultado': resultado})
 
 
 # ── Políticas de RH ───────────────────────────────────────────────────────────
