@@ -549,70 +549,19 @@ def verificar_incons_salvar():
 @_somente_gestor
 def verificar_incons_executar():
     """Executa manualmente a verificação DB vs Secullum para o dia anterior."""
-    import os
-    from datetime import date, timedelta, datetime
+    from datetime import timedelta, datetime
     from zoneinfo import ZoneInfo
+    from services.report_service import disparar_relatorio_inconsistencias
     
     _tz_br = ZoneInfo('America/Sao_Paulo')
     agora = datetime.now(_tz_br)
-
     ontem = (agora.date() - timedelta(days=1))
     ontem_str = ontem.strftime('%Y-%m-%d')
-
-    def _disparar_relatorio():
-        from models import NotificationRule, UnidadeLider
-        from services.notification_processor import (
-            _gerar_relatorio_inconsistencias,
-            _gerar_relatorio_por_departamento,
-            _normalizar_celular,
-        )
-        from services.whatsapp_bot import enviar_texto
-
-        relatorio_global = _gerar_relatorio_inconsistencias(ontem)
-        relatorios_dept  = _gerar_relatorio_por_departamento(ontem)
-
-        # Envia para cada líder de departamento SEMPRE (sem depender de NotificationRule)
-        unidades = UnidadeLider.query.filter(UnidadeLider.celular_lider.isnot(None)).all()
-        alvos = [
-            {'celular': _normalizar_celular(u.celular_lider), 'dept': u.departamento}
-            for u in unidades if u.celular_lider
-        ]
-        total_env = 0
-        for alvo in alvos:
-            dept = alvo['dept']
-            texto_dept = relatorios_dept.get(dept) or (
-                f'📋 Inconsistências — {dept} — {ontem_str}\n\n✅ Nenhuma inconsistência encontrada.'
-            )
-            try:
-                if enviar_texto(celular=alvo['celular'], mensagem=texto_dept, tipo='relatorio'):
-                    total_env += 1
-            except Exception as e_env:
-                current_app.logger.error(
-                    f'[verificar_incons_manual] Falha ao enviar para líder de "{dept}" ({alvo["celular"]}): {e_env}'
-                )
-
-        # Envia relatório global para gestor geral (apenas se existir NotificationRule ativa)
-        regras = NotificationRule.query.filter_by(ativo=True, condition_type='INCONSISTENCY_REPORT').all()
-        for regra in regras:
-            if regra.dest_manager:
-                from services.config_service import get_gestor_celular
-                cel = get_gestor_celular()
-                if cel:
-                    try:
-                        if enviar_texto(celular=_normalizar_celular(cel), mensagem=relatorio_global, tipo='relatorio'):
-                            total_env += 1
-                    except Exception as e_env:
-                        current_app.logger.error(f'[verificar_incons_manual] Falha ao enviar global: {e_env}')
-            regra.mensagens_enviadas = (regra.mensagens_enviadas or 0) + 1
-            regra.ultima_execucao = datetime.utcnow()
-        if regras:
-            db.session.commit()
-        return total_env
 
     try:
         from services.sync_service import sync_batidas
 
-        # Sincroniza todas as batidas do dia anterior primeiro
+        # 1. Sincroniza todas as batidas do dia anterior primeiro
         ok, msg = sync_batidas(ontem_str, ontem_str)
         resultado = f'Sincronização do dia anterior ({ontem_str}) concluída: {msg}'
         
@@ -620,8 +569,8 @@ def verificar_incons_executar():
         _salvar_cfg('verificar_incons_ultimo_run', agora.isoformat())
         db.session.commit()
         
-        # Somente depois de atualizar, dispara o relatório de inconsistências
-        total_env = _disparar_relatorio()
+        # 2. Somente depois de atualizar, dispara o relatório de inconsistências via serviço centralizado
+        total_env = disparar_relatorio_inconsistencias(ontem)
         
         final_msg = f"{resultado}. Relatórios enviados: {total_env}."
         return jsonify({'ok': ok, 'resultado': final_msg})
