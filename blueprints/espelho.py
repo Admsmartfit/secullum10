@@ -12,8 +12,10 @@ espelho_bp = Blueprint('espelho', __name__, url_prefix='/config')
 @espelho_bp.route('/espelho')
 @login_required
 def espelho():
-    data_inicio_str = request.args.get('data_inicio', date.today().strftime('%Y-%m-%d'))
-    data_fim_str = request.args.get('data_fim', date.today().strftime('%Y-%m-%d'))
+    hoje = date.today()
+    primeiro_do_mes = hoje.replace(day=1).strftime('%Y-%m-%d')
+    data_inicio_str = request.args.get('data_inicio', primeiro_do_mes)
+    data_fim_str = request.args.get('data_fim', hoje.strftime('%Y-%m-%d'))
     export = request.args.get('export', 'false') == 'true'
     funcionario_id = request.args.get('funcionario_id', '').strip()
     dep_sel = request.args.get('departamento', '').strip()
