@@ -130,15 +130,34 @@ def espelho():
                 if (dt_saida - dt_fim).total_seconds() > 600:
                     status_lista.append('+10m Saída')
 
-                # 3. Intervalo fora da faixa 50–70 min (requer ≥ 4 batidas)
+                # 3. Verificação de intervalo (requer ≥ 4 batidas)
                 if len(horas_ordenadas) >= 4:
                     dt_saida_int = datetime.combine(data_obj, horas_ordenadas[1])
                     dt_retorno_int = datetime.combine(data_obj, horas_ordenadas[2])
                     if horas_ordenadas[2] < horas_ordenadas[1]:
                         dt_retorno_int += timedelta(days=1)
                     intervalo_min = (dt_retorno_int - dt_saida_int).total_seconds() / 60
-                    if intervalo_min < 50 or intervalo_min > 70:
+
+                    # Jornada bruta (entrada → saída) em horas
+                    dt_entrada_jorn = datetime.combine(data_obj, horas_ordenadas[0])
+                    dt_saida_jorn = datetime.combine(data_obj, horas_ordenadas[-1])
+                    if horas_ordenadas[-1] < horas_ordenadas[0]:
+                        dt_saida_jorn += timedelta(days=1)
+                    jornada_horas = (dt_saida_jorn - dt_entrada_jorn).total_seconds() / 3600
+
+                    if jornada_horas >= 6:
+                        # Jornada longa: intervalo esperado 60 min, tolerância ±10 min
+                        intervalo_min_ok = 50
+                        intervalo_max_ok = 70
+                    else:
+                        # Jornada curta (<6h): intervalo esperado 15 min, tolerância ±2 min
+                        intervalo_min_ok = 13
+                        intervalo_max_ok = 17
+
+                    if intervalo_min < intervalo_min_ok:
                         status_lista.append('Intervalo Insuficiente')
+                    elif intervalo_min > intervalo_max_ok:
+                        status_lista.append('Intervalo Superior')
 
         batidas_agrupadas.append({
             'data': d_str,

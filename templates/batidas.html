@@ -78,7 +78,9 @@
                                 {% elif st == '+10m Saída' %}
                                 <span class="badge bg-warning text-dark" title="Saiu mais de 10 min além do horário"><i class="fas fa-business-time me-1"></i>+10m Saída</span>
                                 {% elif st == 'Intervalo Insuficiente' %}
-                                <span class="badge bg-info text-dark" title="Intervalo fora da faixa de 50–70 min"><i class="fas fa-utensils me-1"></i>Intervalo Insuf.</span>
+                                <span class="badge bg-info text-dark" title="Intervalo abaixo do mínimo permitido"><i class="fas fa-utensils me-1"></i>Intervalo Insuf.</span>
+                                {% elif st == 'Intervalo Superior' %}
+                                <span class="badge bg-warning text-dark" title="Intervalo excedeu o limite em mais de 10 min"><i class="fas fa-utensils me-1"></i>Intervalo Superior</span>
                                 {% endif %}
                             {% endfor %}
                         {% elif item.tem_turno and item.horas|length % 2 == 0 %}
