@@ -119,9 +119,19 @@ def create_app():
     # Rotas permitidas ao nível 'gerente'. Adicione prefixos aqui quando quiser
     # liberar mais funcionalidades.
     GERENTE_WHITELIST = (
-        '/auth/',           # login / logout
-        '/static/',         # ficheiros estáticos (CSS, JS, imagens)
-        '/config/espelho',  # Espelho de Ponto (acesso inicial)
+        '/login',                   # login
+        '/logout',                  # logout  ← rota real (sem prefixo /auth/)
+        '/static/',                 # ficheiros estáticos
+        '/config/espelho',          # Espelho de Ponto
+        '/config/funcionarios',     # Funcionários (visualização)
+        '/inconsistencias/',        # Inconsistências
+        '/escalas/',                # Gestão de Escalas
+        '/banco-horas',             # Banco de Horas
+        '/prontuario/alertas',      # Prontuários
+        '/prontuario/ver/',         # Prontuário individual
+        '/marketplace/',            # Marketplace
+        '/trocas/',                 # Trocas de Turno
+        '/avaliacoes/',             # Avaliação 360°
     )
 
     @app.before_request
@@ -133,6 +143,9 @@ def create_app():
         if current_user.nivel_acesso != 'gerente':
             return  # administrador e outros passam sem restrição
         path = request.path
+        # dashboard (raiz exata) sempre permitido
+        if path == '/':
+            return
         if any(path.startswith(p) for p in GERENTE_WHITELIST):
             return  # rota permitida
         flash('Acesso não autorizado para o seu perfil.', 'warning')

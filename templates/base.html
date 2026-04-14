@@ -464,8 +464,10 @@
                         <span class="d-none d-md-inline">{{ current_user.nome.split()[0] if current_user.is_authenticated else 'Conta' }}</span>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
+                        {% if current_user.nivel_acesso == 'administrador' %}
                         <li><a class="dropdown-item" href="/config/"><i class="fas fa-cog me-2 text-muted"></i>Configurações</a></li>
                         <li><hr class="dropdown-divider"></li>
+                        {% endif %}
                         <li><a class="dropdown-item text-danger" href="/logout"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
                     </ul>
                 </div>
@@ -527,6 +529,7 @@
                     <span class="badge bg-danger ms-auto" style="font-size:0.65rem;">{{ alertas_docs }}</span>
                     {% endif %}
                 </a>
+                {% if is_admin %}
                 <a class="nav-link {% if request.path.startswith('/prontuario/gerar') or request.path.startswith('/prontuario/templates') %}active{% endif %}"
                    href="/prontuario/gerar-documentos" data-tooltip="Gerar Documentos">
                     <i class="fas fa-file-contract"></i>
@@ -542,6 +545,7 @@
                     <i class="fas fa-file-pdf"></i>
                     <span class="nav-link-text">Relatórios Técnicos</span>
                 </a>
+                {% endif %}
                 <a class="nav-link {% if request.path.startswith('/avaliacoes') %}active{% endif %}"
                    href="/avaliacoes/" data-tooltip="Avaliação 360°">
                     <i class="fas fa-star-half-alt"></i>
