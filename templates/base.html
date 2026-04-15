@@ -505,6 +505,7 @@
                     <i class="fas fa-calendar-alt"></i>
                     <span class="nav-link-text">Gestão de Escalas</span>
                 </a>
+                {% if is_admin %}
                 <a class="nav-link {% if request.path == '/banco-horas' or request.path == '/banco-horas/alertas' %}active{% endif %}"
                    href="/banco-horas" data-tooltip="Banco de Horas">
                     <i class="fas fa-history"></i>
@@ -513,6 +514,7 @@
                     <span class="badge bg-warning text-dark ms-auto" style="font-size:0.65rem;">{{ alertas_banco_horas }}</span>
                     {% endif %}
                 </a>
+                {% endif %}
 
                 <hr class="sidebar-separator">
                 <div class="section-label">🤝 Desenv. Humano</div>
@@ -546,6 +548,7 @@
                     <span class="nav-link-text">Relatórios Técnicos</span>
                 </a>
                 {% endif %}
+                {% if is_admin %}
                 <a class="nav-link {% if request.path.startswith('/avaliacoes') %}active{% endif %}"
                    href="/avaliacoes/" data-tooltip="Avaliação 360°">
                     <i class="fas fa-star-half-alt"></i>
@@ -561,6 +564,7 @@
                     <i class="fas fa-check-double"></i>
                     <span class="nav-link-text">Aprovar Trocas de Turno</span>
                 </a>
+                {% endif %}
 
                 {% if is_admin %}
                 <hr class="sidebar-separator">

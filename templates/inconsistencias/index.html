@@ -66,10 +66,12 @@
             <button class="btn btn-primary flex-fill" onclick="analisar()">
                 <i class="fas fa-search me-1"></i>Analisar
             </button>
+            {% if current_user.nivel_acesso == 'administrador' %}
             <button class="btn btn-outline-warning flex-fill" onclick="comparar()"
                     title="Comparar com dados reais do Secullum">
                 <i class="fas fa-cloud-download-alt me-1"></i>vs Secullum
             </button>
+            {% endif %}
         </div>
     </div>
 </div>

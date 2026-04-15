@@ -126,12 +126,8 @@ def create_app():
         '/config/funcionarios',     # Funcionários (visualização)
         '/inconsistencias/',        # Inconsistências
         '/escalas/',                # Gestão de Escalas
-        '/banco-horas',             # Banco de Horas
         '/prontuario/alertas',      # Prontuários
         '/prontuario/ver/',         # Prontuário individual
-        '/marketplace/',            # Marketplace
-        '/trocas/',                 # Trocas de Turno
-        '/avaliacoes/',             # Avaliação 360°
     )
 
     @app.before_request

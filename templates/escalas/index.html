@@ -4,9 +4,11 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 mb-0">Gestão de Escalas</h1>
     <div class="d-flex gap-2">
+        {% if current_user.nivel_acesso == 'administrador' %}
         <a href="{{ url_for('escalas.turno_novo') }}" class="btn btn-primary">
             <i class="fas fa-plus me-2"></i>Novo Turno
         </a>
+        {% endif %}
     </div>
 </div>
 
@@ -134,6 +136,7 @@
                         {% endfor %}
                     </td>
                     <td>
+                        {% if current_user.nivel_acesso == 'administrador' %}
                         <a href="{{ url_for('escalas.turno_editar', turno_id=t.id) }}"
                             class="btn btn-outline-info me-1">
                             <i class="fas fa-edit"></i>
@@ -142,6 +145,9 @@
                             class="d-inline" onsubmit="return confirm('Excluir turno?')">
                             <button class="btn btn-outline-danger"><i class="fas fa-trash"></i></button>
                         </form>
+                        {% else %}
+                        <span class="text-muted small">Apenas Leitura</span>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
