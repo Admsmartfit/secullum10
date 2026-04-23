@@ -208,15 +208,15 @@ function renderGantt(rows) {
 
 // ── Carregamento ─────────────────────────────────────────────────────────────
 async function carregar() {
-    const di     = document.getElementById('filtDataInicio').value;
-    const df     = document.getElementById('filtDataFim').value;
-    const dept   = filtDeptEl.value;
-    const funcId = $('#filtFunc').val() || '';   // lê via jQuery pois Select2 controla o valor
+    const di     = encodeURIComponent(document.getElementById('filtDataInicio').value || '');
+    const df     = encodeURIComponent(document.getElementById('filtDataFim').value || '');
+    const dept   = encodeURIComponent(filtDeptEl.value || '');
+    const funcId = encodeURIComponent($('#filtFunc').val() || '');
 
     document.getElementById('ganttContainer').innerHTML =
         '<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>';
     try {
-        const url = `/escalas/gantt/dados?data_inicio=${di}&data_fim=${df}&dept=${encodeURIComponent(dept)}&func_id=${funcId}`;
+        const url = `/escalas/gantt/dados?data_inicio=${di}&data_fim=${df}&dept=${dept}&func_id=${funcId}`;
         const resp = await fetch(url);
         renderGantt(await resp.json());
     } catch(e) {

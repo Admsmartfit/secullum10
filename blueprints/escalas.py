@@ -294,8 +294,8 @@ def gantt():
 @login_required
 def gantt_dados():
     """JSON: linhas do Gantt cruzando Horário Base e Exceções num período de datas."""
-    data_inicio_str = request.args.get('data_inicio', date.today().strftime('%Y-%m-%d'))
-    data_fim_str    = request.args.get('data_fim',    date.today().strftime('%Y-%m-%d'))
+    data_inicio_str = request.args.get('data_inicio', '').strip() or date.today().strftime('%Y-%m-%d')
+    data_fim_str    = request.args.get('data_fim', '').strip()    or date.today().strftime('%Y-%m-%d')
     dept            = request.args.get('dept', '').strip()
     func_id         = request.args.get('func_id', '').strip()
 
@@ -322,15 +322,15 @@ def gantt_dados():
     if not func_ids:
         return jsonify([])
 
-    # 2. Exceções manuais do período em memória
+    # 2. Exceções manuais — chave como string para evitar bug de tipagem SQLite/Postgres
     alocacoes_q = AlocacaoDiaria.query.filter(
         AlocacaoDiaria.data >= data_inicio,
         AlocacaoDiaria.data <= data_fim,
         AlocacaoDiaria.funcionario_id.in_(func_ids)
     ).all()
-    aloc_map = {(a.funcionario_id, a.data): a for a in alocacoes_q}
+    aloc_map = {(a.funcionario_id, str(a.data)): a for a in alocacoes_q}
 
-    # 3. Batidas do período em memória
+    # 3. Batidas do período — chave como string, hora validada
     batidas_q = Batida.query.filter(
         Batida.data >= data_inicio,
         Batida.data <= data_fim,
@@ -338,48 +338,55 @@ def gantt_dados():
     ).all()
     batidas_map = {}
     for b in batidas_q:
-        batidas_map.setdefault((b.funcionario_id, b.data), []).append(b.hora.strftime('%H:%M'))
+        if b.hora:
+            batidas_map.setdefault((b.funcionario_id, str(b.data)), []).append(b.hora.strftime('%H:%M'))
 
     # 4. Iterar dia a dia e construir as linhas
     rows = []
     curr = data_inicio
     while curr <= data_fim:
-        weekday = curr.weekday()
-        data_fmt = curr.strftime('%d/%m')
+        weekday      = curr.weekday()
+        data_fmt     = curr.strftime('%d/%m/%Y')
+        str_curr     = str(curr)   # chave compatível com os mapas acima
 
         for f in funcionarios:
-            aloc = aloc_map.get((f.id, curr))
-            turno = None
-            warning = None
+            try:
+                aloc = aloc_map.get((f.id, str_curr))
+                turno = None
+                warning = None
 
-            if aloc:
-                turno = aloc.turno
-                warning = aloc.compliance_warning
-            elif f.horario_base and weekday in f.horario_base.dias_semana_list:
-                turno = f.horario_base
+                if aloc:
+                    turno = aloc.turno
+                    warning = aloc.compliance_warning
+                elif f.horario_base and weekday in f.horario_base.dias_semana_list:
+                    turno = f.horario_base
 
-            if not turno or turno.nome.upper() == 'FOLGA':
+                if not turno or not getattr(turno, 'nome', None) or turno.nome.upper() == 'FOLGA':
+                    continue
+
+                h_ini, h_fim, _ = turno.get_horario_dia(weekday)
+                if not h_ini or not h_fim:
+                    continue
+
+                batidas = sorted(batidas_map.get((f.id, str_curr), []))
+
+                rows.append({
+                    'data_formatada':     data_fmt,
+                    'funcionario_id':     str(f.id),
+                    'funcionario_nome':   f.nome,
+                    'departamento':       f.departamento or '—',
+                    'turno_nome':         turno.nome,
+                    'turno_color':        getattr(turno, 'color', '#4f46e5') or '#4f46e5',
+                    'planejado_inicio':   h_ini.strftime('%H:%M') if hasattr(h_ini, 'strftime') else str(h_ini),
+                    'planejado_fim':      h_fim.strftime('%H:%M') if hasattr(h_fim, 'strftime') else str(h_fim),
+                    'batidas':            batidas,
+                    'presente':           bool(batidas),
+                    'compliance_warning': warning,
+                })
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f'[GANTT] erro linha func={f.id} dia={str_curr}: {e}')
                 continue
-
-            h_ini, h_fim, _ = turno.get_horario_dia(weekday)
-            if not h_ini or not h_fim:
-                continue
-
-            batidas = sorted(batidas_map.get((f.id, curr), []))
-
-            rows.append({
-                'data_formatada':     data_fmt,
-                'funcionario_id':     str(f.id),
-                'funcionario_nome':   f.nome,
-                'departamento':       f.departamento or '—',
-                'turno_nome':         turno.nome,
-                'turno_color':        turno.color or '#4f46e5',
-                'planejado_inicio':   h_ini.strftime('%H:%M'),
-                'planejado_fim':      h_fim.strftime('%H:%M'),
-                'batidas':            batidas,
-                'presente':           bool(batidas),
-                'compliance_warning': warning,
-            })
 
         curr += timedelta(days=1)
 
