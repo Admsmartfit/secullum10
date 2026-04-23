@@ -9,9 +9,10 @@
 .gantt-table th, .gantt-table td { padding: 6px 8px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
 .gantt-table thead th { background: var(--card-bg); font-size: .72rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); }
 
-/* ── Linha de funcionário ───────────────────────────────────────────────────── */
-.gantt-row-name  { min-width: 180px; max-width: 200px; font-size: .82rem; font-weight: 600; }
-.gantt-row-dept  { min-width: 130px; font-size: .75rem; color: var(--text-muted); }
+/* ── Linha ──────────────────────────────────────────────────────────────────── */
+.gantt-row-data  { min-width: 70px; font-size: .8rem; font-weight: 700; color: var(--primary); }
+.gantt-row-name  { min-width: 160px; max-width: 180px; font-size: .82rem; font-weight: 600; }
+.gantt-row-dept  { min-width: 120px; font-size: .75rem; color: var(--text-muted); }
 .gantt-row-chart { position: relative; height: 32px; background: #f8fafc; border-radius: 4px; overflow: hidden; }
 
 /* ── Barras ─────────────────────────────────────────────────────────────────── */
@@ -35,41 +36,44 @@
     <h1 class="h3 mb-0 fw-bold">
         <i class="fas fa-chart-gantt me-2 text-primary"></i>Gantt – Planejado vs. Realizado
     </h1>
-    <div class="d-flex gap-2">
-        <a href="{{ url_for('escalas.calendario') }}" class="btn btn-outline-secondary btn">
-            <i class="fas fa-calendar me-1"></i>Calendário
-        </a>
-    </div>
+    <a href="{{ url_for('escalas.calendario') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-calendar me-1"></i>Calendário
+    </a>
 </div>
 
 <!-- Filtros -->
 <div class="card p-3 mb-3">
     <div class="row g-2 align-items-end">
-        <div class="col-md-3">
-            <label class="form-label small fw-bold mb-1">DATA</label>
-            <input type="date" id="filtData" class="form-control form-control"
-                   value="{{ data }}">
+        <div class="col-md-2">
+            <label class="form-label small fw-bold mb-1">DATA INÍCIO</label>
+            <input type="date" id="filtDataInicio" class="form-control" value="{{ data_hoje }}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-bold mb-1">DATA FIM</label>
+            <input type="date" id="filtDataFim" class="form-control" value="{{ data_hoje }}">
         </div>
         <div class="col-md-3">
             <label class="form-label small fw-bold mb-1">DEPARTAMENTO</label>
-            <select id="filtDept" class="form-select form-select">
+            <select id="filtDept" class="form-select">
                 <option value="">Todos</option>
                 {% for d in departamentos %}
                 <option value="{{ d }}" {{ 'selected' if d == dept_sel }}>{{ d }}</option>
                 {% endfor %}
             </select>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <label class="form-label small fw-bold mb-1">FUNCIONÁRIO</label>
-            <select id="filtFunc" class="form-select form-select">
-                <option value="">Todos</option>
+            <select id="filtFunc" class="form-select">
+                <option value="">(Todos)</option>
                 {% for f in funcionarios %}
-                <option value="{{ f.id }}" {{ 'selected' if f.id|string == func_sel }}>{{ f.nome }}</option>
+                <option value="{{ f.id }}"
+                        data-dept="{{ f.departamento or '' }}"
+                        {{ 'selected' if f.id|string == func_sel }}>{{ f.nome }}</option>
                 {% endfor %}
             </select>
         </div>
         <div class="col-md-2">
-            <button id="btnRecarregar" class="btn btn-primary btn w-100">
+            <button id="btnRecarregar" class="btn btn-primary w-100">
                 <i class="fas fa-search me-1"></i>Visualizar
             </button>
         </div>
@@ -86,16 +90,16 @@
 <!-- Legenda -->
 <div class="d-flex gap-4 mt-3 small text-muted flex-wrap">
     <div><span style="display:inline-block;width:24px;height:12px;background:#4f46e5;opacity:.5;border-radius:2px;vertical-align:middle;"></span> Turno planejado</div>
-    <div><span style="display:inline-block;width:24px;height:10px;background:#16a34a;border-radius:2px;vertical-align:middle;"></span> Período trabalhado (batidas)</div>
+    <div><span style="display:inline-block;width:24px;height:10px;background:#16a34a;border-radius:2px;vertical-align:middle;"></span> Período trabalhado</div>
     <div><span style="display:inline-block;width:4px;height:16px;background:#0ea5e9;border-radius:2px;vertical-align:middle;"></span> Batida (ponto)</div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-const HORA_INI = 5;   // eixo começa às 05:00
-const HORA_FIM = 24;  // eixo termina às 24:00
-const SPAN = HORA_FIM - HORA_INI;  // 19 horas
+const HORA_INI = 5;
+const HORA_FIM = 24;
+const SPAN = HORA_FIM - HORA_INI;
 
 function toPct(horaStr) {
     const [h, m] = horaStr.split(':').map(Number);
@@ -103,39 +107,52 @@ function toPct(horaStr) {
     return Math.max(0, Math.min(100, (mins / (SPAN * 60)) * 100));
 }
 
+// ── Filtro em cascata: Departamento → Funcionário ────────────────────────────
+const $filtFunc  = document.getElementById('filtFunc');
+const $filtDept  = document.getElementById('filtDept');
+const allFuncOpts = Array.from($filtFunc.options).map(o => o.cloneNode(true));
+
+$filtDept.addEventListener('change', function () {
+    const dept = this.value;
+    $filtFunc.innerHTML = '';
+    allFuncOpts.forEach(o => {
+        if (!dept || o.value === '' || (o.dataset.dept || '') === dept) {
+            $filtFunc.appendChild(o.cloneNode(true));
+        }
+    });
+    $filtFunc.value = '';
+    carregar();
+});
+
+// ── Renderização ─────────────────────────────────────────────────────────────
 function renderGantt(rows) {
     if (!rows.length) {
         document.getElementById('ganttContainer').innerHTML =
-            '<div class="text-muted text-center py-5">Nenhuma alocação encontrada para os filtros selecionados.</div>';
+            '<div class="text-muted text-center py-5">Nenhum funcionário com turno ou batida para os filtros selecionados.</div>';
         return;
     }
 
-    // Eixo de horas
-    let axisHtml = '<div class="gantt-axis" style="margin-left:340px; margin-right:80px; position:relative; height:24px;">';
+    // Eixo de horas (offset pelo espaço das colunas de dados)
+    let axisHtml = '<div class="gantt-axis" style="margin-left:430px; margin-right:90px; position:relative; height:24px;">';
     for (let h = HORA_INI; h <= HORA_FIM; h++) {
         const pct = ((h - HORA_INI) / SPAN) * 100;
         axisHtml += `<span class="gantt-tick" style="left:${pct}%">${String(h).padStart(2,'0')}h</span>`;
     }
     axisHtml += '</div>';
 
-    // Linhas
     let rowsHtml = rows.map(r => {
         const pIni = toPct(r.planejado_inicio);
         const pFim = toPct(r.planejado_fim);
         const pW   = Math.max(0, pFim - pIni);
 
-        // Barras de batidas (pares entrada/saída)
         let batidaHtml = '';
-        // Batidas individuais (pinos)
         r.batidas.forEach(b => {
-            const pB = toPct(b);
-            batidaHtml += `<div class="bar-punch" style="left:${pB}%" title="${b}"></div>`;
+            batidaHtml += `<div class="bar-punch" style="left:${toPct(b)}%" title="${b}"></div>`;
         });
-        // Período trabalhado (entre 1ª e última batida)
         if (r.batidas.length >= 2) {
-            const pB1 = toPct(r.batidas[0]);
-            const pBN = toPct(r.batidas[r.batidas.length - 1]);
-            batidaHtml += `<div class="bar-actual" style="left:${pB1}%;width:${pBN - pB1}%;background:#16a34a;"></div>`;
+            const p1 = toPct(r.batidas[0]);
+            const pN = toPct(r.batidas[r.batidas.length - 1]);
+            batidaHtml += `<div class="bar-actual" style="left:${p1}%;width:${pN - p1}%;background:#16a34a;"></div>`;
         }
 
         const status = r.presente
@@ -147,6 +164,7 @@ function renderGantt(rows) {
             : '';
 
         return `<tr>
+            <td class="gantt-row-data">${r.data_formatada}</td>
             <td class="gantt-row-name">${r.funcionario_nome}${warn}</td>
             <td class="gantt-row-dept">${r.departamento}</td>
             <td style="min-width:90px;font-size:.75rem;">${r.turno_nome}<br><small class="text-muted">${r.planejado_inicio}–${r.planejado_fim}</small></td>
@@ -166,6 +184,7 @@ function renderGantt(rows) {
         <table class="gantt-table">
             <thead>
                 <tr>
+                    <th class="gantt-row-data">Data</th>
                     <th class="gantt-row-name">Funcionário</th>
                     <th class="gantt-row-dept">Departamento</th>
                     <th>Turno</th>
@@ -178,14 +197,17 @@ function renderGantt(rows) {
         </div>`;
 }
 
+// ── Carregamento ─────────────────────────────────────────────────────────────
 async function carregar() {
-    const data   = document.getElementById('filtData').value;
-    const dept   = document.getElementById('filtDept').value;
-    const funcId = document.getElementById('filtFunc').value;
+    const di    = document.getElementById('filtDataInicio').value;
+    const df    = document.getElementById('filtDataFim').value;
+    const dept  = $filtDept.value;
+    const funcId = $filtFunc.value;
+
     document.getElementById('ganttContainer').innerHTML =
         '<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>';
     try {
-        const url = `/escalas/gantt/dados?data=${data}&dept=${encodeURIComponent(dept)}&func_id=${funcId}`;
+        const url = `/escalas/gantt/dados?data_inicio=${di}&data_fim=${df}&dept=${encodeURIComponent(dept)}&func_id=${funcId}`;
         const resp = await fetch(url);
         renderGantt(await resp.json());
     } catch(e) {
@@ -195,10 +217,15 @@ async function carregar() {
 }
 
 document.getElementById('btnRecarregar').addEventListener('click', carregar);
-// Select2 para funcionário
+document.getElementById('filtDataInicio').addEventListener('change', carregar);
+document.getElementById('filtDataFim').addEventListener('change', carregar);
+$filtFunc.addEventListener('change', carregar);
+
+// Select2 apenas para o campo de funcionário (maior lista)
 $(function() {
-    $('#filtFunc').select2({ placeholder: 'Todos', allowClear: true, width: '100%' });
+    $('#filtFunc').select2({ placeholder: '(Todos)', allowClear: true, width: '100%' });
 });
-carregar();  // carrega ao abrir
+
+carregar();
 </script>
 {% endblock %}
