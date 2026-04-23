@@ -108,19 +108,28 @@ function toPct(horaStr) {
 }
 
 // ── Filtro em cascata: Departamento → Funcionário ────────────────────────────
-const $filtFunc  = document.getElementById('filtFunc');
-const $filtDept  = document.getElementById('filtDept');
-const allFuncOpts = Array.from($filtFunc.options).map(o => o.cloneNode(true));
+const filtFuncEl  = document.getElementById('filtFunc');
+const filtDeptEl  = document.getElementById('filtDept');
+// Captura todas as opções ANTES do Select2 inicializar
+const allFuncOpts = Array.from(filtFuncEl.options).map(o => o.cloneNode(true));
 
-$filtDept.addEventListener('change', function () {
+filtDeptEl.addEventListener('change', function () {
     const dept = this.value;
-    $filtFunc.innerHTML = '';
+
+    // Destrói Select2 para manipular o <select> nativo diretamente
+    $('#filtFunc').select2('destroy');
+
+    filtFuncEl.innerHTML = '';
     allFuncOpts.forEach(o => {
         if (!dept || o.value === '' || (o.dataset.dept || '') === dept) {
-            $filtFunc.appendChild(o.cloneNode(true));
+            filtFuncEl.appendChild(o.cloneNode(true));
         }
     });
-    $filtFunc.value = '';
+    filtFuncEl.value = '';
+
+    // Reinicializa Select2 com a lista filtrada
+    $('#filtFunc').select2({ placeholder: '(Todos)', allowClear: true, width: '100%' });
+
     carregar();
 });
 
@@ -199,10 +208,10 @@ function renderGantt(rows) {
 
 // ── Carregamento ─────────────────────────────────────────────────────────────
 async function carregar() {
-    const di    = document.getElementById('filtDataInicio').value;
-    const df    = document.getElementById('filtDataFim').value;
-    const dept  = $filtDept.value;
-    const funcId = $filtFunc.value;
+    const di     = document.getElementById('filtDataInicio').value;
+    const df     = document.getElementById('filtDataFim').value;
+    const dept   = filtDeptEl.value;
+    const funcId = $('#filtFunc').val() || '';   // lê via jQuery pois Select2 controla o valor
 
     document.getElementById('ganttContainer').innerHTML =
         '<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>';
@@ -219,13 +228,12 @@ async function carregar() {
 document.getElementById('btnRecarregar').addEventListener('click', carregar);
 document.getElementById('filtDataInicio').addEventListener('change', carregar);
 document.getElementById('filtDataFim').addEventListener('change', carregar);
-$filtFunc.addEventListener('change', carregar);
 
-// Select2 apenas para o campo de funcionário (maior lista)
+// Select2 para funcionário — inicializa e ouve mudanças via jQuery
 $(function() {
     $('#filtFunc').select2({ placeholder: '(Todos)', allowClear: true, width: '100%' });
+    $('#filtFunc').on('change', carregar);
+    carregar();
 });
-
-carregar();
 </script>
 {% endblock %}
