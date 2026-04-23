@@ -2,6 +2,14 @@
 
 {% block title %}Espelho de Ponto - Secullum Hub{% endblock %}
 
+{% block extra_css %}
+<style>
+    .bg-sabado  { background-color: #f1f5f9 !important; }
+    .bg-domingo { background-color: #ffe4e6 !important; }
+    .bg-feriado { background-color: #fef08a !important; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex align-items-center gap-2 mb-3 text-muted small">
     <a href="/config/" class="text-muted text-decoration-none"><i class="fas fa-cog me-1"></i>Configurações</a>
@@ -57,8 +65,13 @@
             <tbody>
                 {% if batidas_agrupadas %}
                 {% for item in batidas_agrupadas %}
-                <tr>
-                    <td>{{ item.data }}</td>
+                <tr class="{% if item.tipo_dia == 'sabado' %}bg-sabado{% elif item.tipo_dia == 'domingo' %}bg-domingo{% elif item.tipo_dia == 'feriado' %}bg-feriado{% endif %}">
+                    <td>
+                        <strong>{{ item.data }}</strong>
+                        {% if item.tipo_dia == 'feriado' %}
+                        <br><span class="badge bg-warning text-dark" style="font-size:0.65rem;">Feriado</span>
+                        {% endif %}
+                    </td>
                     <td class="fw-bold">{{ item.funcionario }}</td>
                     <td>
                         <div class="d-flex gap-2 flex-wrap">

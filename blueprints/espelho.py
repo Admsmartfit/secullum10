@@ -4,7 +4,7 @@ from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, request, send_file, jsonify, flash, redirect, url_for
 from flask_login import login_required
 from extensions import db
-from models import Batida, Funcionario, AlocacaoDiaria, Turno
+from models import Batida, Funcionario, AlocacaoDiaria, Turno, Feriado
 
 espelho_bp = Blueprint('espelho', __name__, url_prefix='/config')
 
@@ -95,10 +95,26 @@ def espelho():
         key = (b.data.strftime('%Y-%m-%d'), b.funcionario_id, b.funcionario.nome)
         agrupado.setdefault(key, []).append(_to_time(b.hora))
 
+    # Busca feriados do período uma única vez para não ir ao banco a cada linha
+    datas_feriados = {f.data for f in Feriado.query.filter(
+        Feriado.data >= data_inicio,
+        Feriado.data <= data_fim
+    ).all()}
+
     batidas_agrupadas = []
     for (d_str, fid, nome), horas in agrupado.items():
         horas_ordenadas = sorted(horas)
         data_obj = datetime.strptime(d_str, '%Y-%m-%d').date()
+
+        # Classificação do tipo de dia (prioridade: feriado > domingo > sábado > normal)
+        if data_obj in datas_feriados:
+            tipo_dia = 'feriado'
+        elif data_obj.weekday() == 6:
+            tipo_dia = 'domingo'
+        elif data_obj.weekday() == 5:
+            tipo_dia = 'sabado'
+        else:
+            tipo_dia = 'normal'
 
         func = Funcionario.query.get(fid)
         aloc = AlocacaoDiaria.query.filter_by(funcionario_id=fid, data=data_obj).first()
@@ -166,6 +182,7 @@ def espelho():
             'horas': horas_ordenadas,
             'status': status_lista,
             'tem_turno': tem_turno,
+            'tipo_dia': tipo_dia,
         })
 
     batidas_agrupadas = sorted(batidas_agrupadas, key=lambda x: x['data'], reverse=False)

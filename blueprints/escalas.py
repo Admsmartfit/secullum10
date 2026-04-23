@@ -309,40 +309,72 @@ def gantt_dados():
     except ValueError:
         return jsonify([])
 
-    q = (
-        AlocacaoDiaria.query
-        .filter_by(data=data_ref)
-        .join(Turno)
-        .join(Funcionario)
-        .filter(Funcionario.ativo == True)
-    )
-    q = _filtrar_dept(q, dept)
-    if func_id: q = q.filter(AlocacaoDiaria.funcionario_id == func_id)
-    alocacoes = q.order_by(Funcionario.nome).all()
+    # 1. Buscar os funcionários ativos com base no filtro
+    q_func = Funcionario.query.filter_by(ativo=True)
+    q_func = _filtrar_dept(q_func, dept)
+    if func_id:
+        q_func = q_func.filter(Funcionario.id == func_id)
 
-    # Pega todas as batidas do dia (agrupadas por funcionário)
-    batidas_q = Batida.query.filter_by(data=data_ref)
-    if func_id: batidas_q = batidas_q.filter_by(funcionario_id=func_id)
+    funcionarios = q_func.order_by(Funcionario.nome).all()
+    func_ids = [f.id for f in funcionarios]
+
+    if not func_ids:
+        return jsonify([])
+
+    # 2. Buscar alocações diárias (exceções manuais) para o dia
+    alocacoes_q = AlocacaoDiaria.query.filter(
+        AlocacaoDiaria.data == data_ref,
+        AlocacaoDiaria.funcionario_id.in_(func_ids)
+    ).all()
+    aloc_map = {a.funcionario_id: a for a in alocacoes_q}
+
+    # 3. Buscar as batidas do dia formatadas em HH:MM
+    batidas_q = Batida.query.filter(
+        Batida.data == data_ref,
+        Batida.funcionario_id.in_(func_ids)
+    ).all()
+
     batidas_por_func = {}
-    for b in batidas_q.all():
-        batidas_por_func.setdefault(b.funcionario_id, []).append(b.hora)
+    for b in batidas_q:
+        batidas_por_func.setdefault(b.funcionario_id, []).append(b.hora.strftime('%H:%M'))
 
+    # 4. Construir as linhas avaliando: Tem Exceção? Se não, tem Horário Base?
     rows = []
-    for aloc in alocacoes:
-        h_ini, h_fim, _ = aloc.turno.get_horario_dia(data_ref.weekday())
-        batidas = sorted(batidas_por_func.get(aloc.funcionario_id, []))
+    for f in funcionarios:
+        aloc = aloc_map.get(f.id)
+        turno = None
+        warning = None
+
+        # Dá prioridade à Alocação Manual. Se não houver, usa o Horário Base
+        if aloc:
+            turno = aloc.turno
+            warning = aloc.compliance_warning
+        elif f.horario_base and data_ref.weekday() in f.horario_base.dias_semana_list:
+            turno = f.horario_base
+
+        # Ignorar se não tem turno ou se o turno for declaradamente "FOLGA"
+        if not turno or turno.nome.upper() == 'FOLGA':
+            continue
+
+        h_ini, h_fim, _ = turno.get_horario_dia(data_ref.weekday())
+        if not h_ini or not h_fim:
+            continue
+
+        batidas = sorted(batidas_por_func.get(f.id, []))
+
         rows.append({
-            'funcionario_id':   str(aloc.funcionario_id),
-            'funcionario_nome': aloc.funcionario.nome,
-            'departamento':     aloc.funcionario.departamento or '—',
-            'turno_nome':       aloc.turno.nome,
-            'turno_color':      aloc.turno.color or '#4f46e5',
-            'planejado_inicio': h_ini.strftime('%H:%M'),
-            'planejado_fim':    h_fim.strftime('%H:%M'),
-            'batidas':          batidas,
-            'presente':         bool(batidas),
-            'compliance_warning': aloc.compliance_warning,
+            'funcionario_id':     str(f.id),
+            'funcionario_nome':   f.nome,
+            'departamento':       f.departamento or '—',
+            'turno_nome':         turno.nome,
+            'turno_color':        turno.color or '#4f46e5',
+            'planejado_inicio':   h_ini.strftime('%H:%M'),
+            'planejado_fim':      h_fim.strftime('%H:%M'),
+            'batidas':            batidas,
+            'presente':           bool(batidas),
+            'compliance_warning': warning,
         })
+
     return jsonify(rows)
 
 
