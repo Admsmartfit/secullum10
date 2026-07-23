@@ -1,9 +1,16 @@
 """
 Serviço de integração com Mega-API (WhatsApp) – Etapa 4.
 
-Endpoint REST correto (obtido via /docs/swagger.json):
+PRD Antiban (Fase 0 + Fase 1): as funções públicas abaixo NÃO enviam mais
+diretamente — elas apenas ENFILEIRAM em FilaEnvioWhatsapp. O envio real
+(requests.post) acontece em _despachar_real, chamada exclusivamente por
+services/envio_dispatcher.py (que aplica delay/jitter/rate-limit) ou, para
+as rotas administrativas de teste/envio manual no painel, de forma síncrona
+via o parâmetro imediato=True.
+
+Endpoint REST (obtido via /docs/swagger.json):
   POST https://{host}/rest/sendMessage/{instance_key}/text
-       body: { "messageData": { "to": "5527988010899", "text": "..." } }
+       body: { "messageData": { "to": "5527988010899@s.whatsapp.net", "text": "..." } }
 
   POST https://{host}/rest/sendMessage/{instance_key}/mediaBase64
        body: { "messageData": { "to": "...", "base64": "...", "fileName": "...",
@@ -14,9 +21,14 @@ Authorization: Bearer {MEGAAPI_TOKEN}
 import base64
 import json as _json
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from extensions import db
-from models import WhatsappLog
+from models import WhatsappLog, FilaEnvioWhatsapp
+
+# Exponential backoff para itens que falham no despacho (PRD 2.0, herdado do
+# antigo processar_fila_notificacoes): tentativa 1 -> +5min, 2 -> +15min,
+# 3 -> +30min; a partir da 4ª falha, marca 'erro' definitivo.
+_BACKOFF_MINUTOS = {1: 5, 2: 15, 3: 30}
 
 
 def _megaapi():
@@ -37,7 +49,9 @@ def _headers() -> dict:
 
 
 def _fone(celular: str) -> str:
-    """Normaliza celular para 5511999999999 (sem @s.whatsapp.net)."""
+    """Normaliza celular para 5511999999999 (só dígitos — usado para armazenar
+    em WhatsappLog/FilaEnvioWhatsapp e comparações/dedup). O sufixo oficial da
+    Mega-API é aplicado separadamente por _jid(), só na hora de montar o payload."""
     digits = ''.join(c for c in (celular or '') if c.isdigit())
     if len(digits) == 11:    # DDD + 9 dígitos → adiciona 55
         return f'55{digits}'
@@ -46,181 +60,116 @@ def _fone(celular: str) -> str:
     return digits
 
 
+def _jid(celular: str) -> str:
+    """Formato oficial da Mega-API para contatos privados (PRD 3.1.4.1):
+    sufixo @s.whatsapp.net. Aplicado só ao montar o messageData, nunca ao
+    valor armazenado em banco (que fica só com dígitos, via _fone)."""
+    digits = celular or ''
+    return f'{digits}@s.whatsapp.net' if digits and '@' not in digits else digits
+
+
 def _configured() -> bool:
     cfg = _megaapi()
     return bool(cfg['token'] and cfg['instance'])
 
 
-def enviar_texto(celular: str, mensagem: str, func_id: str = None, 
-                 tipo: str = 'saida', tipo_regra: str = None, 
-                 data_ref=None) -> bool:
-    """Envia mensagem de texto via Mega-API e registra o log."""
-    fone = _fone(celular)
-    log = WhatsappLog(
-        funcionario_id=func_id,
-        tipo=tipo,
-        tipo_regra=tipo_regra,
-        data_referencia=data_ref,
-        mensagem=mensagem,
-        celular=fone,
-        status='enviado',
-        criado_em=datetime.utcnow(),
-    )
-    db.session.add(log)
-
-    if not _configured():
-        log.status = 'sem_config'
-        db.session.commit()
-        return False
-
+def _preencher_mega_id(log: WhatsappLog, resp) -> None:
+    """PRD Antiban Fase 0: captura o id retornado pela Mega-API (campo raiz `id`),
+    disponível de forma síncrona na resposta do próprio POST de envio."""
     try:
-        payload = {
-            'messageData': {
-                'to': fone,          # sem @s.whatsapp.net
-                'text': mensagem,
-            }
-        }
-        resp = requests.post(
-            f'{_base_url()}/text',
-            json=payload,
-            headers=_headers(),
-            timeout=10,
-        )
-        ok = resp.status_code in (200, 201)
-        if ok:
-            log.status = 'enviado'
+        log.mega_message_id = resp.json().get('id')
+    except Exception:
+        pass
+    log.atualizado_em = datetime.utcnow()
+
+
+def _enfileirar(**kwargs) -> FilaEnvioWhatsapp:
+    item = FilaEnvioWhatsapp(status='pendente', **kwargs)
+    db.session.add(item)
+    db.session.commit()
+    return item
+
+
+def _processar_item(item: FilaEnvioWhatsapp) -> bool:
+    """Transições de status (pendente → processando → enviado/erro) + despacho
+    real. Usada tanto pelo caminho síncrono (imediato=True) quanto pelo
+    dispatcher periódico (services/envio_dispatcher.py::processar_proximo)."""
+    item.status = 'processando'
+    item.tentativas = (item.tentativas or 0) + 1
+    db.session.commit()
+
+    ok = _despachar_real(item)
+
+    if ok:
+        item.status = 'enviado'
+        item.enviado_em = datetime.utcnow()
+    else:
+        backoff_min = _BACKOFF_MINUTOS.get(item.tentativas)
+        if backoff_min is not None:
+            # Ainda dentro da janela de retry: volta para 'pendente' com novo enviar_apos
+            item.status = 'pendente'
+            item.enviar_apos = datetime.utcnow() + timedelta(minutes=backoff_min)
         else:
-            log.status = f'erro_{resp.status_code}'
-            log.mensagem = f'[ERRO {resp.status_code}] {resp.text[:200]} | msg: {mensagem}'
-        db.session.commit()
-        return ok
-    except Exception as e:
-        log.status = f'erro: {str(e)[:80]}'
-        db.session.commit()
-        return False
+            item.status = 'erro'
+    db.session.commit()
+    return ok
+
+
+def enviar_texto(celular: str, mensagem: str, func_id: str = None,
+                 tipo: str = 'saida', tipo_regra: str = None,
+                 data_ref=None, prioridade: int = 10, imediato: bool = False) -> bool:
+    """Enfileira mensagem de texto para envio via Mega-API.
+    Retorno True = aceito na fila (não confirma entrega real) — nenhum
+    chamador hoje trata o retorno como confirmação de entrega, então essa
+    mudança de semântica é segura.
+    imediato=True despacha na hora, sem passar pela fila/rate-limit — uso
+    restrito às rotas administrativas de teste/envio manual do painel.
+    """
+    item = _enfileirar(
+        celular=_fone(celular), mensagem=mensagem, funcionario_id=func_id,
+        tipo=tipo, tipo_regra=tipo_regra, data_referencia=data_ref,
+        tipo_msg='texto', prioridade=prioridade,
+    )
+    return _processar_item(item) if imediato else True
 
 
 def enviar_botoes(celular: str, texto: str, botoes: list,
-                  func_id: str = None, tipo: str = 'saida') -> bool:
-    """Envia mensagem com botões interativos via Mega-API.
+                  func_id: str = None, tipo: str = 'saida',
+                  prioridade: int = 10, imediato: bool = False) -> bool:
+    """Enfileira mensagem com botões interativos via Mega-API.
 
     botoes: lista de dicts {"id": "btn_sim", "title": "👍 Sim, confirmo"}
     Máximo 3 botões por limitação do WhatsApp.
 
-    Fallback automático: se a API recusar (ex: conta não suporta), envia
-    texto simples numerado.
+    Fallback automático (se a API recusar) para texto simples numerado é
+    tratado no despacho real (_despachar_botoes), não aqui.
     """
-    fone = _fone(celular)
-    log = WhatsappLog(
-        funcionario_id=func_id,
-        tipo=tipo,
-        mensagem=texto,
-        celular=fone,
-        status='enviado',
-        criado_em=datetime.utcnow(),
+    item = _enfileirar(
+        celular=_fone(celular), mensagem=texto, funcionario_id=func_id, tipo=tipo,
+        tipo_msg='botoes', interativo_json=_json.dumps({'botoes': botoes}),
+        prioridade=prioridade,
     )
-    db.session.add(log)
-
-    if not _configured():
-        log.status = 'sem_config'
-        db.session.commit()
-        return False
-
-    try:
-        payload = {
-            'messageData': {
-                'to': fone,
-                'title': texto,
-                'buttons': [
-                    {'buttonId': b['id'], 'buttonText': {'displayText': b['title']}, 'type': 1}
-                    for b in botoes
-                ],
-                'headerType': 1,
-            }
-        }
-        resp = requests.post(
-            f'{_base_url()}/buttons',
-            json=payload,
-            headers=_headers(),
-            timeout=10,
-        )
-        ok = resp.status_code in (200, 201)
-        if ok:
-            log.status = 'enviado'
-            db.session.commit()
-            return True
-
-        # Fallback: envia como texto numerado
-        opcoes = '\n'.join(f'{i+1}. {b["title"]}' for i, b in enumerate(botoes))
-        fallback = f'{texto}\n\n{opcoes}'
-        log.mensagem = f'[fallback texto] {fallback}'
-        log.status = 'fallback_texto'
-        db.session.commit()
-        return enviar_texto(celular, fallback, func_id=func_id, tipo=tipo)
-    except Exception as e:
-        log.status = f'erro: {str(e)[:80]}'
-        db.session.commit()
-        return False
+    return _processar_item(item) if imediato else True
 
 
 def enviar_menu_lista(celular: str, texto: str, titulo_botao: str,
-                      secoes: list, func_id: str = None, tipo: str = 'saida') -> bool:
-    """Envia List Message (menu) via Mega-API — ideal para > 3 opções.
+                      secoes: list, func_id: str = None, tipo: str = 'saida',
+                      prioridade: int = 10, imediato: bool = False) -> bool:
+    """Enfileira List Message (menu) via Mega-API — ideal para > 3 opções.
 
     secoes: lista de dicts:
       {"title": "Seção", "rows": [{"id": "op1", "title": "Opção 1", "description": "..."}]}
 
-    Fallback: envia texto numerado com todas as opções.
+    Fallback automático para texto numerado é tratado no despacho real
+    (_despachar_lista), não aqui.
     """
-    fone = _fone(celular)
-    todas_opcoes = [r for s in secoes for r in s.get('rows', [])]
-    log = WhatsappLog(
-        funcionario_id=func_id,
-        tipo=tipo,
-        mensagem=texto,
-        celular=fone,
-        status='enviado',
-        criado_em=datetime.utcnow(),
+    item = _enfileirar(
+        celular=_fone(celular), mensagem=texto, funcionario_id=func_id, tipo=tipo,
+        tipo_msg='lista',
+        interativo_json=_json.dumps({'titulo_botao': titulo_botao, 'secoes': secoes}),
+        prioridade=prioridade,
     )
-    db.session.add(log)
-
-    if not _configured():
-        log.status = 'sem_config'
-        db.session.commit()
-        return False
-
-    try:
-        payload = {
-            'messageData': {
-                'to': fone,
-                'text': texto,
-                'buttonText': titulo_botao,
-                'sections': secoes,
-            }
-        }
-        resp = requests.post(
-            f'{_base_url()}/listMessage',
-            json=payload,
-            headers=_headers(),
-            timeout=10,
-        )
-        ok = resp.status_code in (200, 201)
-        if ok:
-            log.status = 'enviado'
-            db.session.commit()
-            return True
-
-        # Fallback: texto numerado
-        opcoes = '\n'.join(f'{i+1}. {r["title"]}' for i, r in enumerate(todas_opcoes))
-        fallback = f'{texto}\n\n{opcoes}\n\n_(Digite o número da opção)_'
-        log.mensagem = f'[fallback texto] {fallback}'
-        log.status = 'fallback_texto'
-        db.session.commit()
-        return enviar_texto(celular, fallback, func_id=func_id, tipo=tipo)
-    except Exception as e:
-        log.status = f'erro: {str(e)[:80]}'
-        db.session.commit()
-        return False
+    return _processar_item(item) if imediato else True
 
 
 def enviar_msg(celular: str, texto: str,
@@ -229,8 +178,10 @@ def enviar_msg(celular: str, texto: str,
                func_id: str = None,
                tipo: str = 'saida',
                tipo_regra: str = None,
-               data_ref=None) -> bool:
-    """Dispatcher unificado: envia texto, botões ou lista dependendo de tipo_msg.
+               data_ref=None,
+               prioridade: int = 10,
+               imediato: bool = False) -> bool:
+    """Dispatcher unificado: enfileira texto, botões ou lista dependendo de tipo_msg.
 
     interativo_json (str): JSON serializado com estrutura:
       Botões: {"botoes": [{"id": "btn_1", "title": "Opção 1"}, ...]}
@@ -242,7 +193,8 @@ def enviar_msg(celular: str, texto: str,
             dados = _json.loads(interativo_json)
             botoes = dados.get('botoes', [])
             if botoes:
-                return enviar_botoes(celular, texto, botoes, func_id=func_id, tipo=tipo)
+                return enviar_botoes(celular, texto, botoes, func_id=func_id, tipo=tipo,
+                                     prioridade=prioridade, imediato=imediato)
         except Exception:
             pass  # fallback para texto
 
@@ -253,12 +205,14 @@ def enviar_msg(celular: str, texto: str,
             secoes = dados.get('secoes', [])
             if secoes:
                 return enviar_menu_lista(celular, texto, titulo_botao, secoes,
-                                         func_id=func_id, tipo=tipo)
+                                         func_id=func_id, tipo=tipo,
+                                         prioridade=prioridade, imediato=imediato)
         except Exception:
             pass  # fallback para texto
 
     return enviar_texto(celular, texto, func_id=func_id, tipo=tipo,
-                        tipo_regra=tipo_regra, data_ref=data_ref)
+                        tipo_regra=tipo_regra, data_ref=data_ref,
+                        prioridade=prioridade, imediato=imediato)
 
 
 def baixar_midia(url: str) -> bytes | None:
@@ -276,17 +230,131 @@ def baixar_midia(url: str) -> bytes | None:
 
 
 def enviar_documento(celular: str, pdf_bytes: bytes, filename: str,
-                     caption: str = '', func_id: str = None, 
+                     caption: str = '', func_id: str = None,
                      tipo: str = 'espelho', tipo_regra: str = None,
-                     data_ref=None) -> bool:
-    """RF4.4 – Envia PDF via Mega-API (mediaBase64) e registra log."""
-    fone = _fone(celular)
+                     data_ref=None, prioridade: int = 10, imediato: bool = False) -> bool:
+    """RF4.4 – Enfileira envio de PDF via Mega-API (mediaBase64)."""
+    item = _enfileirar(
+        celular=_fone(celular), mensagem=caption or filename, funcionario_id=func_id,
+        tipo=tipo, tipo_regra=tipo_regra, data_referencia=data_ref,
+        tipo_msg='documento',
+        interativo_json=_json.dumps({
+            'base64': base64.b64encode(pdf_bytes).decode(),
+            'fileName': filename,
+            'mimeType': 'application/pdf',
+            'caption': caption,
+        }),
+        prioridade=prioridade,
+    )
+    return _processar_item(item) if imediato else True
+
+
+# ── Despacho real (só chamado por _processar_item) ───────────────────────────
+
+def _post_texto(fone: str, mensagem: str, log: WhatsappLog) -> bool:
+    payload = {'messageData': {'to': _jid(fone), 'text': mensagem}}
+    resp = requests.post(f'{_base_url()}/text', json=payload, headers=_headers(), timeout=10)
+    ok = resp.status_code in (200, 201)
+    if ok:
+        log.status = 'enviado'
+        _preencher_mega_id(log, resp)
+    else:
+        log.status = f'erro_{resp.status_code}'
+        log.mensagem = f'[ERRO {resp.status_code}] {resp.text[:200]} | msg: {mensagem}'
+    db.session.commit()
+    return ok
+
+
+def _despachar_botoes(item: FilaEnvioWhatsapp, fone: str, log: WhatsappLog) -> bool:
+    dados = _json.loads(item.interativo_json or '{}')
+    botoes = dados.get('botoes', [])
+    payload = {
+        'messageData': {
+            'to': _jid(fone),
+            'title': item.mensagem,
+            'buttons': [
+                {'buttonId': b['id'], 'buttonText': {'displayText': b['title']}, 'type': 1}
+                for b in botoes
+            ],
+            'headerType': 1,
+        }
+    }
+    resp = requests.post(f'{_base_url()}/buttons', json=payload, headers=_headers(), timeout=10)
+    if resp.status_code in (200, 201):
+        log.status = 'enviado'
+        _preencher_mega_id(log, resp)
+        db.session.commit()
+        return True
+
+    # Fallback: envia como texto numerado (direto, sem voltar para a fila)
+    opcoes = '\n'.join(f'{i+1}. {b["title"]}' for i, b in enumerate(botoes))
+    fallback = f'{item.mensagem}\n\n{opcoes}'
+    log.mensagem = f'[fallback texto] {fallback}'
+    log.status = 'fallback_texto'
+    db.session.commit()
+    return _post_texto(fone, fallback, log)
+
+
+def _despachar_lista(item: FilaEnvioWhatsapp, fone: str, log: WhatsappLog) -> bool:
+    dados = _json.loads(item.interativo_json or '{}')
+    titulo_botao = dados.get('titulo_botao', 'Ver opções')
+    secoes = dados.get('secoes', [])
+    todas_opcoes = [r for s in secoes for r in s.get('rows', [])]
+    payload = {
+        'messageData': {
+            'to': _jid(fone),
+            'text': item.mensagem,
+            'buttonText': titulo_botao,
+            'sections': secoes,
+        }
+    }
+    resp = requests.post(f'{_base_url()}/listMessage', json=payload, headers=_headers(), timeout=10)
+    if resp.status_code in (200, 201):
+        log.status = 'enviado'
+        _preencher_mega_id(log, resp)
+        db.session.commit()
+        return True
+
+    # Fallback: texto numerado (direto, sem voltar para a fila)
+    opcoes = '\n'.join(f'{i+1}. {r["title"]}' for i, r in enumerate(todas_opcoes))
+    fallback = f'{item.mensagem}\n\n{opcoes}\n\n_(Digite o número da opção)_'
+    log.mensagem = f'[fallback texto] {fallback}'
+    log.status = 'fallback_texto'
+    db.session.commit()
+    return _post_texto(fone, fallback, log)
+
+
+def _despachar_documento(item: FilaEnvioWhatsapp, fone: str, log: WhatsappLog) -> bool:
+    dados = _json.loads(item.interativo_json or '{}')
+    payload = {
+        'messageData': {
+            'to':       _jid(fone),
+            'base64':   dados.get('base64', ''),
+            'fileName': dados.get('fileName', 'documento.pdf'),
+            'type':     'document',
+            'mimeType': dados.get('mimeType', 'application/pdf'),
+            'caption':  dados.get('caption', ''),
+        }
+    }
+    resp = requests.post(f'{_base_url()}/mediaBase64', json=payload, headers=_headers(), timeout=30)
+    ok = resp.status_code in (200, 201)
+    log.status = 'enviado' if ok else f'erro_{resp.status_code}'
+    if ok:
+        _preencher_mega_id(log, resp)
+    db.session.commit()
+    return ok
+
+
+def _despachar_real(item: FilaEnvioWhatsapp) -> bool:
+    """Chamada exclusivamente por _processar_item. Faz o requests.post real e
+    grava o resultado em WhatsappLog (a FilaEnvioWhatsapp só guarda o pedido)."""
+    fone = item.celular
     log = WhatsappLog(
-        funcionario_id=func_id,
-        tipo=tipo,
-        tipo_regra=tipo_regra,
-        data_referencia=data_ref,
-        mensagem=caption or filename,
+        funcionario_id=item.funcionario_id,
+        tipo=item.tipo,
+        tipo_regra=item.tipo_regra,
+        data_referencia=item.data_referencia,
+        mensagem=item.mensagem,
         celular=fone,
         status='enviado',
         criado_em=datetime.utcnow(),
@@ -299,27 +367,13 @@ def enviar_documento(celular: str, pdf_bytes: bytes, filename: str,
         return False
 
     try:
-        b64 = base64.b64encode(pdf_bytes).decode()
-        payload = {
-            'messageData': {
-                'to':       fone,
-                'base64':   b64,
-                'fileName': filename,
-                'type':     'document',
-                'mimeType': 'application/pdf',
-                'caption':  caption,
-            }
-        }
-        resp = requests.post(
-            f'{_base_url()}/mediaBase64',
-            json=payload,
-            headers=_headers(),
-            timeout=30,
-        )
-        ok = resp.status_code in (200, 201)
-        log.status = 'enviado' if ok else f'erro_{resp.status_code}'
-        db.session.commit()
-        return ok
+        if item.tipo_msg == 'botoes':
+            return _despachar_botoes(item, fone, log)
+        if item.tipo_msg == 'lista':
+            return _despachar_lista(item, fone, log)
+        if item.tipo_msg == 'documento':
+            return _despachar_documento(item, fone, log)
+        return _post_texto(fone, item.mensagem, log)
     except Exception as e:
         log.status = f'erro: {str(e)[:80]}'
         db.session.commit()

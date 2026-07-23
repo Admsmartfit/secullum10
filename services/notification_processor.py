@@ -13,7 +13,7 @@ from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 
 from extensions import db
-from models import NotificationRule, AlocacaoDiaria, Batida, Funcionario, WhatsappLog, NotificacaoFila
+from models import NotificationRule, AlocacaoDiaria, Batida, Funcionario, WhatsappLog, FilaEnvioWhatsapp
 
 _TZ_BR = ZoneInfo('America/Sao_Paulo')
 
@@ -163,13 +163,16 @@ def _enfileirar(regra: NotificationRule, celular: str, mensagem: str,
                 tipo_regra: str = None, data_ref: date = None) -> None:
     """Enfileira mensagem para envio no próximo início de turno."""
     enviar_apos = _proximo_inicio_turno(aloc)
-    item = NotificacaoFila(
+    item = FilaEnvioWhatsapp(
         regra_id=regra.id,
         funcionario_id=func_id,
         celular=celular,
         mensagem=mensagem,
         tipo=tipo,
-        tipo_regra=tipo_regra,    # Supondo que NotificacaoFila também possa precisar disso
+        tipo_regra=tipo_regra,
+        data_referencia=data_ref,
+        tipo_msg='texto',
+        prioridade=10,
         enviar_apos=enviar_apos,
         status='pendente',
     )
@@ -634,54 +637,11 @@ def _enviar(regra: NotificationRule, func, minutos: int, aloc, data_ref: date, e
     return enviados
 
 
-# ── Processador da fila (Direito à Desconexão) ────────────────────────────────
-
-def processar_fila_notificacoes() -> dict:
-    """
-    Despacha mensagens enfileiradas cujo enviar_apos já passou.
-    Chamado a cada hora via Celery beat.
-    """
-    from services.whatsapp_bot import enviar_texto
-    agora = datetime.now(_TZ_BR)
-    pendentes = (
-        NotificacaoFila.query
-        .filter(
-            NotificacaoFila.status == 'pendente',
-            db.or_(
-                NotificacaoFila.enviar_apos.is_(None),
-                NotificacaoFila.enviar_apos <= agora,
-            ),
-        )
-        .all()
-    )
-    enviados = 0
-    erros = 0
-    for item in pendentes:
-        item.tentativas = (item.tentativas or 0) + 1
-        ok = enviar_texto(
-            celular=item.celular,
-            mensagem=item.mensagem,
-            func_id=item.funcionario_id,
-            tipo=item.tipo or 'fila',
-        )
-        if ok:
-            item.status = 'enviado'
-            item.enviado_em = datetime.now(_TZ_BR)
-            enviados += 1
-        else:
-            # Exponential Backoff (PRD 2.0): 5min, 15min, 30min
-            tentativas = item.tentativas or 1
-            if tentativas == 1:
-                item.enviar_apos = datetime.now(_TZ_BR) + timedelta(minutes=5)
-            elif tentativas == 2:
-                item.enviar_apos = datetime.now(_TZ_BR) + timedelta(minutes=15)
-            elif tentativas == 3:
-                item.enviar_apos = datetime.now(_TZ_BR) + timedelta(minutes=30)
-            else:
-                item.status = 'erro'
-            erros += 1
-    db.session.commit()
-    return {'enviados': enviados, 'erros': erros}
+# ── Fila (Direito à Desconexão) ────────────────────────────────────────────────
+# PRD Antiban Fase 1: o despacho da fila (incluindo retry com backoff exponencial)
+# foi absorvido por services/envio_dispatcher.py + services/whatsapp_bot.py::_processar_item,
+# chamado a cada ~5s pelo APScheduler (services/auto_sync.py). _enfileirar() acima
+# só precisa calcular enviar_apos; o dispatcher genérico cuida do resto.
 
 
 # ── Processador principal ──────────────────────────────────────────────────────

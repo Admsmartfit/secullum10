@@ -269,9 +269,26 @@ class WhatsappLog(db.Model):
     mensagem = db.Column(db.Text)
     status = db.Column(db.String(20), default='enviado')   # enviado / erro / recebido
     celular = db.Column(db.String(20))
+    # PRD Antiban Fase 0: id retornado pela Mega-API no envio (uso futuro: responder/marcar/excluir mensagem)
+    mega_message_id = db.Column(db.String(100), nullable=True)
+    atualizado_em = db.Column(db.DateTime, nullable=True)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     funcionario = db.relationship('Funcionario', backref='whatsapp_logs')
+
+
+class MegaApiInstanceEvent(db.Model):
+    """PRD Antiban Fase 0: eventos de conexão/desconexão da instância Mega-API,
+    capturados no mesmo webhook que recebe mensagens (a Mega-API só permite
+    configurar uma única webhookUrl por instância)."""
+    __tablename__ = 'megaapi_instance_events'
+    id = db.Column(db.Integer, primary_key=True)
+    tipo_evento = db.Column(db.String(50))   # 'connected' / 'disconnected' / 'qr_needed' / 'desconhecido'
+    payload_raw = db.Column(db.Text)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<MegaApiInstanceEvent {self.tipo_evento} em {self.criado_em}>'
 
 
 # ── Etapa 5: Marketplace ───────────────────────────────────────────────────────
@@ -584,6 +601,41 @@ class NotificacaoFila(db.Model):
 
     def __repr__(self):
         return f'<NotificacaoFila {self.id} [{self.status}] enviar_apos={self.enviar_apos}>'
+
+
+class FilaEnvioWhatsapp(db.Model):
+    """PRD Antiban Fase 1: camada única de envio de WhatsApp.
+    Generaliza NotificacaoFila (que fica preservada, sem uso ativo, como
+    histórico/rede de segurança) para TODO envio do sistema, não só os que
+    caem fora do expediente. Todo envio passa por aqui e é despachado por
+    services/envio_dispatcher.py, que aplica delay/jitter/rate-limit.
+    """
+    __tablename__ = 'fila_envio_whatsapp'
+    id = db.Column(db.Integer, primary_key=True)
+    regra_id = db.Column(db.Integer, db.ForeignKey('notification_rules.id'), nullable=True)
+    funcionario_id = db.Column(db.String(50), db.ForeignKey('funcionarios.id'), nullable=True)
+    celular = db.Column(db.String(20), nullable=False)
+    mensagem = db.Column(db.Text, nullable=False)
+    tipo = db.Column(db.String(50))                   # saida / regra / relatorio / manual / ...
+    tipo_regra = db.Column(db.String(50), nullable=True)
+    tipo_msg = db.Column(db.String(20), default='texto')       # texto / botoes / lista / documento
+    interativo_json = db.Column(db.Text, nullable=True)
+    anexo_ref = db.Column(db.String(255), nullable=True)       # reservado (documentos futuros)
+    data_referencia = db.Column(db.Date, nullable=True)
+    prioridade = db.Column(db.Integer, default=10)              # menor = mais prioritário
+    primeiro_contato = db.Column(db.Boolean, default=False)     # reservado (lint futuro, Fase 5)
+    enviar_apos = db.Column(db.DateTime, nullable=True)
+    # pendente / processando / enviado / erro / cancelado
+    status = db.Column(db.String(20), default='pendente')
+    tentativas = db.Column(db.Integer, default=0)
+    criada_em = db.Column(db.DateTime, default=datetime.utcnow)
+    enviado_em = db.Column(db.DateTime, nullable=True)
+
+    regra = db.relationship('NotificationRule', backref='fila_envio')
+    funcionario = db.relationship('Funcionario', backref='fila_envio_whatsapp')
+
+    def __repr__(self):
+        return f'<FilaEnvioWhatsapp {self.id} [{self.status}] enviar_apos={self.enviar_apos}>'
 
 
 class BotKeywordRule(db.Model):

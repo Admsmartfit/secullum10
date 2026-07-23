@@ -168,11 +168,18 @@ def register_tasks(celery):
         logger.info(f'[regras_agendadas] {result}')
         return result
 
-    @celery.task(name='tasks.processar_fila_notificacoes')
-    def processar_fila_notificacoes():
-        from services.notification_processor import processar_fila_notificacoes as _proc
-        result = _proc()
-        logger.info(f'[fila_notificacoes] {result}')
+    # PRD Antiban Fase 1: tasks.processar_fila_notificacoes removida — o despacho
+    # da fila agora é feito por services/envio_dispatcher.py via APScheduler
+    # (services/auto_sync.py), não mais por esta task/beat.
+
+    @celery.task(name='tasks.processar_evento_instancia')
+    def processar_evento_instancia(payload: dict):
+        """PRD Antiban Fase 0: classifica o evento bruto de conexão/desconexão
+        da instância Mega-API (recebido dentro do webhook já existente) e
+        alerta por e-mail em caso de desconexão."""
+        from blueprints.whatsapp import _processar_evento_instancia
+        result = _processar_evento_instancia(payload)
+        logger.info(f'[processar_evento_instancia] {result}')
         return result
 
     @celery.task(name='tasks.processar_regras_evento_sync')

@@ -187,10 +187,9 @@ def create_app():
             'task': 'tasks.sync_batidas_completa',
             'schedule': crontab(minute='*/5'),  # verifica a cada 5 min, self-limita por config
         },
-        'processar-fila-notificacoes-hourly': {
-            'task': 'tasks.processar_fila_notificacoes',
-            'schedule': crontab(minute=10),  # :10 de cada hora — despacha fila de desconexão
-        },
+        # PRD Antiban Fase 1: 'processar-fila-notificacoes-hourly' removida — o
+        # despacho da fila agora é feito por services/envio_dispatcher.py via
+        # APScheduler (services/auto_sync.py), a cada ~5s.
         'verificar-inconsistencias-dia-anterior': {
             'task': 'tasks.verificar_inconsistencias_dia_anterior',
             'schedule': crontab(minute='*'),  # verifica a cada minuto, self-limita pelo horário configurado

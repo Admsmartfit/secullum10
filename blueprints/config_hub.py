@@ -255,7 +255,7 @@ def whatsapp_testar():
         flash('Informe o número de celular para teste.', 'danger')
         return redirect(url_for('config_hub.index') + '#whatsapp')
     from services.whatsapp_bot import enviar_texto
-    ok = enviar_texto(celular=celular, mensagem=mensagem, tipo='teste')
+    ok = enviar_texto(celular=celular, mensagem=mensagem, tipo='teste', imediato=True)
     if ok:
         flash(f'Mensagem enviada com sucesso para {celular}!', 'success')
     else:

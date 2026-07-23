@@ -3,7 +3,7 @@ from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required
 from extensions import db
-from models import WhatsappLog, Funcionario, AlocacaoDiaria, UnidadeLider, Batida, NotificacaoFila, ChatState
+from models import WhatsappLog, Funcionario, AlocacaoDiaria, UnidadeLider, Batida, FilaEnvioWhatsapp, ChatState, MegaApiInstanceEvent
 
 whatsapp_bp = Blueprint('whatsapp', __name__, url_prefix='/whatsapp')
 
@@ -49,9 +49,49 @@ def _validar_hmac(payload_bytes: bytes, signature: str) -> bool:
 
 # ── Webhook ───────────────────────────────────────────────────────────────────
 
+def _eh_mensagem_recebida(data: dict) -> bool:
+    """Heurística: payloads de mensagem recebida trazem 'from' (remetente).
+    Payloads de conexão/desconexão da instância não têm esse campo — a
+    Mega-API só permite configurar uma única webhookUrl por instância, então
+    esses dois tipos de evento chegam neste mesmo endpoint (PRD Antiban Fase 0)."""
+    return bool(isinstance(data, dict) and data.get('from'))
+
+
+def _processar_evento_instancia(payload: dict) -> dict:
+    """Classifica o evento bruto de conexão/desconexão e alerta por e-mail
+    em caso de desconexão. Heurística provisória — a documentação da Mega-API
+    não detalha o schema exato desse payload; ajustar as chaves reais assim
+    que confirmadas em produção (PRD Antiban Fase 0)."""
+    indicativo_desconexao = any(
+        str(v).lower() in ('disconnected', 'close', 'logout')
+        for v in payload.values()
+    ) if isinstance(payload, dict) else False
+
+    if not indicativo_desconexao:
+        return {'processado': True, 'desconexao': False}
+
+    from flask import current_app
+    current_app.logger.error(f'[ALERTA] Possível desconexão da instância Mega-API: {payload}')
+
+    rh_email = os.getenv('RH_EMAIL', '')
+    if rh_email:
+        try:
+            from flask_mail import Message
+            from extensions import mail
+            msg = Message(
+                subject='⚠️ Instância WhatsApp possivelmente desconectada',
+                recipients=[rh_email],
+                body=f'Payload recebido:\n{payload}',
+            )
+            mail.send(msg)
+        except Exception as e:
+            current_app.logger.error(f'[processar_evento_instancia] Falha ao enviar e-mail: {e}')
+    return {'processado': True, 'desconexao': True}
+
+
 @whatsapp_bp.route('/webhook', methods=['POST'])
 def webhook():
-    """RF4.1 – recebe mensagens da Mega-API e enfileira processamento."""
+    """RF4.1 – recebe mensagens e eventos de conexão/desconexão da Mega-API."""
     payload_bytes = request.get_data()
     signature = request.headers.get('X-Mega-Signature', '')
 
@@ -59,6 +99,18 @@ def webhook():
         return jsonify({'error': 'invalid signature'}), 401
 
     data = request.get_json(force=True, silent=True) or {}
+
+    if not _eh_mensagem_recebida(data):
+        # PRD Antiban Fase 0: evento de conexão/desconexão da instância.
+        db.session.add(MegaApiInstanceEvent(tipo_evento='desconhecido', payload_raw=json.dumps(data)))
+        db.session.commit()
+        try:
+            from tasks import processar_evento_instancia
+            processar_evento_instancia.delay(data)
+        except Exception:
+            # fallback síncrono em dev
+            _processar_evento_instancia(data)
+        return jsonify({'ok': True}), 200
 
     # Enfileirar via Celery para processar < 2s (RF4.1)
     try:
@@ -694,9 +746,9 @@ def logs():
         .all()
     )
     fila = (
-        NotificacaoFila.query
-        .filter(NotificacaoFila.status == 'pendente')
-        .order_by(NotificacaoFila.criada_em.desc())
+        FilaEnvioWhatsapp.query
+        .filter(FilaEnvioWhatsapp.status == 'pendente')
+        .order_by(FilaEnvioWhatsapp.criada_em.desc())
         .all()
     )
     funcionarios = (
@@ -724,7 +776,7 @@ def enviar():
         return redirect(url_for('whatsapp.logs'))
 
     from services.whatsapp_bot import enviar_texto
-    ok = enviar_texto(celular=func.celular, mensagem=mensagem, func_id=func_id, tipo='manual')
+    ok = enviar_texto(celular=func.celular, mensagem=mensagem, func_id=func_id, tipo='manual', imediato=True)
     flash('Mensagem enviada!' if ok else 'Falha ao enviar (verifique MEGAAPI_TOKEN).', 'success' if ok else 'danger')
     return redirect(url_for('whatsapp.logs'))
 
@@ -746,50 +798,50 @@ def teste():
         ok = False
         if tipo_msg == 'texto_livre':
             texto = request.form.get('mensagem_livre', 'Teste de mensagem livre do sistema.')
-            ok = enviar_texto(celular, texto, tipo='teste_manual')
+            ok = enviar_texto(celular, texto, tipo='teste_manual', imediato=True)
             
         elif tipo_msg == 'documento':
             # Dummy minimalist PDF content
             pdf_bytes = b"%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n2 0 obj\n<<\n/Type /Pages\n/Count 1\n/Kids [ 3 0 R ]\n>>\nendobj\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [ 0 0 612 792 ]\n/Resources <<\n/Font <<\n/F1 4 0 R\n>>\n>>\n/Contents 5 0 R\n>>\nendobj\n4 0 obj\n<<\n/Type /Font\n/Subtype /Type1\n/BaseFont /Helvetica\n>>\nendobj\n5 0 obj\n<<\n/Length 55\n>>\nstream\nBT\n/F1 24 Tf\n100 700 Td\n(Documento de Teste do Sistema) Tj\nET\nendstream\nendobj\nxref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000219 00000 n \n0000000307 00000 n \ntrailer\n<<\n/Size 6\n/Root 1 0 R\n>>\nstartxref\n413\n%%EOF\n"
-            ok = enviar_documento(celular, pdf_bytes, 'documento_teste.pdf', caption='Segue o documento de teste.', tipo='teste_pdf')
+            ok = enviar_documento(celular, pdf_bytes, 'documento_teste.pdf', caption='Segue o documento de teste.', tipo='teste_pdf', imediato=True)
             
         elif tipo_msg == 'checkin_confirmado':
             texto = "Perfeito, João! Presença confirmada. Bom turno!"
-            ok = enviar_texto(celular, texto, tipo='teste_checkin')
+            ok = enviar_texto(celular, texto, tipo='teste_checkin', imediato=True)
             
         elif tipo_msg == 'ausencia_confirmada':
             texto = "Entendido! Sua ausência foi registrada. Qualquer problema, entre em contato com o RH."
-            ok = enviar_texto(celular, texto, tipo='teste_ausencia')
+            ok = enviar_texto(celular, texto, tipo='teste_ausencia', imediato=True)
             
         elif tipo_msg == 'justificativa_automatica':
             data_hoje = date.today().strftime("%d/%m")
             texto = f"✅ Recebido! Sua justificativa para o dia {data_hoje} foi registrada no espelho de ponto."
-            ok = enviar_texto(celular, texto, tipo='teste_justificativa')
+            ok = enviar_texto(celular, texto, tipo='teste_justificativa', imediato=True)
             
         elif tipo_msg == 'notificacao_gestor_justificativa':
             texto = "📝 *Maria* enviou uma justificativa via WhatsApp:\n\"Meu ônibus quebrou na avenida principal.\""
-            ok = enviar_texto(celular, texto, tipo='teste_notificacao_gestor')
+            ok = enviar_texto(celular, texto, tipo='teste_notificacao_gestor', imediato=True)
             
         elif tipo_msg == 'boas_vindas':
             texto = "🎉 *Bem-vindo(a) à nossa plataforma!*\nSeu cadastro foi realizado com sucesso. Agora você receberá notificações e alertas do seu ponto via WhatsApp."
-            ok = enviar_texto(celular, texto, tipo='teste_boas_vindas')
+            ok = enviar_texto(celular, texto, tipo='teste_boas_vindas', imediato=True)
             
         elif tipo_msg == 'regra_atraso':
             texto = "⚠️ *Alerta de Atraso:*\nIdentificamos que seu turno iniciou, mas seu ponto de entrada ainda não foi registrado no Secullum."
-            ok = enviar_texto(celular, texto, tipo='teste_regra_atraso')
+            ok = enviar_texto(celular, texto, tipo='teste_regra_atraso', imediato=True)
             
         elif tipo_msg == 'regra_hora_extra':
              texto = "⏰ *Alerta de Hora Extra:*\nSeu turno encerrou já faz alguns minutos. Não esqueça de registrar seu ponto de saída!"
-             ok = enviar_texto(celular, texto, tipo='teste_regra_he')
+             ok = enviar_texto(celular, texto, tipo='teste_regra_he', imediato=True)
              
         elif tipo_msg == 'regra_inconsistencia':
              ontem = (date.today() - timedelta(days=1)).strftime("%d/%m")
              texto = f"📋 *Inconsistências — {ontem}*\n\n⚠️ Batidas inconsistentes (2):\n  • Carlos Eduardo: marcação ímpar\n  • Juliana Silva: marcação ausente\n\n🚫 Ausências (1):\n  • Rodrigo Alves"
-             ok = enviar_texto(celular, texto, tipo='teste_relatorio')
+             ok = enviar_texto(celular, texto, tipo='teste_relatorio', imediato=True)
              
         elif tipo_msg == 'banco_horas_diario':
              texto = "📊 *Seu resumo diário de Horas:*\n\nSaldo do dia (Ontem): +1.50 horas\nSaldo Acumulado Atual: +14.20 horas\n\nContinue acompanhando seu ponto!"
-             ok = enviar_texto(celular, texto, tipo='teste_banco_horas')
+             ok = enviar_texto(celular, texto, tipo='teste_banco_horas', imediato=True)
              
         else:
             flash('Tipo de mensagem inválido ou não implementado.', 'warning')

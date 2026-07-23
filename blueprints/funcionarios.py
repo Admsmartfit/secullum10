@@ -102,7 +102,7 @@ def limpar_escala(func_id):
 def excluir_funcionario(func_id):
     from models import (Batida, AlocacaoDiaria, BancoHorasSaldo, Candidatura,
                         ProntuarioDoc, SolicitacaoTroca, EnvioDocumento,
-                        ChatState, ScoreAvaliacao, WhatsappLog, NotificacaoFila)
+                        ChatState, ScoreAvaliacao, WhatsappLog, FilaEnvioWhatsapp)
     func = Funcionario.query.get_or_404(func_id)
     try:
         # Apaga registos dependentes em ordem segura (FK)
@@ -113,7 +113,7 @@ def excluir_funcionario(func_id):
         Candidatura.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
         ScoreAvaliacao.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
         ChatState.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
-        NotificacaoFila.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
+        FilaEnvioWhatsapp.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
         WhatsappLog.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
         EnvioDocumento.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)
         ProntuarioDoc.query.filter_by(funcionario_id=func_id).delete(synchronize_session=False)

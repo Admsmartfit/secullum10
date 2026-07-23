@@ -112,6 +112,17 @@ def job_verificar_incons(app):
             logger.error(f'[auto_sync] job_verificar_incons: Erro: {e}')
 
 
+def job_dispatcher_whatsapp(app):
+    """PRD Antiban Fase 1: despacha no máximo 1 item da fila de WhatsApp por
+    execução, respeitando delay/jitter/rate-limit — roda a cada 5s."""
+    with app.app_context():
+        try:
+            from services.envio_dispatcher import processar_proximo
+            processar_proximo()
+        except Exception as e:
+            logger.error(f'[auto_sync] job_dispatcher_whatsapp: Erro: {e}')
+
+
 def init_scheduler(app):
     """Inicializa o APScheduler e registra os jobs. Chame uma vez em create_app()."""
     global _scheduler
@@ -156,8 +167,19 @@ def init_scheduler(app):
         max_instances=1,
     )
 
+    _scheduler.add_job(
+        func=job_dispatcher_whatsapp,
+        args=[app],
+        trigger=IntervalTrigger(seconds=5),
+        id='fila_whatsapp_dispatcher',
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+    )
+
     _scheduler.start()
-    logger.info('[auto_sync] APScheduler iniciado (sync_rapida: 1min, sync_completa: 5min, verificar_incons: 1min)')
+    logger.info('[auto_sync] APScheduler iniciado (sync_rapida: 1min, sync_completa: 5min, '
+                'verificar_incons: 1min, fila_whatsapp_dispatcher: 5s)')
 
     # Garante shutdown limpo
     import atexit
