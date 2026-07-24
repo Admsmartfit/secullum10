@@ -7,6 +7,7 @@ Recursos:
   - CLT art. 386: alerta para trabalho de funcionárias mulheres no domingo
   - Relatório de inconsistências do dia anterior
 """
+import logging
 import os
 import re
 from datetime import datetime, date, timedelta
@@ -16,6 +17,7 @@ from extensions import db
 from models import NotificationRule, AlocacaoDiaria, Batida, Funcionario, WhatsappLog, FilaEnvioWhatsapp
 
 _TZ_BR = ZoneInfo('America/Sao_Paulo')
+logger = logging.getLogger('notification_processor')
 
 def _get_gestor_celular():
     from services.config_service import get_gestor_celular
@@ -426,9 +428,12 @@ def _normalizar_celular(numero: str) -> str:
 
 def _enviar_relatorio(regra: NotificationRule, texto_global: str) -> int:
     """
-    Envia relatório de inconsistências:
-    - Para cada gestor de departamento: apenas inconsistências do seu depto
-    - Para o gestor global: relatório completo (se dest_manager ativo)
+    Envia relatório de inconsistências respeitando os destinatários da regra
+    (correção: antes desta versão, os líderes de unidade recebiam o relatório
+    incondicionalmente, ignorando dest_manager/dest_rh/dest_custom):
+    - dest_manager: cada líder de unidade (relatório do próprio departamento) + gestor global
+    - dest_rh: gestor global (não há celular de RH dedicado hoje, reaproveita o mesmo campo)
+    - dest_custom: número customizado da regra (relatório completo)
     Cada envio é isolado em try/except: falha num depto não interrompe os demais.
     """
     from services.whatsapp_bot import enviar_texto
@@ -444,35 +449,52 @@ def _enviar_relatorio(regra: NotificationRule, texto_global: str) -> int:
         logger.error(f'[enviar_relatorio] Erro ao gerar relatório por departamento: {e}')
         relatorios_dept = {}
 
-    # Extrai dados em memória ANTES dos envios (commits do enviar_texto expiram a ORM)
-    unidades = UnidadeLider.query.filter(UnidadeLider.celular_lider.isnot(None)).all()
-    alvos = []
-    for u in unidades:
-        if u.celular_lider:
-            alvos.append({
-                'celular': _normalizar_celular(u.celular_lider),
-                'dept': u.departamento,
-            })
+    if regra.dest_manager:
+        # Extrai dados em memória ANTES dos envios (commits do enviar_texto expiram a ORM)
+        unidades = UnidadeLider.query.filter(UnidadeLider.celular_lider.isnot(None)).all()
+        alvos = []
+        for u in unidades:
+            if u.celular_lider:
+                alvos.append({
+                    'celular': _normalizar_celular(u.celular_lider),
+                    'dept': u.departamento,
+                })
 
-    for alvo in alvos:
-        dept = alvo['dept']
-        texto_dept = relatorios_dept.get(dept) or (
-            f'📋 Inconsistências — {dept} — {ontem.strftime("%d/%m/%Y")}\n\n✅ Nenhuma inconsistência encontrada.'
-        )
-        try:
-            if enviar_texto(celular=alvo['celular'], mensagem=texto_dept, tipo='relatorio'):
-                enviados += 1
-        except Exception as e:
-            logger.error(f'[enviar_relatorio] Falha ao enviar para depto "{dept}" ({alvo["celular"]}): {e}')
+        for alvo in alvos:
+            dept = alvo['dept']
+            texto_dept = relatorios_dept.get(dept) or (
+                f'📋 Inconsistências — {dept} — {ontem.strftime("%d/%m/%Y")}\n\n✅ Nenhuma inconsistência encontrada.'
+            )
+            try:
+                if enviar_texto(celular=alvo['celular'], mensagem=texto_dept, tipo='relatorio'):
+                    enviados += 1
+            except Exception as e:
+                logger.error(f'[enviar_relatorio] Falha ao enviar para depto "{dept}" ({alvo["celular"]}): {e}')
 
-    # Relatório global para o gestor geral
-    if regra.dest_manager and _get_gestor_celular():
+        # Relatório global para o gestor geral
+        if _get_gestor_celular():
+            cel_gestor = _normalizar_celular(_get_gestor_celular())
+            try:
+                if enviar_texto(celular=cel_gestor, mensagem=texto_global, tipo='relatorio'):
+                    enviados += 1
+            except Exception as e:
+                logger.error(f'[enviar_relatorio] Falha ao enviar relatório global para {cel_gestor}: {e}')
+
+    if regra.dest_rh and _get_gestor_celular():
         cel_gestor = _normalizar_celular(_get_gestor_celular())
         try:
             if enviar_texto(celular=cel_gestor, mensagem=texto_global, tipo='relatorio'):
                 enviados += 1
         except Exception as e:
-            logger.error(f'[enviar_relatorio] Falha ao enviar relatório global para {cel_gestor}: {e}')
+            logger.error(f'[enviar_relatorio] Falha ao enviar relatório (RH) para {cel_gestor}: {e}')
+
+    if getattr(regra, 'dest_custom', False) and getattr(regra, 'custom_phone', None):
+        num = _normalizar_celular(regra.custom_phone)
+        try:
+            if enviar_texto(celular=num, mensagem=texto_global, tipo='relatorio'):
+                enviados += 1
+        except Exception as e:
+            logger.error(f'[enviar_relatorio] Falha ao enviar relatório (custom) para {num}: {e}')
 
     return enviados
 
