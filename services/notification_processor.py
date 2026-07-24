@@ -275,10 +275,19 @@ def _gerar_relatorio_inconsistencias(data_ref: date) -> str:
                 turno_str = f'{aloc.turno.hora_inicio.strftime("%H:%M")}–{aloc.turno.hora_fim.strftime("%H:%M")}'
             ausentes.append({'nome': func.nome, 'turno': turno_str})
 
-    linhas = [f'📋 Inconsistências — {data_ref.strftime("%d/%m/%Y")}']
+    from services.spintax import resolver_spintax
+    # PRD Antiban Fase 3: INCONSISTENCY_REPORT monta o texto diretamente (não
+    # passa por _render/templates), então o Spintax é aplicado aqui, só no
+    # cabeçalho e nos títulos de seção fixos — não no conteúdo dinâmico.
+    linhas = [resolver_spintax(
+        '{📋 Inconsistências|📋 Resumo de inconsistências|📋 Relatório de pendências} — '
+        + data_ref.strftime("%d/%m/%Y")
+    )]
 
     if por_func:
-        linhas.append(f'\n⚠️ Batidas inconsistentes ({len(por_func)}):')
+        linhas.append(resolver_spintax(
+            f'\n{{⚠️ Batidas inconsistentes|⚠️ Marcações irregulares|⚠️ Pontos com problema}} ({len(por_func)}):'
+        ))
         for nome in sorted(por_func):
             d = por_func[nome]
             tipos = ', '.join(sorted(d['tipos']))
@@ -289,7 +298,9 @@ def _gerar_relatorio_inconsistencias(data_ref: date) -> str:
             linhas.append(linha)
 
     if ausentes:
-        linhas.append(f'\n🚫 Ausências ({len(ausentes)}):')
+        linhas.append(resolver_spintax(
+            f'\n{{🚫 Ausências|🚫 Sem ponto registrado|🚫 Faltas do dia}} ({len(ausentes)}):'
+        ))
         for a in sorted(ausentes, key=lambda x: x['nome']):
             linha = f'  • {a["nome"]}'
             if a['turno']:
@@ -297,7 +308,9 @@ def _gerar_relatorio_inconsistencias(data_ref: date) -> str:
             linhas.append(linha)
 
     if not por_func and not ausentes:
-        linhas.append('\n✅ Nenhuma inconsistência encontrada.')
+        linhas.append(resolver_spintax(
+            '\n{✅ Nenhuma inconsistência encontrada.|✅ Tudo certo por aqui hoje.|✅ Nenhuma pendência identificada.}'
+        ))
 
     return '\n'.join(linhas)
 
@@ -371,12 +384,16 @@ def _gerar_relatorio_por_departamento(data_ref: date) -> dict:
             d['ausentes'].append({'nome': func.nome, 'turno': turno_str})
 
     # Gera texto por departamento
+    from services.spintax import resolver_spintax
     result = {}
     data_str = data_ref.strftime('%d/%m/%Y')
     for dept, dados in por_dept.items():
-        linhas = [f'📋 Inconsistências — {dept} — {data_str}']
+        titulo = resolver_spintax('{📋 Inconsistências|📋 Resumo de inconsistências|📋 Relatório de pendências}')
+        linhas = [f'{titulo} — {dept} — {data_str}']
         if dados['inconsistentes']:
-            linhas.append(f'\n⚠️ Batidas inconsistentes ({len(dados["inconsistentes"])}):')
+            linhas.append(resolver_spintax(
+                f'\n{{⚠️ Batidas inconsistentes|⚠️ Marcações irregulares|⚠️ Pontos com problema}} ({len(dados["inconsistentes"])}):'
+            ))
             for nome in sorted(dados['inconsistentes']):
                 info = dados['inconsistentes'][nome]
                 tipos = ', '.join(sorted(info['tipos']))
@@ -386,7 +403,9 @@ def _gerar_relatorio_por_departamento(data_ref: date) -> dict:
                 linha += f'\n    👆 Batidas: {info["batidas"]}'
                 linhas.append(linha)
         if dados['ausentes']:
-            linhas.append(f'\n🚫 Ausências ({len(dados["ausentes"])}):')
+            linhas.append(resolver_spintax(
+                f'\n{{🚫 Ausências|🚫 Sem ponto registrado|🚫 Faltas do dia}} ({len(dados["ausentes"])}):'
+            ))
             for a in sorted(dados['ausentes'], key=lambda x: x['nome']):
                 linha = f'  • {a["nome"]}'
                 if a['turno']:
