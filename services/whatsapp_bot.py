@@ -73,6 +73,12 @@ def _configured() -> bool:
     return bool(cfg['token'] and cfg['instance'])
 
 
+def _eh_primeiro_contato(fone: str) -> bool:
+    """PRD Antiban Fase 5: True se nunca houve envio bem-sucedido para este
+    número (usado para acionar o lint de link/palavra-gatilho no despacho)."""
+    return WhatsappLog.query.filter_by(celular=fone, status='enviado').first() is None
+
+
 def _preencher_mega_id(log: WhatsappLog, resp) -> None:
     """PRD Antiban Fase 0: captura o id retornado pela Mega-API (campo raiz `id`),
     disponível de forma síncrona na resposta do próprio POST de envio."""
@@ -125,10 +131,11 @@ def enviar_texto(celular: str, mensagem: str, func_id: str = None,
     imediato=True despacha na hora, sem passar pela fila/rate-limit — uso
     restrito às rotas administrativas de teste/envio manual do painel.
     """
+    fone = _fone(celular)
     item = _enfileirar(
-        celular=_fone(celular), mensagem=mensagem, funcionario_id=func_id,
+        celular=fone, mensagem=mensagem, funcionario_id=func_id,
         tipo=tipo, tipo_regra=tipo_regra, data_referencia=data_ref,
-        tipo_msg='texto', prioridade=prioridade,
+        tipo_msg='texto', prioridade=prioridade, primeiro_contato=_eh_primeiro_contato(fone),
     )
     return _processar_item(item) if imediato else True
 
@@ -144,10 +151,11 @@ def enviar_botoes(celular: str, texto: str, botoes: list,
     Fallback automático (se a API recusar) para texto simples numerado é
     tratado no despacho real (_despachar_botoes), não aqui.
     """
+    fone = _fone(celular)
     item = _enfileirar(
-        celular=_fone(celular), mensagem=texto, funcionario_id=func_id, tipo=tipo,
+        celular=fone, mensagem=texto, funcionario_id=func_id, tipo=tipo,
         tipo_msg='botoes', interativo_json=_json.dumps({'botoes': botoes}),
-        prioridade=prioridade,
+        prioridade=prioridade, primeiro_contato=_eh_primeiro_contato(fone),
     )
     return _processar_item(item) if imediato else True
 
@@ -163,11 +171,12 @@ def enviar_menu_lista(celular: str, texto: str, titulo_botao: str,
     Fallback automático para texto numerado é tratado no despacho real
     (_despachar_lista), não aqui.
     """
+    fone = _fone(celular)
     item = _enfileirar(
-        celular=_fone(celular), mensagem=texto, funcionario_id=func_id, tipo=tipo,
+        celular=fone, mensagem=texto, funcionario_id=func_id, tipo=tipo,
         tipo_msg='lista',
         interativo_json=_json.dumps({'titulo_botao': titulo_botao, 'secoes': secoes}),
-        prioridade=prioridade,
+        prioridade=prioridade, primeiro_contato=_eh_primeiro_contato(fone),
     )
     return _processar_item(item) if imediato else True
 
@@ -234,8 +243,9 @@ def enviar_documento(celular: str, pdf_bytes: bytes, filename: str,
                      tipo: str = 'espelho', tipo_regra: str = None,
                      data_ref=None, prioridade: int = 10, imediato: bool = False) -> bool:
     """RF4.4 – Enfileira envio de PDF via Mega-API (mediaBase64)."""
+    fone = _fone(celular)
     item = _enfileirar(
-        celular=_fone(celular), mensagem=caption or filename, funcionario_id=func_id,
+        celular=fone, mensagem=caption or filename, funcionario_id=func_id,
         tipo=tipo, tipo_regra=tipo_regra, data_referencia=data_ref,
         tipo_msg='documento',
         interativo_json=_json.dumps({
@@ -244,9 +254,36 @@ def enviar_documento(celular: str, pdf_bytes: bytes, filename: str,
             'mimeType': 'application/pdf',
             'caption': caption,
         }),
-        prioridade=prioridade,
+        prioridade=prioridade, primeiro_contato=_eh_primeiro_contato(fone),
     )
     return _processar_item(item) if imediato else True
+
+
+def _despachar_pergunta_optin(item: FilaEnvioWhatsapp, pergunta: str) -> bool:
+    """PRD Antiban Fase 4: envia a pergunta de opt-in (não o conteúdo real do
+    item) e grava um WhatsappLog próprio para essa pergunta. Chamada
+    exclusivamente por services/envio_dispatcher.py::_iniciar_optin."""
+    log = WhatsappLog(
+        funcionario_id=item.funcionario_id,
+        tipo='optin_pergunta',
+        tipo_regra=item.tipo_regra,
+        data_referencia=item.data_referencia,
+        mensagem=pergunta,
+        celular=item.celular,
+        status='enviado',
+        criado_em=datetime.utcnow(),
+    )
+    db.session.add(log)
+    if not _configured():
+        log.status = 'sem_config'
+        db.session.commit()
+        return False
+    try:
+        return _post_texto(item.celular, pergunta, log)
+    except Exception as e:
+        log.status = f'erro: {str(e)[:80]}'
+        db.session.commit()
+        return False
 
 
 # ── Despacho real (só chamado por _processar_item) ───────────────────────────

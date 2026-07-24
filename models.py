@@ -386,6 +386,14 @@ class NotificationRule(db.Model):
     only_working_hours = db.Column(db.Boolean, default=True)
     send_immediately   = db.Column(db.Boolean, default=False)
 
+    # PRD Antiban Fase 4: opt-in conversacional — default True para toda regra
+    # nova (blindagem contra denúncia é a prioridade; RH desmarca manualmente
+    # só para regras que já são resposta direta a uma ação do funcionário).
+    requer_optin       = db.Column(db.Boolean, default=True)
+    optin_janela_horas = db.Column(db.Integer, default=24)
+    # 'enviar' | 'reenviar_pergunta' | 'cancelar'
+    optin_fallback     = db.Column(db.String(20), default='enviar')
+
     # Stats
     criado_em         = db.Column(db.DateTime, default=datetime.utcnow)
     ultima_execucao   = db.Column(db.DateTime, nullable=True)

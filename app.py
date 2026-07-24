@@ -190,6 +190,14 @@ def create_app():
         # PRD Antiban Fase 1: 'processar-fila-notificacoes-hourly' removida — o
         # despacho da fila agora é feito por services/envio_dispatcher.py via
         # APScheduler (services/auto_sync.py), a cada ~5s.
+        'processar-fallback-optin': {
+            'task': 'tasks.processar_fallback_optin',
+            'schedule': crontab(minute='*/15'),
+        },
+        'verificar-saude-whatsapp': {
+            'task': 'tasks.verificar_saude_whatsapp',
+            'schedule': crontab(minute='*/15'),
+        },
         'verificar-inconsistencias-dia-anterior': {
             'task': 'tasks.verificar_inconsistencias_dia_anterior',
             'schedule': crontab(minute='*'),  # verifica a cada minuto, self-limita pelo horário configurado

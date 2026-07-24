@@ -18,6 +18,22 @@ def get_setting(chave_db: str, env_var: str, default: str = '') -> str:
     return os.getenv(env_var, default) or default
 
 
+def set_setting(chave_db: str, valor: str) -> None:
+    """Grava/atualiza uma configuração na tabela Configuracao (PRD Antiban
+    Fase 6 — simétrico a get_setting). Centraliza aqui o padrão get/set que
+    hoje está duplicado localmente em tasks.py, services/auto_sync.py e
+    blueprints/config_hub.py; este helper é usado pelo código novo, sem
+    alterar as duplicatas pré-existentes."""
+    from models import Configuracao
+    from extensions import db
+    row = Configuracao.query.filter_by(chave=chave_db).first()
+    if row:
+        row.valor = str(valor)
+    else:
+        db.session.add(Configuracao(chave=chave_db, valor=str(valor)))
+    db.session.commit()
+
+
 def get_secullum_api():
     """Retorna instância configurada da SecullumAPI."""
     try:

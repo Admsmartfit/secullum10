@@ -61,15 +61,91 @@ def _calcular_delay_extra(mensagem: str) -> float:
     return min(teto, len(mensagem or '') * por_char)
 
 
+def _lint_problemas(item: FilaEnvioWhatsapp) -> list:
+    """PRD Antiban Fase 5: rede de segurança em tempo de execução — bloqueia
+    link/palavra-gatilho em mensagens de primeiro contato (a validação
+    principal já acontece no cadastro do template, ver blueprints/config_hub.py)."""
+    if not item.primeiro_contato:
+        return []
+    from services.config_service import get_setting
+    from services.lint_template import validar_template_primeiro_contato
+    palavras = [p for p in get_setting(
+        'whatsapp_palavras_gatilho', 'WA_PALAVRAS_GATILHO',
+        'promoção,grátis,desconto,clique aqui,imperdível',
+    ).split(',') if p.strip()]
+    return validar_template_primeiro_contato(item.mensagem, palavras)
+
+
+def _alertar_bloqueio_lint(item: FilaEnvioWhatsapp, problemas: list) -> None:
+    import logging
+    logging.getLogger('envio_dispatcher').error(
+        f'[bloqueado_lint] item {item.id} bloqueado (primeiro contato): {problemas}'
+    )
+    import os
+    rh_email = os.getenv('RH_EMAIL', '')
+    if not rh_email:
+        return
+    try:
+        from flask_mail import Message
+        from extensions import mail
+        mail.send(Message(
+            subject='⚠️ Mensagem de primeiro contato bloqueada (WhatsApp)',
+            recipients=[rh_email],
+            body=f'Item da fila #{item.id} (celular {item.celular}) foi bloqueado antes do envio:\n'
+                 + '\n'.join(problemas) + f'\n\nMensagem:\n{item.mensagem}',
+        ))
+    except Exception:
+        pass
+
+
+def _iniciar_optin(item: FilaEnvioWhatsapp) -> dict:
+    """PRD Antiban Fase 4: envia a pergunta de opt-in em vez do conteúdo real e
+    coloca o funcionário em estado de espera (ChatState AGUARDANDO_OPTIN).
+
+    Só se aplica quando o destinatário é o próprio funcionário: o campo
+    `funcionario_id` de FilaEnvioWhatsapp indica de quem é o evento, não
+    necessariamente quem recebe a mensagem — envios para gestor/RH/telefone
+    customizado (notification_processor.py::_enviar) usam o mesmo
+    funcionario_id do funcionário, mas vão para outro número, e não há como
+    amarrar a resposta de opt-in a um ChatState nesses casos. Quando não se
+    aplica, despacha normalmente (sem opt-in)."""
+    from models import Funcionario
+    from services.whatsapp_bot import _fone, _processar_item
+    func = Funcionario.query.get(item.funcionario_id) if item.funcionario_id else None
+    if not func or _fone(func.celular or '') != item.celular:
+        return {'enviado': _processar_item(item), 'item_id': item.id, 'optin': False}
+
+    from services.config_service import get_setting
+    nome = (func.nome or '').split()[0] if func.nome else ''
+    assunto = (item.regra.nome if item.regra else '') or 'uma mensagem'
+    pergunta = get_setting(
+        'whatsapp_optin_texto_padrao', 'WA_OPTIN_TEXTO_PADRAO',
+        'Olá {{name}}, tudo bem? Posso te enviar {{assunto}} por aqui?',
+    ).replace('{{name}}', nome).replace('{{assunto}}', assunto)
+
+    from services.whatsapp_bot import _despachar_pergunta_optin
+    _despachar_pergunta_optin(item, pergunta)
+
+    item.status = 'aguardando_optin'
+    db.session.commit()
+
+    from blueprints.whatsapp import _set_state
+    _set_state(func.id, 'AGUARDANDO_OPTIN', {'fila_id': item.id})
+
+    return {'aguardando_optin': True, 'item_id': item.id}
+
+
 def processar_proximo() -> dict:
     """Processa NO MÁXIMO 1 item da fila por chamada (chamado a cada poucos segundos)."""
     if not _pode_enviar_agora():
         return {'skipped': True, 'motivo': 'rate_limit_ou_desativado'}
 
     agora = datetime.utcnow()
+    # 'optin_confirmado' = item que já passou pela pergunta de opt-in e foi
+    # aceito pelo funcionário; segue direto para despacho, sem perguntar de novo.
     item = (FilaEnvioWhatsapp.query
             .filter(
-                FilaEnvioWhatsapp.status == 'pendente',
+                FilaEnvioWhatsapp.status.in_(['pendente', 'optin_confirmado']),
                 db.or_(FilaEnvioWhatsapp.enviar_apos.is_(None),
                        FilaEnvioWhatsapp.enviar_apos <= agora),
             )
@@ -86,6 +162,18 @@ def processar_proximo() -> dict:
             item.enviar_apos = agora + timedelta(seconds=delay_extra)
             db.session.commit()
             return {'skipped': True, 'motivo': 'delay_extra_aplicado', 'item_id': item.id}
+
+    problemas = _lint_problemas(item)
+    if problemas:
+        item.status = 'bloqueado_lint'
+        db.session.commit()
+        _alertar_bloqueio_lint(item, problemas)
+        return {'bloqueado_lint': True, 'item_id': item.id, 'problemas': problemas}
+
+    # Opt-in só é avaliado na primeira passagem ('pendente'); um item já
+    # 'optin_confirmado' pula direto para o despacho real.
+    if item.status == 'pendente' and item.regra_id and item.regra and item.regra.requer_optin:
+        return _iniciar_optin(item)
 
     from services.whatsapp_bot import _processar_item
     ok = _processar_item(item)

@@ -101,6 +101,15 @@ def index():
         'megaapi_secret':       get_setting('megaapi_secret',       'MEGAAPI_SECRET', ''),
         'gestor_celular':       get_setting('gestor_celular',       'GESTOR_CELULAR', ''),
         'calendario_api_token': get_setting('calendario_api_token', '',               ''),
+        # PRD Antiban Fase 4/5
+        'whatsapp_optin_texto_padrao': get_setting(
+            'whatsapp_optin_texto_padrao', 'WA_OPTIN_TEXTO_PADRAO',
+            'Olá {{name}}, tudo bem? Posso te enviar {{assunto}} por aqui?'),
+        'whatsapp_optin_palavras': get_setting(
+            'whatsapp_optin_palavras', 'WA_OPTIN_PALAVRAS', 'sim,pode,ok,claro,manda'),
+        'whatsapp_palavras_gatilho': get_setting(
+            'whatsapp_palavras_gatilho', 'WA_PALAVRAS_GATILHO',
+            'promoção,grátis,desconto,clique aqui,imperdível'),
     }
 
     rh_politicas = {
@@ -113,6 +122,50 @@ def index():
     feriados = Feriado.query.filter(
         db.extract('year', Feriado.data) == ano_feriados
     ).order_by(Feriado.data).all()
+
+    # PRD Antiban Fase 6: dashboard de saúde do WhatsApp
+    from models import WhatsappLog, MegaApiInstanceEvent, FilaEnvioWhatsapp, NotificationRule
+    limite_30d = hoje - timedelta(days=30)
+    logs_30d = (WhatsappLog.query
+                .filter(WhatsappLog.criado_em >= limite_30d)
+                .with_entities(WhatsappLog.criado_em, WhatsappLog.status)
+                .all())
+    por_dia = {}
+    for criado_em, status in logs_30d:
+        dia = criado_em.date().isoformat()
+        d = por_dia.setdefault(dia, {'enviados': 0, 'erros': 0})
+        if status and status.startswith('erro'):
+            d['erros'] += 1
+        elif status == 'enviado':
+            d['enviados'] += 1
+    envios_por_dia = [
+        {'dia': dia, **valores} for dia, valores in sorted(por_dia.items(), reverse=True)
+    ][:30]
+
+    optin_status_counts = dict(
+        db.session.query(FilaEnvioWhatsapp.status, db.func.count(FilaEnvioWhatsapp.id))
+        .join(NotificationRule, FilaEnvioWhatsapp.regra_id == NotificationRule.id)
+        .filter(NotificationRule.requer_optin == True)
+        .group_by(FilaEnvioWhatsapp.status)
+        .all()
+    )
+    optin_stats = {
+        'aguardando': optin_status_counts.get('aguardando_optin', 0),
+        'aceitos': optin_status_counts.get('optin_confirmado', 0) + optin_status_counts.get('enviado', 0),
+        'recusados': optin_status_counts.get('cancelado', 0),
+    }
+
+    instance_events = (MegaApiInstanceEvent.query
+                       .order_by(MegaApiInstanceEvent.criado_em.desc())
+                       .limit(10).all())
+
+    wa_saude = {
+        'envios_por_dia': envios_por_dia,
+        'optin_stats': optin_stats,
+        'instance_events': instance_events,
+        'dispatcher_ativo': get_setting('whatsapp_dispatcher_ativo', 'WA_DISPATCHER_ATIVO', '1') == '1',
+        'bloqueados_lint': FilaEnvioWhatsapp.query.filter_by(status='bloqueado_lint').count(),
+    }
 
     return render_template(
         'config/index.html',
@@ -135,6 +188,7 @@ def index():
         experiencia_dias=experiencia_dias,
         integ_cfg=integ_cfg,
         mapa_cidades={u.cidade_ibge: u.empresa_cidade for u in unidades.values() if u.cidade_ibge},
+        wa_saude=wa_saude,
     )
 
 
@@ -265,6 +319,19 @@ def whatsapp_testar():
             'warning',
         )
     return redirect(url_for('config_hub.index') + '#whatsapp')
+
+
+@config_hub_bp.route('/whatsapp/circuito/toggle', methods=['POST'])
+@login_required
+@_somente_gestor
+def whatsapp_circuito_toggle():
+    """PRD Antiban Fase 6: liga/desliga manualmente o despacho da fila
+    (mesmo campo que o circuito de segurança automático usa)."""
+    from services.config_service import get_setting, set_setting
+    ativo = get_setting('whatsapp_dispatcher_ativo', 'WA_DISPATCHER_ATIVO', '1') == '1'
+    set_setting('whatsapp_dispatcher_ativo', '0' if ativo else '1')
+    flash('Despacho de WhatsApp ' + ('pausado.' if ativo else 'reativado.'), 'success')
+    return redirect(url_for('config_hub.index') + '#tab-whatsapp-saude')
 
 
 # ── Importar Escalas do Secullum ──────────────────────────────────────────────
@@ -692,6 +759,23 @@ def feriados_sync():
 @_somente_gestor
 def integracoes_salvar():
     """Salva credenciais de integração no banco (sem precisar editar .env)."""
+    # PRD Antiban Fase 5.5: o texto de abertura do opt-in é, por definição, a
+    # mensagem de primeiro contato mais comum — bloqueia o salvamento se
+    # contiver link/palavra-gatilho (rede de segurança em tempo de execução
+    # cobre os demais templates, ver services/envio_dispatcher.py::_lint_problemas).
+    optin_texto = request.form.get('WA_OPTIN_TEXTO_PADRAO', '').strip()
+    if optin_texto:
+        from services.lint_template import validar_template_primeiro_contato
+        from services.config_service import get_setting
+        palavras_csv = request.form.get('WA_PALAVRAS_GATILHO', '').strip() or get_setting(
+            'whatsapp_palavras_gatilho', 'WA_PALAVRAS_GATILHO',
+            'promoção,grátis,desconto,clique aqui,imperdível')
+        palavras = [p.strip() for p in palavras_csv.split(',') if p.strip()]
+        problemas = validar_template_primeiro_contato(optin_texto, palavras)
+        if problemas:
+            flash('Texto de opt-in não pode ser salvo: ' + '; '.join(problemas), 'danger')
+            return redirect(url_for('config_hub.index') + '#tab-integracoes')
+
     campos = [
         ('secullum_email',    'SECULLUM_EMAIL'),
         ('secullum_password', 'SECULLUM_PASSWORD'),
@@ -702,6 +786,9 @@ def integracoes_salvar():
         ('megaapi_secret',       'MEGAAPI_SECRET'),
         ('gestor_celular',       'GESTOR_CELULAR'),
         ('calendario_api_token', ''),
+        ('whatsapp_optin_texto_padrao', 'WA_OPTIN_TEXTO_PADRAO'),
+        ('whatsapp_optin_palavras',     'WA_OPTIN_PALAVRAS'),
+        ('whatsapp_palavras_gatilho',   'WA_PALAVRAS_GATILHO'),
     ]
     for chave_db, form_field in campos:
         valor = request.form.get(form_field, '').strip()

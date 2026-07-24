@@ -127,6 +127,9 @@
                 {% if r.send_immediately %}
                 <span class="text-danger"><i class="fas fa-bolt me-1"></i>Envio 24h</span>
                 {% endif %}
+                {% if r.requer_optin %}
+                <span class="text-primary"><i class="fas fa-comment-dots me-1"></i>Pergunta antes (opt-in)</span>
+                {% endif %}
             </div>
         </div>
         <div class="d-flex gap-1 flex-shrink-0">
@@ -138,7 +141,7 @@
             <button class="btn btn-outline-secondary" title="Editar"
                     data-bs-toggle="modal" data-bs-target="#modalRegra"
                     onclick="abrirEditar(this)"
-                    data-rule="{{ {'id':r.id,'nome':r.nome,'ativo':r.ativo,'categoria':r.categoria or 'alerta','trigger_type':r.trigger_type,'trigger_hour':r.trigger_hour,'trigger_weekday':r.trigger_weekday,'condition_type':r.condition_type,'threshold_minutes':r.threshold_minutes,'dest_employee':r.dest_employee,'dest_manager':r.dest_manager,'dest_rh':r.dest_rh,'template_manager':r.template_manager or '','template_employee':r.template_employee or '','template_manager_tipo':(r.template_manager_tipo or 'texto') if r.template_manager_tipo is defined else 'texto','template_manager_interativo':(r.template_manager_interativo or '') if r.template_manager_interativo is defined else '','template_employee_tipo':(r.template_employee_tipo or 'texto') if r.template_employee_tipo is defined else 'texto','template_employee_interativo':(r.template_employee_interativo or '') if r.template_employee_interativo is defined else '','only_working_hours':r.only_working_hours,'send_immediately':r.send_immediately}|tojson|forceescape }}">
+                    data-rule="{{ {'id':r.id,'nome':r.nome,'ativo':r.ativo,'categoria':r.categoria or 'alerta','trigger_type':r.trigger_type,'trigger_hour':r.trigger_hour,'trigger_weekday':r.trigger_weekday,'condition_type':r.condition_type,'threshold_minutes':r.threshold_minutes,'dest_employee':r.dest_employee,'dest_manager':r.dest_manager,'dest_rh':r.dest_rh,'template_manager':r.template_manager or '','template_employee':r.template_employee or '','template_manager_tipo':(r.template_manager_tipo or 'texto') if r.template_manager_tipo is defined else 'texto','template_manager_interativo':(r.template_manager_interativo or '') if r.template_manager_interativo is defined else '','template_employee_tipo':(r.template_employee_tipo or 'texto') if r.template_employee_tipo is defined else 'texto','template_employee_interativo':(r.template_employee_interativo or '') if r.template_employee_interativo is defined else '','only_working_hours':r.only_working_hours,'send_immediately':r.send_immediately,'requer_optin':r.requer_optin,'optin_janela_horas':r.optin_janela_horas,'optin_fallback':r.optin_fallback or 'enviar'}|tojson|forceescape }}">
                 <i class="fas fa-edit"></i>
             </button>
             <button class="btn btn {% if r.ativo %}btn-warning{% else %}btn-outline-success{% endif %}"
@@ -936,6 +939,47 @@
                             </div>
                         </div>
 
+                        <!-- 6. Opt-in conversacional (PRD Antiban Fase 4) -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed py-2 small fw-semibold" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#acc6">
+                                    <i class="fas fa-comment-dots text-primary me-2"></i>Opt-in Conversacional (Antiban)
+                                </button>
+                            </h2>
+                            <div id="acc6" class="accordion-collapse collapse">
+                                <div class="accordion-body py-2">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input" type="checkbox"
+                                               name="requer_optin" id="chkRequerOptin" checked>
+                                        <label class="form-check-label small" for="chkRequerOptin">
+                                            Perguntar antes de enviar o conteúdo ("Posso te enviar X?")
+                                        </label>
+                                    </div>
+                                    <div class="small text-muted mb-2">
+                                        Desmarque apenas se esta mensagem for resposta direta a uma ação
+                                        que o próprio funcionário acabou de fazer (ex.: confirmação de
+                                        check-in que ele mesmo solicitou).
+                                    </div>
+                                    <div class="d-flex gap-3 flex-wrap">
+                                        <div>
+                                            <label class="form-label small mb-1">Janela de resposta (horas)</label>
+                                            <input type="number" class="form-control form-control-sm" style="max-width:120px;"
+                                                   name="optin_janela_horas" id="inputOptinJanela" value="24" min="1">
+                                        </div>
+                                        <div>
+                                            <label class="form-label small mb-1">Se não responder</label>
+                                            <select class="form-select form-select-sm" name="optin_fallback" id="selectOptinFallback">
+                                                <option value="enviar">Enviar o conteúdo mesmo assim</option>
+                                                <option value="reenviar_pergunta">Reenviar a pergunta (1x)</option>
+                                                <option value="cancelar">Cancelar o envio</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                     </div><!-- /accordion -->
                 </div>
                 <div class="modal-footer py-2" style="flex-shrink:0;">
@@ -976,6 +1020,9 @@ function abrirNovaRegra(triggerOrCat) {
     document.getElementById('chkWorkingHours').checked = true;
     document.getElementById('chkCustom').checked       = false;
     document.getElementById('inputCustomPhone').value  = '';
+    document.getElementById('chkRequerOptin').checked  = true;
+    document.getElementById('inputOptinJanela').value  = 24;
+    document.getElementById('selectOptinFallback').value = 'enviar';
     toggleCustomPhone();
 
     const triggerTypes = ['EVENT_SYNC', 'EVENT_ABSENCE', 'EVENT_HOURLY', 'DAILY', 'WEEKLY'];
@@ -1017,6 +1064,9 @@ function abrirEditar(btn) {
     document.getElementById('txaEmployee').value        = r.template_employee || '';
     document.getElementById('chkWorkingHours').checked  = r.only_working_hours;
     document.getElementById('chkSendImm').checked       = r.send_immediately;
+    document.getElementById('chkRequerOptin').checked   = r.requer_optin !== false;
+    document.getElementById('inputOptinJanela').value   = r.optin_janela_horas || 24;
+    document.getElementById('selectOptinFallback').value = r.optin_fallback || 'enviar';
     carregarEditorInterativo('mgr', r.template_manager_tipo || 'texto', r.template_manager_interativo || '');
     carregarEditorInterativo('emp', r.template_employee_tipo || 'texto', r.template_employee_interativo || '');
     updateTriggerFields();

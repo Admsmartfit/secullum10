@@ -92,6 +92,12 @@ def _render(template: str, func, minutos: int = 0, aloc=None, data_ref: date = N
         for k, v in extra.items():
             template = template.replace(f'{{{{{k}}}}}', str(v))
 
+    # PRD Antiban Fase 3: Spintax como última etapa — todas as tags já foram
+    # substituídas acima, então só resta a sintaxe {opção1|opção2} do próprio
+    # admin, se houver.
+    from services.spintax import resolver_spintax
+    template = resolver_spintax(template)
+
     return template
 
 

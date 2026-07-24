@@ -53,6 +53,11 @@
       <i class="fas fa-plug me-2"></i> Integrações (API)
     </button>
   </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-whatsapp-saude">
+      <i class="fas fa-heartbeat me-2"></i> Saúde do WhatsApp
+    </button>
+  </li>
 </ul>
 
 <div class="tab-content" id="configTabContent">
@@ -568,6 +573,31 @@
                 <input type="password" name="MEGAAPI_TOKEN" class="form-control" value="{{ integ_cfg.megaapi_token }}">
               </div>
             </div>
+
+            <!-- PRD Antiban Fase 4/5: opt-in e lint de primeiro contato -->
+            <div class="border-top pt-3 mt-3">
+              <div class="fw-bold small text-muted mb-2">
+                <i class="fas fa-shield-alt me-1 text-primary"></i>ANTIBAN — Opt-in e Primeiro Contato
+              </div>
+              <div class="row g-2">
+                <div class="col-12">
+                  <label class="form-label small">Texto padrão da pergunta de opt-in</label>
+                  <textarea name="WA_OPTIN_TEXTO_PADRAO" class="form-control" rows="2"
+                            placeholder="Olá {{'{{'}}name{{'}}'}}, tudo bem? Posso te enviar {{'{{'}}assunto{{'}}'}} por aqui?">{{ integ_cfg.whatsapp_optin_texto_padrao }}</textarea>
+                  <div class="form-text">Suporta {{'{{'}}name{{'}}'}} e {{'{{'}}assunto{{'}}'}}. Não pode conter link nem palavra-gatilho.</div>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label small">Palavras que confirmam o opt-in (CSV)</label>
+                  <input type="text" name="WA_OPTIN_PALAVRAS" class="form-control"
+                         value="{{ integ_cfg.whatsapp_optin_palavras }}">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label small">Palavras-gatilho bloqueadas no 1º contato (CSV)</label>
+                  <input type="text" name="WA_PALAVRAS_GATILHO" class="form-control"
+                         value="{{ integ_cfg.whatsapp_palavras_gatilho }}">
+                </div>
+              </div>
+            </div>
             <!-- Calendario.com.br Token -->
             <div class="border-top pt-3 mt-3">
               <div class="fw-bold small text-muted mb-2">
@@ -715,6 +745,109 @@
               </div>
               <div id="importResultado" class="mt-2 small d-none alert"></div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TAB SAÚDE DO WHATSAPP (PRD Antiban Fase 6) ═══════════════════════════ -->
+  <div class="tab-pane fade" id="tab-whatsapp-saude">
+    <div class="row g-4">
+      <div class="col-lg-4">
+        <div class="card p-4 mb-4">
+          <div class="section-title mb-3">
+            <i class="fas fa-shield-alt {{ 'text-success' if wa_saude.dispatcher_ativo else 'text-danger' }}"></i>
+            Circuito de Segurança
+          </div>
+          <p class="mb-2">
+            Status atual:
+            <span class="badge {{ 'bg-success' if wa_saude.dispatcher_ativo else 'bg-danger' }}">
+              {{ 'ATIVO — despachando normalmente' if wa_saude.dispatcher_ativo else 'PAUSADO' }}
+            </span>
+          </p>
+          <div class="form-text mb-3">
+            Pausa automaticamente se a taxa de falha de envio passar de 15% em 1h
+            (verificado a cada 15 min).
+          </div>
+          <form method="POST" action="{{ url_for('config_hub.whatsapp_circuito_toggle') }}">
+            <button type="submit" class="btn w-100 {{ 'btn-outline-danger' if wa_saude.dispatcher_ativo else 'btn-success' }}">
+              {% if wa_saude.dispatcher_ativo %}<i class="fas fa-pause me-2"></i>Pausar despacho{% else %}<i class="fas fa-play me-2"></i>Reativar despacho{% endif %}
+            </button>
+          </form>
+        </div>
+
+        <div class="card p-4 mb-4">
+          <div class="section-title mb-3">
+            <i class="fas fa-comment-dots text-primary"></i>
+            Resposta a Opt-in
+          </div>
+          <ul class="list-unstyled mb-0 small">
+            <li class="mb-1"><i class="fas fa-hourglass-half text-warning me-1"></i> Aguardando resposta: <strong>{{ wa_saude.optin_stats.aguardando }}</strong></li>
+            <li class="mb-1"><i class="fas fa-check-circle text-success me-1"></i> Aceitos: <strong>{{ wa_saude.optin_stats.aceitos }}</strong></li>
+            <li><i class="fas fa-times-circle text-danger me-1"></i> Recusados: <strong>{{ wa_saude.optin_stats.recusados }}</strong></li>
+          </ul>
+        </div>
+
+        <div class="card p-4">
+          <div class="section-title mb-3">
+            <i class="fas fa-ban text-danger"></i>
+            Bloqueados pelo Lint (1º contato)
+          </div>
+          <p class="mb-0">{{ wa_saude.bloqueados_lint }} mensagem(ns) bloqueada(s) por conter link/palavra-gatilho.</p>
+        </div>
+      </div>
+
+      <div class="col-lg-4">
+        <div class="card p-4">
+          <div class="section-title mb-3">
+            <i class="fas fa-chart-bar text-accent"></i>
+            Envios/Erros por Dia (últimos 30 dias)
+          </div>
+          <div class="table-responsive" style="max-height:420px;">
+            <table class="table table-sm">
+              <thead><tr><th>Dia</th><th class="text-end">Enviados</th><th class="text-end">Erros</th></tr></thead>
+              <tbody>
+                {% for d in wa_saude.envios_por_dia %}
+                <tr>
+                  <td>{{ d.dia }}</td>
+                  <td class="text-end text-success">{{ d.enviados }}</td>
+                  <td class="text-end {{ 'text-danger fw-bold' if d.erros else 'text-muted' }}">{{ d.erros }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="3" class="text-muted text-center">Sem envios registrados.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="form-text mt-2">
+            Não inclui "entregue/lido" — a Mega-API não confirma esse evento
+            para mensagens enviadas; a métrica de saúde disponível é só o
+            sucesso/erro síncrono do próprio envio.
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-4">
+        <div class="card p-4">
+          <div class="section-title mb-3">
+            <i class="fas fa-plug text-warning"></i>
+            Últimas Conexões/Desconexões da Instância
+          </div>
+          <div class="table-responsive" style="max-height:420px;">
+            <table class="table table-sm">
+              <thead><tr><th>Quando</th><th>Tipo</th></tr></thead>
+              <tbody>
+                {% for ev in wa_saude.instance_events %}
+                <tr>
+                  <td class="small">{{ ev.criado_em.strftime('%d/%m %H:%M') }}</td>
+                  <td><span class="badge bg-secondary">{{ ev.tipo_evento }}</span></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="2" class="text-muted text-center">Nenhum evento registrado.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

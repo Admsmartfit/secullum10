@@ -120,3 +120,14 @@ Se precisar expor outro serviço no mesmo túnel, adicione **antes** do `http_st
   ```bash
   docker-compose logs -f celery_worker
   ```
+
+---
+
+## Checklist mensal — Antiban WhatsApp (PRD Fase 6)
+
+Revisão de rotina para sustentar a redução de risco de bloqueio/denúncia do número de WhatsApp. Fazer em **Configurações → Saúde do WhatsApp** e **Notificações**:
+
+1. **Variações de Spintax**: conferir se os templates das regras mais usadas (`Notificações`) ainda têm pelo menos 3 variações `{opção1|opção2|opção3}` nos trechos repetitivos — adicionar mais opções se o texto estiver "engessado".
+2. **Palavras-gatilho**: revisar a lista em Configurações → Integrações → "Palavras-gatilho bloqueadas no 1º contato" — atualizar conforme novos padrões de spam identificados pelo WhatsApp.
+3. **Taxa de resposta de opt-in**: conferir em Configurações → Saúde do WhatsApp quantos "aguardando"/"recusados" há por tipo de regra — se uma regra tiver taxa de recusa muito alta, revisar o texto ou a frequência dessa notificação.
+4. Conferir se o **circuito de segurança** (`whatsapp_dispatcher_ativo`) não ficou pausado silenciosamente por uma falha antiga.

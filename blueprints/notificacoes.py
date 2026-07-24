@@ -58,12 +58,14 @@ CONDITION_CATEGORIA = {
 # Templates padrão por tipo de condição
 _DEFAULTS = {
     'LATE_ENTRY': {
+        # PRD Antiban Fase 3: Spintax {opção1|opção2|opção3} — evita texto idêntico
+        # para funcionários diferentes no mesmo dia.
         'manager':  'O funcionário {full_name} está {minutes} min atrasado no turno {turno} ({inicio}).',
-        'employee': 'Olá, {name}! Identificamos {minutes} min de atraso no seu ponto. Turno: {turno} ({inicio}). Por favor, regularize.',
+        'employee': '{Olá|Oi|E aí}, {name}! {Identificamos|Notamos|Percebemos} {minutes} min de atraso no seu ponto. Turno: {turno} ({inicio}). {Por favor, regularize|Regularize assim que possível|Ajuste quando puder}.',
     },
     'ABSENCE': {
         'manager':  'O funcionário {full_name} não registrou ponto hoje. Turno: {turno} ({inicio}).',
-        'employee': 'Olá, {name}! Você não registrou ponto hoje (turno {turno} às {inicio}). Responda esta mensagem.',
+        'employee': '{Olá|Oi|E aí}, {name}! Você não registrou ponto hoje (turno {turno} às {inicio}). {Responda esta mensagem|Nos avise o que aconteceu|Pode nos dar um retorno}?',
     },
     'OVERTIME': {
         'manager':  '{full_name} está fazendo hora extra de {minutes} min após o turno {turno} ({fim}).',
@@ -128,10 +130,12 @@ BOT_MSG_LABELS = {
 }
 
 BOT_MSG_DEFAULTS = {
-    'bot_msg_sim_func':             'Perfeito, {{nome}}! Presença confirmada. Bom turno! 👍',
-    'bot_msg_nao_func':             'Entendido! Sua ausência foi registrada. Qualquer dúvida, entre em contato com o RH.',
+    # PRD Antiban Fase 3: variações de Spintax {opção1|opção2|opção3} nos trechos
+    # mais repetitivos, para que dois funcionários não recebam texto idêntico.
+    'bot_msg_sim_func':             '{Perfeito|Show|Ótimo}, {{nome}}! Presença confirmada. {Bom turno|Ótimo turno|Bom trabalho}! 👍',
+    'bot_msg_nao_func':             '{Entendido|Combinado|Ok}! Sua ausência foi registrada. {Qualquer dúvida|Precisando de algo|Se precisar}, entre em contato com o RH.',
     'bot_msg_nao_lider':            '⚠️ {{nome}} confirmou AUSÊNCIA hoje.',
-    'bot_msg_justificativa_func':   '✅ Recebido! Sua justificativa para {{data}} foi registrada no espelho de ponto.',
+    'bot_msg_justificativa_func':   '✅ {Recebido|Combinado|Registrado}! Sua justificativa para {{data}} foi registrada no espelho de ponto.',
     'bot_msg_justificativa_lider':  '📝 *{{nome}}* enviou uma justificativa:\n"{{mensagem}}"',
     'bot_msg_transbordo_lider':     '💬 Mensagem de *{{nome}}*:\n"{{mensagem}}"',
     'bot_msg_atestado_func':        '✅ Atestado recebido com sucesso em {{data}}! O RH foi notificado.',
@@ -164,6 +168,10 @@ def _save_from_form(regra: NotificationRule, form):
     regra.template_manager_interativo  = form.get('template_manager_interativo') or None
     regra.only_working_hours = 'only_working_hours' in form
     regra.send_immediately   = 'send_immediately' in form
+    # PRD Antiban Fase 4: opt-in conversacional (default True para regras novas)
+    regra.requer_optin       = 'requer_optin' in form
+    regra.optin_janela_horas = int(form.get('optin_janela_horas') or 24)
+    regra.optin_fallback     = form.get('optin_fallback') or 'enviar'
 
 
 @notificacoes_bp.route('/')

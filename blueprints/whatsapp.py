@@ -140,6 +140,44 @@ def _set_state(func_id: str, estado: str, contexto: dict = None):
     db.session.commit()
 
 
+def _normalizar_sem_acento(s: str) -> str:
+    """PRD Antiban Fase 4: remove acentos para comparação tolerante de respostas."""
+    import unicodedata
+    return ''.join(c for c in unicodedata.normalize('NFD', s or '') if unicodedata.category(c) != 'Mn')
+
+
+def _get_setting_lista(chave: str, env: str, default_csv: str) -> list:
+    from services.config_service import get_setting
+    return [p.strip() for p in get_setting(chave, env, default_csv).split(',') if p.strip()]
+
+
+def _processar_resposta_optin(func: 'Funcionario', ctx: dict, texto: str) -> None:
+    """PRD Antiban Fase 4: trata a resposta do funcionário à pergunta de
+    opt-in. Afirmativa → libera o conteúdo real na fila (status
+    'optin_confirmado', despachado normalmente pelo dispatcher). Qualquer
+    outra resposta → cancela o envio do conteúdo real."""
+    from models import FilaEnvioWhatsapp
+    fila_id = ctx.get('fila_id')
+    item = FilaEnvioWhatsapp.query.get(fila_id) if fila_id else None
+    palavras = _get_setting_lista('whatsapp_optin_palavras', 'WA_OPTIN_PALAVRAS', 'sim,pode,ok,claro,manda')
+    texto_norm = _normalizar_sem_acento(texto.lower().strip())
+
+    if any(p in texto_norm for p in palavras):
+        if item and item.status == 'aguardando_optin':
+            item.status = 'optin_confirmado'
+            item.enviar_apos = None
+            db.session.commit()
+    else:
+        from services.whatsapp_bot import enviar_texto
+        enviar_texto(celular=func.celular, mensagem='Sem problema! Se precisar, é só chamar.',
+                     func_id=func.id, tipo='optin_recusado')
+        if item and item.status == 'aguardando_optin':
+            item.status = 'cancelado'
+            db.session.commit()
+
+    _set_state(func.id, 'IDLE')
+
+
 def _enviar_menu_principal(func: 'Funcionario'):
     """Envia o Menu Principal como List Message."""
     from services.whatsapp_bot import enviar_menu_lista
@@ -344,6 +382,13 @@ def _processar_mensagem(data: dict):
                 func_id=func.id,
                 tipo='bot_instrucao',
             )
+        return
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # 4b2. Estado AGUARDANDO_OPTIN → confirmação de opt-in (PRD Antiban Fase 4)
+    # ══════════════════════════════════════════════════════════════════════════
+    if estado_atual == 'AGUARDANDO_OPTIN':
+        _processar_resposta_optin(func, ctx, texto)
         return
 
     # ══════════════════════════════════════════════════════════════════════════

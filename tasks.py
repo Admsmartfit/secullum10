@@ -182,6 +182,74 @@ def register_tasks(celery):
         logger.info(f'[processar_evento_instancia] {result}')
         return result
 
+    @celery.task(name='tasks.processar_fallback_optin')
+    def processar_fallback_optin():
+        """PRD Antiban Fase 4: aplica o fallback (enviar/reenviar/cancelar) para
+        itens 'aguardando_optin' cuja janela de resposta (regra.optin_janela_horas)
+        expirou. Nunca despacha diretamente — só reabre o item para o dispatcher
+        normal (services/envio_dispatcher.py), que respeita o rate-limit."""
+        from models import FilaEnvioWhatsapp
+        from extensions import db
+        agora = datetime.utcnow()
+        pendentes = FilaEnvioWhatsapp.query.filter_by(status='aguardando_optin').all()
+        processados = 0
+        for item in pendentes:
+            regra = item.regra
+            prazo_horas = (regra.optin_janela_horas if regra and regra.optin_janela_horas else 24)
+            if agora - item.criada_em < timedelta(hours=prazo_horas):
+                continue
+            fallback = (regra.optin_fallback if regra else 'enviar') or 'enviar'
+            if fallback == 'enviar':
+                item.status = 'optin_confirmado'
+                item.enviar_apos = None
+            elif fallback == 'reenviar_pergunta' and (item.tentativas or 0) < 1:
+                # Reenvia a pergunta uma única vez: reabre como 'pendente' para o
+                # dispatcher perguntar de novo no próximo ciclo (respeitando rate-limit).
+                item.tentativas = (item.tentativas or 0) + 1
+                item.criada_em = agora
+                item.status = 'pendente'
+                item.enviar_apos = None
+            else:
+                item.status = 'cancelado'
+            processados += 1
+        db.session.commit()
+        logger.info(f'[processar_fallback_optin] {processados} item(ns) processado(s).')
+        return {'processados': processados}
+
+    @celery.task(name='tasks.verificar_saude_whatsapp')
+    def verificar_saude_whatsapp():
+        """PRD Antiban Fase 6: circuito de segurança automático — se a taxa de
+        falha síncrona (WhatsappLog.status LIKE 'erro_%') na última hora passar
+        de 15%, desativa o despacho automaticamente e alerta por e-mail."""
+        import os
+        from models import WhatsappLog
+        from services.config_service import get_setting, set_setting
+        limite = datetime.utcnow() - timedelta(hours=1)
+        total = WhatsappLog.query.filter(WhatsappLog.criado_em >= limite).count()
+        falhas = WhatsappLog.query.filter(
+            WhatsappLog.criado_em >= limite,
+            WhatsappLog.status.like('erro_%'),
+        ).count()
+        taxa = (falhas / total) if total else 0.0
+        if total > 0 and taxa > 0.15 and get_setting('whatsapp_dispatcher_ativo', 'WA_DISPATCHER_ATIVO', '1') == '1':
+            set_setting('whatsapp_dispatcher_ativo', '0')
+            logger.error(f'[verificar_saude_whatsapp] Taxa de falha {taxa:.0%} ({falhas}/{total}) — despacho pausado automaticamente.')
+            rh_email = os.getenv('RH_EMAIL', '')
+            if rh_email:
+                try:
+                    from flask_mail import Message
+                    from extensions import mail
+                    mail.send(Message(
+                        subject='🔴 Circuito de segurança ativado — envios de WhatsApp pausados',
+                        recipients=[rh_email],
+                        body=(f'Taxa de falha de envio na última hora: {taxa:.0%} ({falhas} de {total}).\n'
+                              'O despacho automático foi pausado (whatsapp_dispatcher_ativo=0).\n'
+                              'Revise a instância da Mega-API e reative manualmente em Configurações → WhatsApp.'),
+                    ))
+                except Exception as e:
+                    logger.error(f'[verificar_saude_whatsapp] Falha ao enviar e-mail: {e}')
+        return {'total': total, 'falhas': falhas, 'taxa': taxa}
+
     @celery.task(name='tasks.processar_regras_evento_sync')
     def processar_regras_evento_sync():
         from services.notification_processor import processar_regras_evento
