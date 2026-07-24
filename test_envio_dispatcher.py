@@ -51,6 +51,8 @@ def test_dispatcher_rate_limit_e_opt_in():
         set_setting('whatsapp_delay_min_s', '0')
         set_setting('whatsapp_delay_max_jitter_s', '0')
         set_setting('whatsapp_delay_por_caractere_s', '0')
+        set_setting('whatsapp_delay_jitter_digitacao_s', '0')
+        set_setting('whatsapp_delay_extra_min_s', '0')
 
         func = Funcionario(id='t1', nome='Fulano de Teste', celular='27900000001', ativo=True)
         db.session.add(func)

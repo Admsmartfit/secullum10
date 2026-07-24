@@ -720,12 +720,24 @@ def processar_regras_evento(trigger_type: str, data_ref: date = None) -> dict:
 
         # Relatório de inconsistências: lógica própria, usa o dia anterior
         if regra.condition_type == 'INCONSISTENCY_REPORT':
+            agora_br = datetime.now(_TZ_BR)
+            # PRD Antiban: sem esse guard, um trigger_type que dispara várias
+            # vezes por dia (ex.: EVENT_SYNC a cada sincronização) reenfileirava
+            # o relatório inteiro repetidamente — nenhum outro ponto desta função
+            # protegia esse caminho contra reenvio (cooldown só existe no loop
+            # por funcionário, mais abaixo). Envia no máximo 1x por dia (BRT).
+            ultima = regra.ultima_execucao
+            if ultima:
+                if ultima.tzinfo is None:
+                    ultima = ultima.replace(tzinfo=_TZ_BR)
+                if ultima.date() == agora_br.date():
+                    continue
             ontem = data_ref - timedelta(days=1)
             relatorio = _gerar_relatorio_inconsistencias(ontem)
             enviados_regra = _enviar_relatorio(regra, relatorio)
             if enviados_regra > 0:
                 regra.mensagens_enviadas = (regra.mensagens_enviadas or 0) + enviados_regra
-                regra.ultima_execucao = datetime.now(_TZ_BR)
+                regra.ultima_execucao = agora_br
             total += enviados_regra
             continue
 

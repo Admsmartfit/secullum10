@@ -54,11 +54,23 @@ def _pode_enviar_agora() -> bool:
 
 
 def _calcular_delay_extra(mensagem: str) -> float:
-    """Delay adicional proporcional ao tamanho da mensagem (Fase 2 revisada:
-    substitui a simulação de presença 'digitando...', que a Mega-API não expõe)."""
-    por_char = _cfg_float('whatsapp_delay_por_caractere_s', 'WA_DELAY_CHAR_S', 0.15)
-    teto = _cfg_float('whatsapp_delay_extra_max_s', 'WA_DELAY_EXTRA_MAX_S', 10)
-    return min(teto, len(mensagem or '') * por_char)
+    """Simula o tempo de digitação humana antes do envio real (Fase 2 revisada:
+    substitui a simulação de presença 'digitando...', que a Mega-API não expõe).
+
+    ms/caractere + jitter aleatório + piso e teto de segurança — garante que
+    NENHUMA mensagem seja despachada instantaneamente (o piso mínimo é o que
+    evita que respostas curtas tipo "Ok"/"Sim" saiam em milissegundos, o
+    principal indício de automação para o WhatsApp) nem demore tanto que
+    pareça travado.
+    """
+    por_char = _cfg_float('whatsapp_delay_por_caractere_s', 'WA_DELAY_CHAR_S', 0.045)
+    jitter_max = _cfg_float('whatsapp_delay_jitter_digitacao_s', 'WA_DELAY_JITTER_DIGITACAO_S', 1.5)
+    piso = _cfg_float('whatsapp_delay_extra_min_s', 'WA_DELAY_EXTRA_MIN_S', 1.5)
+    teto = _cfg_float('whatsapp_delay_extra_max_s', 'WA_DELAY_EXTRA_MAX_S', 8)
+
+    tempo = len(mensagem or '') * por_char
+    tempo += random.uniform(0, jitter_max)
+    return max(piso, min(teto, tempo))
 
 
 def _lint_problemas(item: FilaEnvioWhatsapp) -> list:
