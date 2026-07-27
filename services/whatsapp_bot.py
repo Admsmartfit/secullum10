@@ -123,26 +123,32 @@ def _processar_item(item: FilaEnvioWhatsapp) -> bool:
 
 def enviar_texto(celular: str, mensagem: str, func_id: str = None,
                  tipo: str = 'saida', tipo_regra: str = None,
-                 data_ref=None, prioridade: int = 10, imediato: bool = False) -> bool:
+                 data_ref=None, prioridade: int = 10, imediato: bool = False,
+                 regra_id: int = None) -> bool:
     """Enfileira mensagem de texto para envio via Mega-API.
     Retorno True = aceito na fila (não confirma entrega real) — nenhum
     chamador hoje trata o retorno como confirmação de entrega, então essa
     mudança de semântica é segura.
     imediato=True despacha na hora, sem passar pela fila/rate-limit — uso
     restrito às rotas administrativas de teste/envio manual do painel.
+    regra_id: amarra o item à NotificationRule de origem — necessário para o
+    opt-in (Fase 4) e o lint (Fase 5) que dependem de `item.regra`; sem isso,
+    o item nunca é elegível para opt-in mesmo com requer_optin=True na regra.
     """
     fone = _fone(celular)
     item = _enfileirar(
         celular=fone, mensagem=mensagem, funcionario_id=func_id,
         tipo=tipo, tipo_regra=tipo_regra, data_referencia=data_ref,
         tipo_msg='texto', prioridade=prioridade, primeiro_contato=_eh_primeiro_contato(fone),
+        regra_id=regra_id,
     )
     return _processar_item(item) if imediato else True
 
 
 def enviar_botoes(celular: str, texto: str, botoes: list,
                   func_id: str = None, tipo: str = 'saida',
-                  prioridade: int = 10, imediato: bool = False) -> bool:
+                  prioridade: int = 10, imediato: bool = False,
+                  regra_id: int = None) -> bool:
     """Enfileira mensagem com botões interativos via Mega-API.
 
     botoes: lista de dicts {"id": "btn_sim", "title": "👍 Sim, confirmo"}
@@ -156,13 +162,15 @@ def enviar_botoes(celular: str, texto: str, botoes: list,
         celular=fone, mensagem=texto, funcionario_id=func_id, tipo=tipo,
         tipo_msg='botoes', interativo_json=_json.dumps({'botoes': botoes}),
         prioridade=prioridade, primeiro_contato=_eh_primeiro_contato(fone),
+        regra_id=regra_id,
     )
     return _processar_item(item) if imediato else True
 
 
 def enviar_menu_lista(celular: str, texto: str, titulo_botao: str,
                       secoes: list, func_id: str = None, tipo: str = 'saida',
-                      prioridade: int = 10, imediato: bool = False) -> bool:
+                      prioridade: int = 10, imediato: bool = False,
+                      regra_id: int = None) -> bool:
     """Enfileira List Message (menu) via Mega-API — ideal para > 3 opções.
 
     secoes: lista de dicts:
@@ -177,6 +185,7 @@ def enviar_menu_lista(celular: str, texto: str, titulo_botao: str,
         tipo_msg='lista',
         interativo_json=_json.dumps({'titulo_botao': titulo_botao, 'secoes': secoes}),
         prioridade=prioridade, primeiro_contato=_eh_primeiro_contato(fone),
+        regra_id=regra_id,
     )
     return _processar_item(item) if imediato else True
 
@@ -189,7 +198,8 @@ def enviar_msg(celular: str, texto: str,
                tipo_regra: str = None,
                data_ref=None,
                prioridade: int = 10,
-               imediato: bool = False) -> bool:
+               imediato: bool = False,
+               regra_id: int = None) -> bool:
     """Dispatcher unificado: enfileira texto, botões ou lista dependendo de tipo_msg.
 
     interativo_json (str): JSON serializado com estrutura:
@@ -203,7 +213,7 @@ def enviar_msg(celular: str, texto: str,
             botoes = dados.get('botoes', [])
             if botoes:
                 return enviar_botoes(celular, texto, botoes, func_id=func_id, tipo=tipo,
-                                     prioridade=prioridade, imediato=imediato)
+                                     prioridade=prioridade, imediato=imediato, regra_id=regra_id)
         except Exception:
             pass  # fallback para texto
 
@@ -215,13 +225,13 @@ def enviar_msg(celular: str, texto: str,
             if secoes:
                 return enviar_menu_lista(celular, texto, titulo_botao, secoes,
                                          func_id=func_id, tipo=tipo,
-                                         prioridade=prioridade, imediato=imediato)
+                                         prioridade=prioridade, imediato=imediato, regra_id=regra_id)
         except Exception:
             pass  # fallback para texto
 
     return enviar_texto(celular, texto, func_id=func_id, tipo=tipo,
                         tipo_regra=tipo_regra, data_ref=data_ref,
-                        prioridade=prioridade, imediato=imediato)
+                        prioridade=prioridade, imediato=imediato, regra_id=regra_id)
 
 
 def baixar_midia(url: str) -> bytes | None:
@@ -241,7 +251,8 @@ def baixar_midia(url: str) -> bytes | None:
 def enviar_documento(celular: str, pdf_bytes: bytes, filename: str,
                      caption: str = '', func_id: str = None,
                      tipo: str = 'espelho', tipo_regra: str = None,
-                     data_ref=None, prioridade: int = 10, imediato: bool = False) -> bool:
+                     data_ref=None, prioridade: int = 10, imediato: bool = False,
+                     regra_id: int = None) -> bool:
     """RF4.4 – Enfileira envio de PDF via Mega-API (mediaBase64)."""
     fone = _fone(celular)
     item = _enfileirar(
@@ -255,6 +266,7 @@ def enviar_documento(celular: str, pdf_bytes: bytes, filename: str,
             'caption': caption,
         }),
         prioridade=prioridade, primeiro_contato=_eh_primeiro_contato(fone),
+        regra_id=regra_id,
     )
     return _processar_item(item) if imediato else True
 

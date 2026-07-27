@@ -466,7 +466,7 @@ def _enviar_relatorio(regra: NotificationRule, texto_global: str) -> int:
                 f'📋 Inconsistências — {dept} — {ontem.strftime("%d/%m/%Y")}\n\n✅ Nenhuma inconsistência encontrada.'
             )
             try:
-                if enviar_texto(celular=alvo['celular'], mensagem=texto_dept, tipo='relatorio'):
+                if enviar_texto(celular=alvo['celular'], mensagem=texto_dept, tipo='relatorio', regra_id=regra.id):
                     enviados += 1
             except Exception as e:
                 logger.error(f'[enviar_relatorio] Falha ao enviar para depto "{dept}" ({alvo["celular"]}): {e}')
@@ -475,7 +475,7 @@ def _enviar_relatorio(regra: NotificationRule, texto_global: str) -> int:
         if _get_gestor_celular():
             cel_gestor = _normalizar_celular(_get_gestor_celular())
             try:
-                if enviar_texto(celular=cel_gestor, mensagem=texto_global, tipo='relatorio'):
+                if enviar_texto(celular=cel_gestor, mensagem=texto_global, tipo='relatorio', regra_id=regra.id):
                     enviados += 1
             except Exception as e:
                 logger.error(f'[enviar_relatorio] Falha ao enviar relatório global para {cel_gestor}: {e}')
@@ -483,7 +483,7 @@ def _enviar_relatorio(regra: NotificationRule, texto_global: str) -> int:
     if regra.dest_rh and _get_gestor_celular():
         cel_gestor = _normalizar_celular(_get_gestor_celular())
         try:
-            if enviar_texto(celular=cel_gestor, mensagem=texto_global, tipo='relatorio'):
+            if enviar_texto(celular=cel_gestor, mensagem=texto_global, tipo='relatorio', regra_id=regra.id):
                 enviados += 1
         except Exception as e:
             logger.error(f'[enviar_relatorio] Falha ao enviar relatório (RH) para {cel_gestor}: {e}')
@@ -491,7 +491,7 @@ def _enviar_relatorio(regra: NotificationRule, texto_global: str) -> int:
     if getattr(regra, 'dest_custom', False) and getattr(regra, 'custom_phone', None):
         num = _normalizar_celular(regra.custom_phone)
         try:
-            if enviar_texto(celular=num, mensagem=texto_global, tipo='relatorio'):
+            if enviar_texto(celular=num, mensagem=texto_global, tipo='relatorio', regra_id=regra.id):
                 enviados += 1
         except Exception as e:
             logger.error(f'[enviar_relatorio] Falha ao enviar relatório (custom) para {num}: {e}')
@@ -623,6 +623,7 @@ def _enviar(regra: NotificationRule, func, minutos: int, aloc, data_ref: date, e
                     tipo_msg='botoes', interativo_json=default_interativo,
                     func_id=func.id, tipo='regra',
                     tipo_regra=regra.condition_type, data_ref=data_ref,
+                    regra_id=regra.id,
                 )
                 if ok:
                     enviados += 1
@@ -632,6 +633,7 @@ def _enviar(regra: NotificationRule, func, minutos: int, aloc, data_ref: date, e
                 interativo_json=getattr(regra, 'template_employee_interativo', None),
                 func_id=func.id, tipo='regra',
                 tipo_regra=regra.condition_type, data_ref=data_ref,
+                regra_id=regra.id,
             ):
                 enviados += 1
 
@@ -650,6 +652,7 @@ def _enviar(regra: NotificationRule, func, minutos: int, aloc, data_ref: date, e
                     interativo_json=getattr(regra, 'template_manager_interativo', None),
                     func_id=func.id, tipo='regra',
                     tipo_regra=regra.condition_type, data_ref=data_ref,
+                    regra_id=regra.id,
                 ):
                     enviados += 1
 
@@ -662,7 +665,8 @@ def _enviar(regra: NotificationRule, func, minutos: int, aloc, data_ref: date, e
                 enviados += 1
             elif enviar_texto(celular=_get_gestor_celular(), mensagem=msg,
                               func_id=func.id, tipo='regra',
-                              tipo_regra=regra.condition_type, data_ref=data_ref):
+                              tipo_regra=regra.condition_type, data_ref=data_ref,
+                              regra_id=regra.id):
                 enviados += 1
 
     if getattr(regra, 'dest_custom', False) and getattr(regra, 'custom_phone', None):
@@ -678,7 +682,8 @@ def _enviar(regra: NotificationRule, func, minutos: int, aloc, data_ref: date, e
                     enviados += 1
                 elif enviar_texto(celular=num, mensagem=msg,
                                   func_id=func.id, tipo='regra',
-                                  tipo_regra=regra.condition_type, data_ref=data_ref):
+                                  tipo_regra=regra.condition_type, data_ref=data_ref,
+                                  regra_id=regra.id):
                     enviados += 1
 
     return enviados
