@@ -61,5 +61,15 @@ def get_megaapi_config() -> dict:
     }
 
 
+def get_evolutionapi_config() -> dict:
+    """Retorna configurações da Evolution API (migração Mega-API → Evolution API).
+    `host` é a URL completa (ex.: https://evolution.ricardo.home.nom.br)."""
+    return {
+        'host':     get_setting('evolution_host',     'EVOLUTION_HOST',     ''),
+        'instance': get_setting('evolution_instance', 'EVOLUTION_INSTANCE', 'secullum10'),
+        'api_key':  get_setting('evolution_api_key',  'EVOLUTION_API_KEY',  ''),
+    }
+
+
 def get_gestor_celular() -> str:
     return get_setting('gestor_celular', 'GESTOR_CELULAR', '')

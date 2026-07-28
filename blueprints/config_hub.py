@@ -99,6 +99,11 @@ def index():
         'megaapi_instance':  get_setting('megaapi_instance',  'MEGAAPI_INSTANCE',  ''),
         'megaapi_token':        get_setting('megaapi_token',        'MEGAAPI_TOKEN',  ''),
         'megaapi_secret':       get_setting('megaapi_secret',       'MEGAAPI_SECRET', ''),
+        # Migração Evolution API — transporte ativo de envio (Mega-API acima
+        # fica só como legado/rollback, não usada mais por whatsapp_bot.py)
+        'evolution_host':     get_setting('evolution_host',     'EVOLUTION_HOST',     ''),
+        'evolution_instance': get_setting('evolution_instance', 'EVOLUTION_INSTANCE', 'secullum10'),
+        'evolution_api_key':  get_setting('evolution_api_key',  'EVOLUTION_API_KEY',  ''),
         'gestor_celular':       get_setting('gestor_celular',       'GESTOR_CELULAR', ''),
         'calendario_api_token': get_setting('calendario_api_token', '',               ''),
         # PRD Antiban Fase 4/5
@@ -314,7 +319,8 @@ def whatsapp_testar():
         flash(f'Mensagem enviada com sucesso para {celular}!', 'success')
     else:
         flash(
-            f'Falha no envio para {celular}. Verifique MEGAAPI_TOKEN e MEGAAPI_INSTANCE no .env. '
+            f'Falha no envio para {celular}. Verifique EVOLUTION_HOST, EVOLUTION_INSTANCE e '
+            'EVOLUTION_API_KEY, ou se o número está bloqueado (WhatsApp → Logs). '
             'O log foi registrado em WhatsApp → Logs.',
             'warning',
         )
@@ -784,6 +790,9 @@ def integracoes_salvar():
         ('megaapi_instance',  'MEGAAPI_INSTANCE'),
         ('megaapi_token',        'MEGAAPI_TOKEN'),
         ('megaapi_secret',       'MEGAAPI_SECRET'),
+        ('evolution_host',      'EVOLUTION_HOST'),
+        ('evolution_instance',  'EVOLUTION_INSTANCE'),
+        ('evolution_api_key',   'EVOLUTION_API_KEY'),
         ('gestor_celular',       'GESTOR_CELULAR'),
         ('calendario_api_token', ''),
         ('whatsapp_optin_texto_padrao', 'WA_OPTIN_TEXTO_PADRAO'),

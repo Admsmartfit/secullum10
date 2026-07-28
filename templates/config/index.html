@@ -558,7 +558,24 @@
               </div>
             </div>
 
-            <h6 class="text-muted small fw-bold text-uppercase mb-3">MegaAPI WhatsApp</h6>
+            <h6 class="text-muted small fw-bold text-uppercase mb-3">Evolution API WhatsApp</h6>
+            <div class="row g-3">
+              <div class="col-md-8">
+                <label class="form-label">Host</label>
+                <input type="text" name="EVOLUTION_HOST" class="form-control"
+                       placeholder="https://evolution.exemplo.com" value="{{ integ_cfg.evolution_host }}">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Instância</label>
+                <input type="text" name="EVOLUTION_INSTANCE" class="form-control" value="{{ integ_cfg.evolution_instance }}">
+              </div>
+              <div class="col-md-12">
+                <label class="form-label">API Key</label>
+                <input type="password" name="EVOLUTION_API_KEY" class="form-control" value="{{ integ_cfg.evolution_api_key }}">
+              </div>
+            </div>
+
+            <h6 class="text-muted small fw-bold text-uppercase mb-3 mt-4">MegaAPI WhatsApp (legado — não usada para envio)</h6>
             <div class="row g-3">
               <div class="col-md-8">
                 <label class="form-label">Host</label>

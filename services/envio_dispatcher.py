@@ -2,8 +2,12 @@
 Camada única de despacho de WhatsApp — PRD Antiban (Fase 1 + Fase 2 revisada).
 
 Aplica delay mínimo + jitter, teto de envios/hora e um atraso adicional
-proporcional ao tamanho da mensagem antes de cada envio real. Presença
-("digitando...") não é aplicável — a Mega-API não expõe esse endpoint.
+proporcional ao tamanho da mensagem antes de cada envio real (esse atraso é
+só o espaçamento entre itens da fila — a simulação de presença "digitando..."
+de verdade, via Evolution API, acontece em services/whatsapp_bot.py, no
+momento do despacho real). Nenhuma mudança de transporte (Mega-API →
+Evolution API) exige alterações neste módulo: o acoplamento com
+services/whatsapp_bot.py é só via _processar_item/_despachar_pergunta_optin.
 
 Chamado periodicamente (a cada ~5s) por services/auto_sync.py. Processa no
 máximo 1 item da fila por chamada — nenhum time.sleep bloqueante aqui.
@@ -54,23 +58,14 @@ def _pode_enviar_agora() -> bool:
 
 
 def _calcular_delay_extra(mensagem: str) -> float:
-    """Simula o tempo de digitação humana antes do envio real (Fase 2 revisada:
-    substitui a simulação de presença 'digitando...', que a Mega-API não expõe).
-
-    ms/caractere + jitter aleatório + piso e teto de segurança — garante que
-    NENHUMA mensagem seja despachada instantaneamente (o piso mínimo é o que
-    evita que respostas curtas tipo "Ok"/"Sim" saiam em milissegundos, o
-    principal indício de automação para o WhatsApp) nem demore tanto que
-    pareça travado.
-    """
-    por_char = _cfg_float('whatsapp_delay_por_caractere_s', 'WA_DELAY_CHAR_S', 0.045)
-    jitter_max = _cfg_float('whatsapp_delay_jitter_digitacao_s', 'WA_DELAY_JITTER_DIGITACAO_S', 1.5)
-    piso = _cfg_float('whatsapp_delay_extra_min_s', 'WA_DELAY_EXTRA_MIN_S', 1.5)
-    teto = _cfg_float('whatsapp_delay_extra_max_s', 'WA_DELAY_EXTRA_MAX_S', 8)
-
-    tempo = len(mensagem or '') * por_char
-    tempo += random.uniform(0, jitter_max)
-    return max(piso, min(teto, tempo))
+    """Adia o item na fila por um tempo proporcional ao tamanho da mensagem,
+    antes do envio real (Fase 2). Desde a migração para Evolution API, a
+    simulação de digitação de verdade (presença 'composing' visível para o
+    destinatário) acontece em services/whatsapp_bot.py, logo antes do envio —
+    aqui a mesma fórmula (services/humanizacao.py) é reaproveitada só para
+    espalhar os itens na fila sem bloquear o job do scheduler com sleep."""
+    from services.humanizacao import calcular_duracao_digitacao
+    return calcular_duracao_digitacao(mensagem)
 
 
 def _lint_problemas(item: FilaEnvioWhatsapp) -> list:
@@ -136,7 +131,8 @@ def _iniciar_optin(item: FilaEnvioWhatsapp) -> dict:
     ).replace('{{name}}', nome).replace('{{assunto}}', assunto)
 
     from services.whatsapp_bot import _despachar_pergunta_optin
-    _despachar_pergunta_optin(item, pergunta)
+    botoes_optin = [{'id': 'opt_sim', 'title': 'Sim'}, {'id': 'opt_nao', 'title': 'Não'}]
+    _despachar_pergunta_optin(item, pergunta, botoes=botoes_optin)
 
     item.status = 'aguardando_optin'
     db.session.commit()

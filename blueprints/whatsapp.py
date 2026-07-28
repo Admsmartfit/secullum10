@@ -3,7 +3,7 @@ from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required
 from extensions import db
-from models import WhatsappLog, Funcionario, AlocacaoDiaria, UnidadeLider, Batida, FilaEnvioWhatsapp, ChatState, MegaApiInstanceEvent
+from models import WhatsappLog, Funcionario, AlocacaoDiaria, UnidadeLider, Batida, FilaEnvioWhatsapp, ChatState, MegaApiInstanceEvent, WhatsappBlacklist
 
 whatsapp_bp = Blueprint('whatsapp', __name__, url_prefix='/whatsapp')
 
@@ -123,6 +123,104 @@ def webhook():
     return jsonify({'ok': True}), 200
 
 
+# ── Webhook Evolution API ─────────────────────────────────────────────────────
+# Rota nova, separada da rota Mega-API acima (mantida intacta para rollback).
+# A Evolution API não assina payloads com HMAC como a Mega-API — a
+# autenticação é por um segredo compartilhado (EVOLUTION_WEBHOOK_TOKEN),
+# configurado como query string na própria URL do webhook no painel Evolution.
+
+def _validar_token_evolution(token: str) -> bool:
+    from services.config_service import get_setting
+    esperado = get_setting('evolution_webhook_token', 'EVOLUTION_WEBHOOK_TOKEN', '')
+    if not esperado:
+        return True  # em dev, aceitar sem validação (mesmo padrão de _validar_hmac)
+    return hmac.compare_digest(esperado, token or '')
+
+
+def _adaptar_payload_evolution(data: dict) -> dict:
+    """Traduz o payload aninhado da Evolution API (evento `messages.upsert`)
+    para o formato plano que _processar_mensagem já espera (herdado da
+    Mega-API): {'from', 'type', 'body'/'text', 'interactive': {'button_reply': {'id'}}}.
+
+    Shape assumido da Evolution API v2 (validar contra a instância real —
+    ver plano de verificação):
+      {"event": "messages.upsert", "instance": "...",
+       "data": {"key": {"remoteJid": "5511999999999@s.whatsapp.net", "fromMe": false, "id": "..."},
+                "pushName": "...", "messageType": "conversation",
+                "message": {"conversation": "texto livre"}
+                            | {"buttonsResponseMessage": {"selectedButtonId": "opt_sim"}}
+                            | {"imageMessage": {...}} | {"documentMessage": {...}}
+                            | {"audioMessage": {...}}}}
+
+    Retorna {} se não for um evento de mensagem recebida (ex.: connection.update)."""
+    if not isinstance(data, dict) or data.get('event') != 'messages.upsert':
+        return {}
+    corpo = data.get('data') or {}
+    key = corpo.get('key') or {}
+    if key.get('fromMe'):
+        return {}  # mensagens enviadas pela própria instância não são "recebidas"
+
+    remote_jid = key.get('remoteJid', '')
+    msg = corpo.get('message') or {}
+
+    texto = (
+        msg.get('conversation')
+        or (msg.get('extendedTextMessage') or {}).get('text')
+        or ''
+    )
+
+    tipo = 'text'
+    interactive = {}
+    media_url = ''
+    if 'buttonsResponseMessage' in msg:
+        btn_id = (msg.get('buttonsResponseMessage') or {}).get('selectedButtonId', '')
+        interactive = {'button_reply': {'id': btn_id}}
+    elif 'listResponseMessage' in msg:
+        row_id = ((msg.get('listResponseMessage') or {}).get('singleSelectReply') or {}).get('selectedRowId', '')
+        interactive = {'list_reply': {'id': row_id}}
+    elif 'imageMessage' in msg:
+        tipo = 'image'
+        media_url = (msg.get('imageMessage') or {}).get('url', '')
+    elif 'documentMessage' in msg:
+        tipo = 'document'
+        media_url = (msg.get('documentMessage') or {}).get('url', '')
+    elif 'audioMessage' in msg:
+        tipo = 'ptt'
+        media_url = (msg.get('audioMessage') or {}).get('url', '')
+
+    return {
+        'from': remote_jid,
+        'type': tipo,
+        'body': texto,
+        'text': texto,
+        'interactive': interactive,
+        'mediaUrl': media_url,
+    }
+
+
+@whatsapp_bp.route('/webhook/evolution', methods=['POST'])
+def webhook_evolution():
+    """Webhook da Evolution API — adapta o payload aninhado para o formato
+    plano que a lógica de _processar_mensagem já entende (reaproveitada
+    integralmente, sem reescrita: ChatState, opt-in, avaliação 360, etc.)."""
+    if not _validar_token_evolution(request.args.get('token', '')):
+        return jsonify({'error': 'invalid token'}), 401
+
+    raw = request.get_json(force=True, silent=True) or {}
+    data = _adaptar_payload_evolution(raw)
+
+    if not data.get('from'):
+        return jsonify({'ok': True, 'ignorado': True}), 200
+
+    try:
+        from tasks import processar_webhook_whatsapp
+        processar_webhook_whatsapp.delay(data)
+    except Exception:
+        _processar_mensagem(data)
+
+    return jsonify({'ok': True}), 200
+
+
 def _get_or_create_state(func_id: str) -> 'ChatState':
     """Retorna ou cria o ChatState do funcionário."""
     state = ChatState.query.filter_by(funcionario_id=func_id).first()
@@ -151,11 +249,27 @@ def _get_setting_lista(chave: str, env: str, default_csv: str) -> list:
     return [p.strip() for p in get_setting(chave, env, default_csv).split(',') if p.strip()]
 
 
+def _bloquear_numero(fone: str, motivo: str = 'OPT_OUT') -> None:
+    """Migração Evolution API — Blacklist absoluta: grava o número (se ainda
+    não estiver) e cancela TODOS os itens pendentes daquele número na fila,
+    não só o item associado ao opt-in em curso. Sem exceção de cargo/regra —
+    ver services/whatsapp_bot.py::_bloqueado, checado em todo envio real."""
+    if not WhatsappBlacklist.query.filter_by(celular=fone).first():
+        db.session.add(WhatsappBlacklist(celular=fone, motivo=motivo))
+
+    (FilaEnvioWhatsapp.query
+        .filter(FilaEnvioWhatsapp.celular == fone,
+                FilaEnvioWhatsapp.status.in_(['pendente', 'aguardando_optin', 'optin_confirmado']))
+        .update({'status': 'cancelado'}, synchronize_session=False))
+    db.session.commit()
+
+
 def _processar_resposta_optin(func: 'Funcionario', ctx: dict, texto: str) -> None:
     """PRD Antiban Fase 4: trata a resposta do funcionário à pergunta de
     opt-in. Afirmativa → libera o conteúdo real na fila (status
     'optin_confirmado', despachado normalmente pelo dispatcher). Qualquer
-    outra resposta → cancela o envio do conteúdo real."""
+    outra resposta → cancela o envio do conteúdo real E bloqueia o número de
+    forma absoluta (Blacklist) — regra sem exceção de cargo, ver _bloquear_numero."""
     from models import FilaEnvioWhatsapp
     fila_id = ctx.get('fila_id')
     item = FilaEnvioWhatsapp.query.get(fila_id) if fila_id else None
@@ -168,12 +282,12 @@ def _processar_resposta_optin(func: 'Funcionario', ctx: dict, texto: str) -> Non
             item.enviar_apos = None
             db.session.commit()
     else:
-        from services.whatsapp_bot import enviar_texto
-        enviar_texto(celular=func.celular, mensagem='Sem problema! Se precisar, é só chamar.',
-                     func_id=func.id, tipo='optin_recusado')
-        if item and item.status == 'aguardando_optin':
-            item.status = 'cancelado'
-            db.session.commit()
+        from services.whatsapp_bot import _fone, enviar_texto
+        # imediato=True: precisa sair ANTES do _bloquear_numero, senão o
+        # próprio guard de blacklist rejeitaria esta confirmação.
+        enviar_texto(celular=func.celular, mensagem='Sem problema! Você não receberá mais mensagens automáticas por aqui.',
+                     func_id=func.id, tipo='optin_recusado', imediato=True)
+        _bloquear_numero(_fone(func.celular or ''), motivo='OPT_OUT')
 
     _set_state(func.id, 'IDLE')
 
@@ -292,6 +406,12 @@ def _processar_mensagem(data: dict):
     )
 
     if btn_id:
+        # Resposta em botão nativo à pergunta de opt-in (Evolution API) —
+        # trata como texto livre 'sim'/'nao' na mesma lógica de
+        # _processar_resposta_optin, em vez do menu genérico de botões.
+        if estado_atual == 'AGUARDANDO_OPTIN' and btn_id in ('opt_sim', 'opt_nao') and func:
+            _processar_resposta_optin(func, ctx, 'sim' if btn_id == 'opt_sim' else 'nao')
+            return
         _processar_interactive(func, celular, btn_id, estado_atual, ctx)
         return
 
@@ -327,6 +447,27 @@ def _processar_mensagem(data: dict):
         return
 
     resposta_upper = texto.upper().strip()
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # Opt-out incondicional (Blacklist absoluta) — independente de estado
+    # atual do ChatState ou de haver uma pergunta de opt-in pendente. Regra
+    # sem exceção de cargo (PRD Evolution API): qualquer funcionário pode
+    # pedir para parar a qualquer momento, e fica bloqueado de imediato.
+    # ══════════════════════════════════════════════════════════════════════════
+    if func:
+        palavras_optout = _get_setting_lista(
+            'whatsapp_optout_palavras', 'WA_OPTOUT_PALAVRAS', 'pare,parar,sair,stop,cancelar')
+        texto_norm_optout = _normalizar_sem_acento(texto.lower().strip())
+        if texto_norm_optout in palavras_optout:
+            from services.whatsapp_bot import _fone, enviar_texto
+            # imediato=True: precisa sair ANTES do _bloquear_numero, senão o
+            # próprio guard de blacklist rejeitaria esta confirmação.
+            enviar_texto(celular=func.celular,
+                         mensagem='Pronto! Você não receberá mais mensagens automáticas por aqui.',
+                         func_id=func.id, tipo='optout_confirmado', imediato=True)
+            _bloquear_numero(_fone(func.celular or ''), motivo='OPT_OUT')
+            _set_state(func.id, 'IDLE')
+            return
 
     if active_token:
         from models import RespostaAvaliacao

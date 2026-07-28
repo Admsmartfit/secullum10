@@ -277,6 +277,21 @@ class WhatsappLog(db.Model):
     funcionario = db.relationship('Funcionario', backref='whatsapp_logs')
 
 
+class WhatsappBlacklist(db.Model):
+    """Migração Evolution API: bloqueio absoluto e global de opt-out. Qualquer
+    número aqui presente é rejeitado em TODO envio (fila, imediato=True,
+    pergunta de opt-in), sem exceção de cargo/regra — ver
+    services/whatsapp_bot.py::_bloqueado."""
+    __tablename__ = 'whatsapp_blacklist'
+    id = db.Column(db.Integer, primary_key=True)
+    celular = db.Column(db.String(20), unique=True, nullable=False, index=True)
+    motivo = db.Column(db.String(50), default='OPT_OUT')
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<WhatsappBlacklist {self.celular} ({self.motivo})>'
+
+
 class MegaApiInstanceEvent(db.Model):
     """PRD Antiban Fase 0: eventos de conexão/desconexão da instância Mega-API,
     capturados no mesmo webhook que recebe mensagens (a Mega-API só permite

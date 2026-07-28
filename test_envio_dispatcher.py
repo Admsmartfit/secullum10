@@ -1,7 +1,7 @@
 """
 Teste manual do PRD Antiban WhatsApp (Fases 1-6).
 Segue o estilo de test_batidas.py/test_api.py (script standalone, não pytest),
-mas NUNCA chama a Mega-API real: usa SQLite em memória e credenciais em
+mas NUNCA chama a Evolution API real: usa SQLite em memória e credenciais em
 branco, então toda tentativa de envio cai em status 'sem_config'.
 
 Execute com:
@@ -9,8 +9,9 @@ Execute com:
 """
 import os
 os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
-os.environ['MEGAAPI_TOKEN'] = ''
-os.environ['MEGAAPI_INSTANCE'] = ''
+os.environ['EVOLUTION_HOST'] = ''
+os.environ['EVOLUTION_INSTANCE'] = ''
+os.environ['EVOLUTION_API_KEY'] = ''
 
 from datetime import datetime, timedelta
 
