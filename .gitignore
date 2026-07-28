@@ -1,1 +1,19 @@
 /.claude
+
+# Segredos — nunca versionar (ver .env.example para o template)
+.env
+.env.*
+!.env.example
+
+# Bytecode Python
+__pycache__/
+*.pyc
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# Banco de dados local / backups (dados reais de funcionários)
+instance/*.db
+instance/*.sqlite3
