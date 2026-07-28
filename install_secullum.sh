@@ -59,13 +59,13 @@ if [ "$opcao_env" == "2" ]; then
     read -p "Senha do Secullum: " secullum_password
     read -p "ID do banco Secullum (secullumidbancoselecionado): " secullum_banco
 
-    # WhatsApp / MegaAPI
+    # WhatsApp / Evolution API
     echo ""
-    echo "--- WhatsApp / MegaAPI (deixe em branco para configurar depois) ---"
-    read -p "MEGAAPI_HOST (ex: apistart01.megaapi.com.br): " mega_host
-    read -p "MEGAAPI_INSTANCE: " mega_instance
-    read -p "MEGAAPI_TOKEN: " mega_token
-    read -p "MEGAAPI_SECRET: " mega_secret
+    echo "--- WhatsApp / Evolution API (deixe em branco para configurar depois) ---"
+    read -p "EVOLUTION_HOST (ex: https://evolution.seudominio.com): " evolution_host
+    read -p "EVOLUTION_API_KEY: " evolution_api_key
+    read -p "EVOLUTION_INSTANCE (padrão: secullum10): " evolution_instance
+    read -p "EVOLUTION_WEBHOOK_TOKEN (segredo do endpoint /whatsapp/webhook/evolution): " evolution_webhook_token
     read -p "Celular do gestor (ex: 5527988010899): " gestor_cel
 
     # Banco de dados
@@ -97,11 +97,11 @@ SECULLUM_EMAIL=$secullum_email
 SECULLUM_PASSWORD=$secullum_password
 SECULLUM_BANCO=$secullum_banco
 
-# WhatsApp / MegaAPI
-MEGAAPI_HOST=${mega_host:-apistart01.megaapi.com.br}
-MEGAAPI_INSTANCE=$mega_instance
-MEGAAPI_TOKEN=$mega_token
-MEGAAPI_SECRET=$mega_secret
+# WhatsApp / Evolution API
+EVOLUTION_HOST=$evolution_host
+EVOLUTION_API_KEY=$evolution_api_key
+EVOLUTION_INSTANCE=${evolution_instance:-secullum10}
+EVOLUTION_WEBHOOK_TOKEN=$evolution_webhook_token
 GESTOR_CELULAR=$gestor_cel
 
 # Flask-Mail (opcional)
