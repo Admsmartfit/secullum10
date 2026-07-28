@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% block title %}Sandbox de Conversa WhatsApp{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0 text-white">Sandbox de Conversa WhatsApp
+        <span class="badge bg-warning text-dark ms-2 small" style="font-size: 0.5em;"><i class="fas fa-flask me-1"></i>Isolado — Não afeta produção</span>
+    </h1>
+    <a href="{{ url_for('whatsapp.logs') }}" class="btn btn-outline-light shadow">
+        <i class="fas fa-arrow-left me-2"></i>Voltar para o Hub
+    </a>
+</div>
+
+<div class="alert alert-info border-0 rounded-4 d-flex align-items-start mb-4">
+    <i class="fas fa-info-circle fa-2x me-3 mt-1"></i>
+    <div class="small">
+        <strong>Como funciona.</strong> Escolha um telefone real (o seu, por exemplo). Tudo aqui roda a
+        <strong>mesma lógica do bot de produção</strong> (menus, check-in, atestado, opt-in/opt-out), mas usando um
+        funcionário de teste isolado (<code>SANDBOX-*</code>, inativo, fora dos relatórios). As respostas do bot são
+        <strong>enviadas de verdade</strong> pela Evolution API — podem levar alguns segundos para chegar (mesmo
+        delay humanizado de produção). Use "Simular mensagem recebida" para digitar o que o funcionário diria,
+        sem precisar responder de um celular de verdade.
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-4 mb-4">
+        <div class="card border-0 shadow-lg bg-dark text-white p-4">
+            <form method="GET" action="{{ url_for('whatsapp_sandbox.index') }}" class="mb-4">
+                <label class="form-label fw-bold text-muted small"><i class="fas fa-phone me-2"></i>TELEFONE DE TESTE</label>
+                <div class="input-group">
+                    <input type="text" name="celular" class="form-control bg-secondary text-white border-0"
+                           placeholder="Ex: 5511999999999" value="{{ celular_bruto }}" required>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-play"></i></button>
+                </div>
+                <div class="form-text text-muted small">DDI + DDD + número, só dígitos.</div>
+            </form>
+
+            {% if fone %}
+            <div class="small text-muted mb-3">
+                Funcionário de teste: <code>{{ func.id }}</code><br>
+                Estado atual do chat: <span class="badge bg-info">{{ estado_chat }}</span>
+            </div>
+
+            <hr class="border-secondary">
+
+            <h6 class="text-white mb-3"><i class="fas fa-paper-plane me-2"></i>Enviar mensagem real (bot → telefone)</h6>
+            <form method="POST" action="{{ url_for('whatsapp_sandbox.enviar') }}" class="mb-4">
+                <input type="hidden" name="celular" value="{{ celular_bruto }}">
+                <textarea name="mensagem" class="form-control bg-secondary text-white border-0 mb-2" rows="2"
+                          placeholder="Mensagem que o sistema vai enviar de verdade..." required></textarea>
+                <button type="submit" class="btn btn-success w-100"><i class="fas fa-paper-plane me-2"></i>Enviar agora</button>
+            </form>
+
+            <h6 class="text-white mb-3"><i class="fas fa-keyboard me-2"></i>Simular mensagem recebida (texto livre)</h6>
+            <form method="POST" action="{{ url_for('whatsapp_sandbox.simular') }}" class="mb-4">
+                <input type="hidden" name="celular" value="{{ celular_bruto }}">
+                <input type="hidden" name="modo" value="texto">
+                <textarea name="texto" class="form-control bg-secondary text-white border-0 mb-2" rows="2"
+                          placeholder='Ex: "oi", "sim", "30", "pare"...' required></textarea>
+                <button type="submit" class="btn btn-outline-light w-100"><i class="fas fa-user me-2"></i>Simular como se o funcionário digitasse</button>
+            </form>
+
+            <h6 class="text-white mb-3"><i class="fas fa-hand-pointer me-2"></i>Simular toque em botão/menu</h6>
+            <form method="POST" action="{{ url_for('whatsapp_sandbox.simular') }}" class="mb-4">
+                <input type="hidden" name="celular" value="{{ celular_bruto }}">
+                <input type="hidden" name="modo" value="botao">
+                <select name="btn_id" class="form-select bg-secondary text-white border-0 mb-2">
+                    {% for id, label in botoes_rapidos %}
+                    <option value="{{ id }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-outline-light w-100"><i class="fas fa-hand-pointer me-2"></i>Simular toque</button>
+            </form>
+
+            <form method="POST" action="{{ url_for('whatsapp_sandbox.reset') }}"
+                  onsubmit="return confirm('Reiniciar esta conversa de teste? O histórico e o estado do chat serão apagados (não afeta funcionários reais).');">
+                <input type="hidden" name="celular" value="{{ celular_bruto }}">
+                <button type="submit" class="btn btn-outline-danger w-100"><i class="fas fa-trash-alt me-2"></i>Reiniciar conversa de teste</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-lg bg-dark text-white p-4" style="min-height: 500px;">
+            {% if not fone %}
+            <div class="text-center text-muted py-5">
+                <i class="fas fa-comments fa-3x mb-3"></i>
+                <p>Informe um telefone à esquerda para iniciar a sessão de teste.</p>
+            </div>
+            {% else %}
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="text-muted mb-0">Conversa com {{ fone }}</h6>
+                <a href="{{ url_for('whatsapp_sandbox.index', celular=celular_bruto) }}" class="btn btn-sm btn-outline-light">
+                    <i class="fas fa-sync-alt me-1"></i>Atualizar
+                </a>
+            </div>
+            <div style="max-height: 600px; overflow-y: auto;">
+                {% if not timeline %}
+                <div class="text-center text-muted py-5">Nenhuma mensagem ainda nesta conversa de teste.</div>
+                {% endif %}
+                {% for msg in timeline %}
+                <div class="d-flex mb-2 {% if msg.direcao == 'entrada' %}justify-content-start{% else %}justify-content-end{% endif %}">
+                    <div class="p-2 px-3 rounded-4 {% if msg.direcao == 'entrada' %}bg-secondary{% else %}bg-success bg-opacity-25 border border-success{% endif %}"
+                         style="max-width: 75%;">
+                        <div class="small text-muted mb-1">
+                            {% if msg.direcao == 'entrada' %}<i class="fas fa-user me-1"></i>Funcionário (simulado){% else %}<i class="fas fa-robot me-1"></i>Bot{% endif %}
+                            {% if msg.status in ('pendente', 'processando') %}
+                            <span class="badge bg-warning text-dark ms-2">⏳ na fila...</span>
+                            {% elif msg.status == 'bloqueado' %}
+                            <span class="badge bg-danger ms-2">bloqueado (opt-out)</span>
+                            {% elif msg.status and msg.status.startswith('erro') %}
+                            <span class="badge bg-danger ms-2">erro</span>
+                            {% elif msg.status == 'enviado' %}
+                            <span class="badge bg-success ms-2">✓ enviado</span>
+                            {% endif %}
+                            <span class="ms-2">{{ msg.quando.strftime('%d/%m %H:%M:%S') if msg.quando else '' }}</span>
+                        </div>
+                        <div style="white-space: pre-wrap;">{{ msg.texto }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

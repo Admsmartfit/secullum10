@@ -589,6 +589,11 @@
                     <i class="fas fa-vial"></i>
                     <span class="nav-link-text">Simulador do WhatsApp</span>
                 </a>
+                <a class="nav-link {% if request.path.startswith('/whatsapp/sandbox') %}active{% endif %}"
+                   href="/whatsapp/sandbox/" data-tooltip="Sandbox de Conversa WhatsApp">
+                    <i class="fas fa-flask"></i>
+                    <span class="nav-link-text">Sandbox de Conversa</span>
+                </a>
                 <a class="nav-link {% if request.path == '/config/banco-horas' %}active{% endif %}"
                    href="/config/banco-horas" data-tooltip="Regras do Banco de Horas">
                     <i class="fas fa-sliders-h"></i>

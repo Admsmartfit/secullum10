@@ -44,6 +44,9 @@ def _run_safe_migrations(db):
         "ALTER TABLE tokens_avaliacao ADD COLUMN IF NOT EXISTS expira_em TIMESTAMP",
         "ALTER TABLE scores_avaliacao ADD COLUMN IF NOT EXISTS token_resultado VARCHAR(64)",
         "ALTER TABLE scores_avaliacao ADD COLUMN IF NOT EXISTS resultado_enviado_em TIMESTAMP",
+        # Migração Evolution API — id da mensagem retornado no envio
+        "ALTER TABLE whatsapp_logs ADD COLUMN IF NOT EXISTS mega_message_id VARCHAR(100)",
+        "ALTER TABLE whatsapp_logs ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP",
     ]
     for sql in migrations:
         try:
@@ -86,6 +89,7 @@ def create_app():
     from blueprints.escalas import escalas_bp
     from blueprints.financeiro import financeiro_bp
     from blueprints.whatsapp import whatsapp_bp
+    from blueprints.whatsapp_sandbox import whatsapp_sandbox_bp
     from blueprints.marketplace import marketplace_bp
     from blueprints.prontuario import prontuario_bp
     from blueprints.config_hub import config_hub_bp
@@ -103,6 +107,7 @@ def create_app():
     app.register_blueprint(escalas_bp)
     app.register_blueprint(financeiro_bp)
     app.register_blueprint(whatsapp_bp)
+    app.register_blueprint(whatsapp_sandbox_bp)
     # Alias para o webhook configurado no MegaAPI: POST /webhook/whatsapp
     from blueprints.whatsapp import webhook as _wh_handler
     app.add_url_rule('/webhook/whatsapp', 'webhook_megaapi_alias', _wh_handler, methods=['POST'])
