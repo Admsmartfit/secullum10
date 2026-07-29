@@ -14,6 +14,8 @@ services:
     depends_on:
       - redis
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./uploads:/app/uploads
       - ./instance:/app/instance
@@ -30,6 +32,8 @@ services:
     depends_on:
       - redis
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./uploads:/app/uploads
       - ./storage:/app/storage
@@ -45,6 +49,8 @@ services:
     depends_on:
       - redis
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   redis:
     image: redis:7-alpine

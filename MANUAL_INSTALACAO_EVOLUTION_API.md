@@ -208,16 +208,31 @@ Para expor a Evolution API publicamente via HTTPS:
 
 Atualize o arquivo `.env` da aplicação Secullum10 com o endereço da Evolution API.
 
-**Não use `http://localhost:8085`** — o Secullum10 roda dentro do container `secullum10_web`,
-que tem sua própria rede isolada; "localhost" ali aponta para o próprio container, não para o
-host, então a Evolution API (num stack Docker separado) fica inacessível ("Connection refused").
-Use a URL pública configurada no Passo 5 (via Cloudflare Tunnel):
+**Não use `http://localhost:8085` direto** — o Secullum10 roda dentro do container
+`secullum10_web` (stack Docker separado da Evolution API), que tem sua própria rede isolada;
+"localhost" ali aponta para o próprio container, não para o host físico, então a Evolution API
+fica inacessível ("Connection refused") mesmo os dois estando na mesma máquina.
+
+Como os dois ficam no mesmo servidor Linux e a Evolution só precisa ser alcançada
+internamente (não por HTTPS/Cloudflare), a solução é o `docker-compose.yml` do Secullum10
+mapear um hostname especial para o host físico. Adicione em cada serviço que acessa WhatsApp
+(`web`, `celery_worker`, `celery_beat`):
+
+```yaml
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+```
+
+E no `.env` do Secullum10:
 
 ```env
-EVOLUTION_HOST=https://evolution.ricardo.home.nom.br
+EVOLUTION_HOST=http://host.docker.internal:8085
 EVOLUTION_API_KEY=SuaChaveSecretaSUPERForte123!
 EVOLUTION_INSTANCE=secullum10
 ```
+
+(Alternativa, se preferir expor a Evolution publicamente via Cloudflare Tunnel — Passo 5 — e
+não se importar com o tráfego saindo e voltando pela internet: `EVOLUTION_HOST=https://evolution.ricardo.home.nom.br`.)
 
 ---
 
