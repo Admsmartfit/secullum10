@@ -267,7 +267,7 @@ class WhatsappLog(db.Model):
     tipo_regra = db.Column(db.String(50), nullable=True)  # LATE_ENTRY, etc.
     data_referencia = db.Column(db.Date, nullable=True)   # Data da ocorrência
     mensagem = db.Column(db.Text)
-    status = db.Column(db.String(20), default='enviado')   # enviado / erro / recebido
+    status = db.Column(db.String(120), default='enviado')   # enviado / erro / recebido / "erro: <detalhe>"
     celular = db.Column(db.String(20))
     # PRD Antiban Fase 0: id retornado pela Mega-API no envio (uso futuro: responder/marcar/excluir mensagem)
     mega_message_id = db.Column(db.String(100), nullable=True)

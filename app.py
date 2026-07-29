@@ -47,6 +47,9 @@ def _run_safe_migrations(db):
         # Migração Evolution API — id da mensagem retornado no envio
         "ALTER TABLE whatsapp_logs ADD COLUMN IF NOT EXISTS mega_message_id VARCHAR(100)",
         "ALTER TABLE whatsapp_logs ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP",
+        # status guardava só 20 chars, mas o código grava 'erro: <até 80 chars>' —
+        # estourava e derrubava a request inteira (StringDataRightTruncation)
+        "ALTER TABLE whatsapp_logs ALTER COLUMN status TYPE VARCHAR(120)",
     ]
     for sql in migrations:
         try:

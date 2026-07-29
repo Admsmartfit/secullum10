@@ -206,10 +206,15 @@ Para expor a Evolution API publicamente via HTTPS:
 
 ## 🔗 Passo 6: Integração no Secullum10
 
-Atualize o arquivo `.env` da aplicação Secullum10 com o endereço e a porta da Evolution API (`8085`):
+Atualize o arquivo `.env` da aplicação Secullum10 com o endereço da Evolution API.
+
+**Não use `http://localhost:8085`** — o Secullum10 roda dentro do container `secullum10_web`,
+que tem sua própria rede isolada; "localhost" ali aponta para o próprio container, não para o
+host, então a Evolution API (num stack Docker separado) fica inacessível ("Connection refused").
+Use a URL pública configurada no Passo 5 (via Cloudflare Tunnel):
 
 ```env
-EVOLUTION_HOST=http://localhost:8085
+EVOLUTION_HOST=https://evolution.ricardo.home.nom.br
 EVOLUTION_API_KEY=SuaChaveSecretaSUPERForte123!
 EVOLUTION_INSTANCE=secullum10
 ```
